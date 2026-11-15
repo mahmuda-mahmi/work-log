@@ -15,10 +15,10 @@ const COMMON_PASSWORDS = new Set([
 ]);
 
 export function assertPasswordPolicy(password: string): void {
-  if (password.length < 12) {
+  if (password.length < 8) {
     throw new BadRequestException({
       code: 'WEAK_PASSWORD',
-      message: 'Password must be at least 12 characters',
+      message: 'Password must be at least 8 characters',
     });
   }
   if (COMMON_PASSWORDS.has(password.toLowerCase())) {

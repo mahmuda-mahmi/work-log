@@ -14,9 +14,10 @@ body {
 }
 
 .container {
-  max-width: 760px;
+  width: 100%;
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 20px 16px;
+  padding: 20px 28px;
 }
 
 .topbar {
@@ -622,7 +623,38 @@ button,
 a.btn-primary,
 a.btn-secondary {
   text-decoration: none;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-sm {
+  min-height: 36px;
+  height: 36px;
+  padding: 0 14px;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.password-wrap {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.password-wrap input {
+  flex: 1 1 auto;
+}
+
+.password-toggle-btn {
+  min-width: 72px;
+  padding: 0 12px;
+}
+
+.followup-edit-cell {
+  padding: 12px !important;
+  background: #f8fafc;
 }
 
 .checkbox-inline {

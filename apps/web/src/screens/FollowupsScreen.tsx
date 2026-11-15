@@ -299,107 +299,126 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
                     const editTitles = editCat?.titles ?? [];
                     return (
                       <tr key={item.id}>
-                        <td className="col-ser">{idx + 1}</td>
-                        <td>
-                          <select
-                            value={editing.categoryName}
-                            onChange={(e) => {
-                              const nextCatName = e.target.value;
-                              const nextCat = activeCategories.find(
-                                (c) => c.name === nextCatName,
-                              );
-                              setEditing({
-                                ...editing,
-                                categoryName: nextCatName,
-                                titleName: nextCat?.titles[0]?.name ?? editing.titleName,
-                              });
-                            }}
-                          >
-                            {!activeCategories.some((c) => c.name === editing.categoryName) && (
-                              <option value={editing.categoryName}>
-                                {editing.categoryName || 'General'}
-                              </option>
-                            )}
-                            {activeCategories.map((c) => (
-                              <option key={c.id} value={c.name}>
-                                {c.name}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td>
-                          <select
-                            value={editing.titleName}
-                            onChange={(e) =>
-                              setEditing({ ...editing, titleName: e.target.value })
-                            }
-                          >
-                            {!editTitles.some((t) => t.name === editing.titleName) && (
-                              <option value={editing.titleName}>{editing.titleName}</option>
-                            )}
-                            {editTitles.map((t) => (
-                              <option key={t.id} value={t.name}>
-                                {t.name}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td>
-                          <textarea
-                            rows={3}
-                            style={{ width: '100%' }}
-                            value={editing.statusText}
-                            onChange={(e) =>
-                              setEditing({ ...editing, statusText: e.target.value })
-                            }
-                          />
-                          <select
-                            style={{ marginTop: 4 }}
-                            value={editing.status}
-                            onChange={(e) =>
-                              setEditing({
-                                ...editing,
-                                status: e.target.value as FollowupStatus,
-                              })
-                            }
-                          >
-                            <option value="open">Open (carry forward)</option>
-                            <option value="in_progress">In Progress (carry forward)</option>
-                            <option value="done">Done (stop carrying forward)</option>
-                          </select>
-                        </td>
-                        <td>
-                          <select
-                            value={editing.completedByMemberId}
-                            onChange={(e) =>
-                              setEditing({ ...editing, completedByMemberId: e.target.value })
-                            }
-                          >
-                            <option value="">Label ({editing.completedByLabel})</option>
-                            {activeMembers.map((m) => (
-                              <option key={m.id} value={m.id}>
-                                {m.displayName}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td>
-                          <div className="history-actions">
-                            <button
-                              type="button"
-                              className="btn-primary btn-sm"
-                              disabled={updateMutation.isPending}
-                              onClick={() => updateMutation.mutate(editing)}
-                            >
-                              Save
-                            </button>
-                            <button
-                              type="button"
-                              className="btn-secondary btn-sm"
-                              onClick={() => setEditing(null)}
-                            >
-                              Cancel
-                            </button>
+                        <td colSpan={6} className="followup-edit-cell">
+                          <div className="entry-edit-box">
+                            <div className="group-header">
+                              <strong>Editing Follow-up #{idx + 1}</strong>
+                            </div>
+                            <div className="composer-grid">
+                              <label className="field">
+                                <span>Report Category</span>
+                                <select
+                                  value={editing.categoryName}
+                                  onChange={(e) => {
+                                    const nextCatName = e.target.value;
+                                    const nextCat = activeCategories.find(
+                                      (c) => c.name === nextCatName,
+                                    );
+                                    setEditing({
+                                      ...editing,
+                                      categoryName: nextCatName,
+                                      titleName: nextCat?.titles[0]?.name ?? editing.titleName,
+                                    });
+                                  }}
+                                >
+                                  {!activeCategories.some((c) => c.name === editing.categoryName) && (
+                                    <option value={editing.categoryName}>
+                                      {editing.categoryName || 'General'}
+                                    </option>
+                                  )}
+                                  {activeCategories.map((c) => (
+                                    <option key={c.id} value={c.name}>
+                                      {c.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label className="field">
+                                <span>Title</span>
+                                <select
+                                  value={editing.titleName}
+                                  onChange={(e) =>
+                                    setEditing({ ...editing, titleName: e.target.value })
+                                  }
+                                >
+                                  {!editTitles.some((t) => t.name === editing.titleName) && (
+                                    <option value={editing.titleName}>{editing.titleName}</option>
+                                  )}
+                                  {editTitles.map((t) => (
+                                    <option key={t.id} value={t.name}>
+                                      {t.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            </div>
+
+                            <label className="field">
+                              <span>Status</span>
+                              <textarea
+                                rows={3}
+                                value={editing.statusText}
+                                onChange={(e) =>
+                                  setEditing({ ...editing, statusText: e.target.value })
+                                }
+                              />
+                            </label>
+
+                            <div className="composer-grid">
+                              <label className="field">
+                                <span>Follow-up State</span>
+                                <select
+                                  value={editing.status}
+                                  onChange={(e) =>
+                                    setEditing({
+                                      ...editing,
+                                      status: e.target.value as FollowupStatus,
+                                    })
+                                  }
+                                >
+                                  <option value="open">Open (carry forward)</option>
+                                  <option value="in_progress">In Progress (carry forward)</option>
+                                  <option value="done">Done (stop carrying forward)</option>
+                                </select>
+                              </label>
+                              <label className="field">
+                                <span>Task Completed By</span>
+                                <select
+                                  value={editing.completedByMemberId}
+                                  onChange={(e) =>
+                                    setEditing({
+                                      ...editing,
+                                      completedByMemberId: e.target.value,
+                                    })
+                                  }
+                                >
+                                  <option value="">Label ({editing.completedByLabel})</option>
+                                  {activeMembers.map((m) => (
+                                    <option key={m.id} value={m.id}>
+                                      {m.displayName}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            </div>
+
+                            <div className="entry-edit-actions">
+                              <button
+                                type="button"
+                                className="btn-primary btn-sm"
+                                disabled={updateMutation.isPending}
+                                onClick={() => updateMutation.mutate(editing)}
+                              >
+                                {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-secondary btn-sm"
+                                onClick={() => setEditing(null)}
+                              >
+                                Cancel
+                              </button>
+                            </div>
                           </div>
                         </td>
                       </tr>

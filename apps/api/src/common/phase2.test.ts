@@ -20,8 +20,8 @@ function mockContext(req: Partial<AuthenticatedRequest>): ExecutionContext {
 }
 
 describe('Phase 2 Auth, Security & Permission Matrix', () => {
-  it('hashes and verifies passwords with Argon2id and enforces 12+ char policy', async () => {
-    await assert.rejects(() => hashPassword('short123'), /at least 12 characters/);
+  it('hashes and verifies passwords with Argon2id and enforces 8+ char policy', async () => {
+    await assert.rejects(() => hashPassword('short12'), /at least 8 characters/);
     await assert.rejects(() => hashPassword('password1234'), /too common/);
 
     const hash = await hashPassword('CorrectHorseBattery99!');

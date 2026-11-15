@@ -351,6 +351,13 @@ export class AuthController {
         });
       }
 
+      await insertUser(conn, {
+        id: userId,
+        name: body.name,
+        email: body.email,
+        passwordHash,
+      });
+
       const claimed = await markInviteAccepted(conn, invite.id, userId);
       if (!claimed) {
         throw new BadRequestException({
@@ -358,13 +365,6 @@ export class AuthController {
           message: 'Invite has already been used',
         });
       }
-
-      await insertUser(conn, {
-        id: userId,
-        name: body.name,
-        email: body.email,
-        passwordHash,
-      });
 
       await insertTeamMember(conn, {
         id: memberId,

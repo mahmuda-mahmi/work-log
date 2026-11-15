@@ -3,7 +3,7 @@ import { MemberRoleSchema } from './reports.js';
 
 export const PasswordSchema = z
   .string()
-  .min(12, 'Password must be at least 12 characters')
+  .min(8, 'Password must be at least 8 characters')
   .max(128, 'Password must be at most 128 characters');
 
 export const EmailSchema = z

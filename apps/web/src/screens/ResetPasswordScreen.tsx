@@ -6,6 +6,7 @@ import { authApi } from '../api/client';
 export function ResetPasswordScreen() {
   const { token = '' } = useParams();
   const [newPassword, setNewPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [done, setDone] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -37,14 +38,23 @@ export function ResetPasswordScreen() {
             }}
           >
             <label className="field">
-              <span>New Password (min 12 chars)</span>
-              <input
-                type="password"
-                minLength={12}
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                required
-              />
+              <span>New Password (min 8 chars)</span>
+              <div className="password-wrap">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  minLength={8}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                />
+                <button
+                  type="button"
+                  className="btn-secondary password-toggle-btn"
+                  onClick={() => setShowPassword((v) => !v)}
+                >
+                  {showPassword ? 'Hide' : 'Show'}
+                </button>
+              </div>
             </label>
             <button type="submit" className="btn-primary" disabled={mutation.isPending}>
               {mutation.isPending ? 'Updating…' : 'Set New Password'}

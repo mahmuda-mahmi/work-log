@@ -15,6 +15,7 @@ export function LoginScreen() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [teamName, setTeamName] = useState('CGHQ');
   const [teamSlug, setTeamSlug] = useState('cghq');
   const [name, setName] = useState('');
@@ -86,14 +87,23 @@ export function LoginScreen() {
               <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
             </label>
             <label className="field">
-              <span>Password (min 12 chars)</span>
-              <input
-                type="password"
-                minLength={12}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
+              <span>Password (min 8 chars)</span>
+              <div className="password-wrap">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  minLength={8}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+                <button
+                  type="button"
+                  className="btn-secondary password-toggle-btn"
+                  onClick={() => setShowPassword((v) => !v)}
+                >
+                  {showPassword ? 'Hide' : 'Show'}
+                </button>
+              </div>
             </label>
             <button type="submit" className="btn-primary" disabled={bootstrapMutation.isPending}>
               {bootstrapMutation.isPending ? 'Creating…' : 'Create Team & Sign In'}
@@ -114,12 +124,21 @@ export function LoginScreen() {
             </label>
             <label className="field">
               <span>Password</span>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
+              <div className="password-wrap">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+                <button
+                  type="button"
+                  className="btn-secondary password-toggle-btn"
+                  onClick={() => setShowPassword((v) => !v)}
+                >
+                  {showPassword ? 'Hide' : 'Show'}
+                </button>
+              </div>
             </label>
             <button type="submit" className="btn-primary" disabled={loginMutation.isPending}>
               {loginMutation.isPending ? 'Signing in…' : 'Sign In'}
