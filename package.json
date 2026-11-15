@@ -6,7 +6,7 @@
   "scripts": {
     "dev:api": "pnpm --filter @cghq/api dev",
     "dev:web": "pnpm --filter @cghq/web dev",
-    "build": "pnpm --filter @cghq/contracts build && pnpm --filter @cghq/api build && pnpm --filter @cghq/web build",
+    "build": "pnpm --filter @cghq/contracts build && pnpm --filter @cghq/document build && pnpm --filter @cghq/api build && pnpm --filter @cghq/web build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "db:migrate": "tsx scripts/migrate.ts"
