@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+.vite/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Vercel
+.vercel/
+
+# Logs & coverage
+*.log
+coverage/
+
+# Local session exports / OS
+opencode-session.json
+conversation.md
+.DS_Store
+Thumbs.db
