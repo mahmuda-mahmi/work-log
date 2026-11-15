@@ -3,10 +3,16 @@ import type {
   AuthSession,
   BootstrapLeadInput,
   CompletePasswordResetInput,
+  CreateEntryInput,
   CreateInviteInput,
+  DailyReportDto,
+  DictionaryCategory,
   LoginInput,
   MemberSummary,
+  ReorderIdsInput,
   TeamSettings,
+  UpdateEntryInput,
+  UpdateGroupNumberingInput,
   UpdateTeamSettingsInput,
 } from '@cghq/contracts';
 
@@ -15,6 +21,7 @@ export class ApiError extends Error {
     public readonly status: number,
     public readonly code: string,
     message: string,
+    public readonly payload?: Record<string, unknown>,
   ) {
     super(message);
   }
@@ -31,8 +38,17 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   });
 
   if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { code?: string; message?: string };
-    throw new ApiError(res.status, body.code ?? 'HTTP_ERROR', body.message ?? `Request failed (${res.status})`);
+    const body = (await res.json().catch(() => ({}))) as {
+      code?: string;
+      message?: string;
+      [key: string]: unknown;
+    };
+    throw new ApiError(
+      res.status,
+      body.code ?? 'HTTP_ERROR',
+      body.message ?? `Request failed (${res.status})`,
+      body,
+    );
   }
 
   return res.json() as Promise<T>;
@@ -94,4 +110,58 @@ export const teamsApi = {
       method: 'PUT',
       body: JSON.stringify({ fileName, base64 }),
     }),
+};
+
+export const dictionaryApi = {
+  list: (teamId: string) => apiFetch<DictionaryCategory[]>(`/api/teams/${teamId}/dictionary`),
+  renameCategory: (teamId: string, categoryId: string, name: string) =>
+    apiFetch<{ ok: boolean }>(`/api/teams/${teamId}/dictionary/categories/${categoryId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name }),
+    }),
+  renameTitle: (teamId: string, titleId: string, name: string) =>
+    apiFetch<{ ok: boolean }>(`/api/teams/${teamId}/dictionary/titles/${titleId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name }),
+    }),
+};
+
+export const reportsApi = {
+  getToday: (teamId: string) => apiFetch<DailyReportDto>(`/api/teams/${teamId}/reports/today`),
+  getByDate: (teamId: string, date: string) =>
+    apiFetch<DailyReportDto>(`/api/teams/${teamId}/reports/${date}`),
+  createEntry: (teamId: string, date: string, body: CreateEntryInput) =>
+    apiFetch<DailyReportDto>(`/api/teams/${teamId}/reports/${date}/entries`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  updateEntry: (teamId: string, date: string, entryId: string, body: UpdateEntryInput) =>
+    apiFetch<DailyReportDto>(`/api/teams/${teamId}/reports/${date}/entries/${entryId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  deleteEntry: (teamId: string, date: string, entryId: string) =>
+    apiFetch<DailyReportDto>(`/api/teams/${teamId}/reports/${date}/entries/${entryId}`, {
+      method: 'DELETE',
+    }),
+  reorderGroups: (teamId: string, date: string, body: ReorderIdsInput) =>
+    apiFetch<DailyReportDto>(`/api/teams/${teamId}/reports/${date}/groups/reorder`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+  reorderEntries: (teamId: string, date: string, groupId: string, body: ReorderIdsInput) =>
+    apiFetch<DailyReportDto>(
+      `/api/teams/${teamId}/reports/${date}/groups/${groupId}/entries/reorder`,
+      { method: 'PUT', body: JSON.stringify(body) },
+    ),
+  updateGroupNumbering: (
+    teamId: string,
+    date: string,
+    groupId: string,
+    body: UpdateGroupNumberingInput,
+  ) =>
+    apiFetch<DailyReportDto>(
+      `/api/teams/${teamId}/reports/${date}/groups/${groupId}/numbering`,
+      { method: 'PATCH', body: JSON.stringify(body) },
+    ),
 };

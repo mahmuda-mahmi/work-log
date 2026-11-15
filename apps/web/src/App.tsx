@@ -1,34 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Navigate, Route, Routes } from 'react-router';
-import { HealthResponseSchema, type HealthResponse } from '@cghq/contracts';
 import { authApi } from './api/client';
 import { InviteAcceptScreen } from './screens/InviteAcceptScreen';
 import { LoginScreen } from './screens/LoginScreen';
+import { ReportScreen } from './screens/ReportScreen';
 import { ResetPasswordScreen } from './screens/ResetPasswordScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
-
-async function fetchHealth(): Promise<HealthResponse> {
-  const res = await fetch('/api/health');
-  if (!res.ok) throw new Error(`Health check failed (${res.status})`);
-  return HealthResponseSchema.parse(await res.json());
-}
-
-function TodayPlaceholder() {
-  const { data } = useQuery({ queryKey: ['health'], queryFn: fetchHealth });
-  return (
-    <section className="card">
-      <h2>Today&apos;s Report</h2>
-      <p className="muted">
-        Daily entry composer, grouping, and live preview will be added in Phase 3.
-      </p>
-      {data && (
-        <p className="muted">
-          System: <strong>{data.status}</strong> · DB: <strong>{data.db}</strong>
-        </p>
-      )}
-    </section>
-  );
-}
 
 function AuthenticatedShell() {
   const queryClient = useQueryClient();
@@ -81,7 +58,8 @@ function AuthenticatedShell() {
       </header>
 
       <Routes>
-        <Route path="/" element={<TodayPlaceholder />} />
+        <Route path="/" element={<ReportScreen session={session} />} />
+        <Route path="/reports/:date" element={<ReportScreen session={session} />} />
         <Route path="/settings" element={<SettingsScreen session={session} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
