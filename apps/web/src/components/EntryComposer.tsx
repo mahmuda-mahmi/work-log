@@ -134,7 +134,7 @@ export function EntryComposer({
           : [currentMemberId],
       });
     },
-    onSuccess: (updatedReport) => {
+    onSuccess: () => {
       setErrorMsg(null);
       writeJsonStorage(lastPairKey, {
         categoryName: categoryName.trim(),
@@ -146,7 +146,6 @@ export function EntryComposer({
       } catch {
         // Ignore
       }
-      queryClient.setQueryData(['report', teamId, reportDate], updatedReport);
       void queryClient.invalidateQueries({ queryKey: ['report', teamId] });
       void queryClient.invalidateQueries({ queryKey: ['dictionary', teamId] });
     },

@@ -9,6 +9,7 @@ import type {
 import {
   ApiError,
   dictionaryApi,
+  followupsApi,
   reportsApi,
   teamsApi,
 } from '../api/client.js';
@@ -72,13 +73,57 @@ export function ReportScreen({ session }: ReportScreenProps) {
   const isFinalized = report?.status === 'finalized';
   const showNewDayBanner = Boolean(report && report.todayDate !== report.reportDate);
 
-  function syncReportCache(updated: DailyReportDto) {
-    queryClient.setQueryData(['report', teamId, updated.reportDate], updated);
-    if (!routeDate) {
-      queryClient.setQueryData(['report', teamId, 'today'], updated);
+  function syncReportCache(updated?: DailyReportDto) {
+    if (updated) {
+      queryClient.setQueryData(['report', teamId, updated.reportDate], updated);
+      if (!routeDate) {
+        queryClient.setQueryData(['report', teamId, 'today'], updated);
+      }
     }
+    void queryClient.invalidateQueries({ queryKey: ['report', teamId] });
     void queryClient.invalidateQueries({ queryKey: ['dictionary', teamId] });
+    void queryClient.invalidateQueries({ queryKey: ['report-history', teamId] });
   }
+
+  const finalizeMutation = useMutation({
+    mutationFn: () => reportsApi.finalize(teamId, activeDate),
+    onSuccess: (updated) => {
+      setActionError(null);
+      syncReportCache(updated);
+    },
+    onError: (err) => {
+      setActionError(err instanceof ApiError ? err.message : 'Failed to finalize report');
+    },
+  });
+
+  const reopenMutation = useMutation({
+    mutationFn: () => reportsApi.reopen(teamId, activeDate),
+    onSuccess: (updated) => {
+      setActionError(null);
+      syncReportCache(updated);
+    },
+    onError: (err) => {
+      setActionError(err instanceof ApiError ? err.message : 'Failed to reopen report');
+    },
+  });
+
+  const promoteFollowupMutation = useMutation({
+    mutationFn: (payload: {
+      categoryName: string;
+      titleName: string;
+      statusText: string;
+      completedByMemberId: string | null;
+      completedByLabel: string | null;
+    }) => followupsApi.create(teamId, payload),
+    onSuccess: () => {
+      setActionError(null);
+      void queryClient.invalidateQueries({ queryKey: ['followups', teamId] });
+      syncReportCache();
+    },
+    onError: (err) => {
+      setActionError(err instanceof ApiError ? err.message : 'Failed to promote to follow-up');
+    },
+  });
 
   const updateEntryMutation = useMutation({
     mutationFn: (payload: {
@@ -94,10 +139,10 @@ export function ReportScreen({ session }: ReportScreenProps) {
         completedByLabel: payload.completedByLabel,
         version: payload.version,
       }),
-    onSuccess: (updated) => {
+    onSuccess: () => {
       setActionError(null);
       setEditing(null);
-      syncReportCache(updated);
+      syncReportCache();
     },
     onError: (err) => {
       if (err instanceof ApiError && err.code === 'VERSION_CONFLICT') {
@@ -111,9 +156,9 @@ export function ReportScreen({ session }: ReportScreenProps) {
 
   const deleteEntryMutation = useMutation({
     mutationFn: (entryId: string) => reportsApi.deleteEntry(teamId, activeDate, entryId),
-    onSuccess: (updated) => {
+    onSuccess: () => {
       setActionError(null);
-      syncReportCache(updated);
+      syncReportCache();
     },
     onError: (err) => {
       setActionError(err instanceof ApiError ? err.message : 'Failed to delete entry');
@@ -122,9 +167,9 @@ export function ReportScreen({ session }: ReportScreenProps) {
 
   const reorderGroupsMutation = useMutation({
     mutationFn: (ids: string[]) => reportsApi.reorderGroups(teamId, activeDate, { ids }),
-    onSuccess: (updated) => {
+    onSuccess: () => {
       setActionError(null);
-      syncReportCache(updated);
+      syncReportCache();
     },
     onError: (err) => {
       setActionError(err instanceof ApiError ? err.message : 'Failed to reorder groups');
@@ -134,9 +179,9 @@ export function ReportScreen({ session }: ReportScreenProps) {
   const reorderEntriesMutation = useMutation({
     mutationFn: ({ groupId, ids }: { groupId: string; ids: string[] }) =>
       reportsApi.reorderEntries(teamId, activeDate, groupId, { ids }),
-    onSuccess: (updated) => {
+    onSuccess: () => {
       setActionError(null);
-      syncReportCache(updated);
+      syncReportCache();
     },
     onError: (err) => {
       setActionError(err instanceof ApiError ? err.message : 'Failed to reorder entries');
@@ -152,9 +197,9 @@ export function ReportScreen({ session }: ReportScreenProps) {
       numberingMode: 'numbered' | 'plain';
     }) =>
       reportsApi.updateGroupNumbering(teamId, activeDate, groupId, { numberingMode }),
-    onSuccess: (updated) => {
+    onSuccess: () => {
       setActionError(null);
-      syncReportCache(updated);
+      syncReportCache();
     },
     onError: (err) => {
       setActionError(err instanceof ApiError ? err.message : 'Failed to change numbering');
@@ -242,25 +287,69 @@ export function ReportScreen({ session }: ReportScreenProps) {
           </span>
         </div>
 
-        <div className="view-toggle" role="tablist" aria-label="Report view mode">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={viewMode === 'edit'}
-            className={viewMode === 'edit' ? 'tab-btn tab-btn-active' : 'tab-btn'}
-            onClick={() => setViewMode('edit')}
-          >
-            Edit Entries
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={viewMode === 'preview'}
-            className={viewMode === 'preview' ? 'tab-btn tab-btn-active' : 'tab-btn'}
-            onClick={() => setViewMode('preview')}
-          >
-            Live Preview
-          </button>
+        <div className="toolbar-actions">
+          {session.member.role === 'lead' &&
+            (isFinalized ? (
+              <button
+                type="button"
+                className="btn-secondary btn-sm"
+                disabled={reopenMutation.isPending}
+                onClick={() => reopenMutation.mutate()}
+              >
+                {reopenMutation.isPending ? 'Reopening...' : 'Reopen'}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn-primary btn-sm"
+                disabled={finalizeMutation.isPending}
+                onClick={() => finalizeMutation.mutate()}
+              >
+                {finalizeMutation.isPending ? 'Finalizing...' : 'Finalize'}
+              </button>
+            ))}
+
+          {isFinalized ? (
+            <>
+              <a
+                className="btn-primary btn-sm"
+                href={reportsApi.getExportUrl(teamId, report.reportDate, 'pdf')}
+              >
+                Export PDF
+              </a>
+              <a
+                className="btn-secondary btn-sm"
+                href={reportsApi.getExportUrl(teamId, report.reportDate, 'docx')}
+              >
+                Export DOCX
+              </a>
+            </>
+          ) : (
+            <span className="muted" title="Team Lead must finalize before exporting (Q7)">
+              Finalize to export
+            </span>
+          )}
+
+          <div className="view-toggle" role="tablist" aria-label="Report view mode">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === 'edit'}
+              className={viewMode === 'edit' ? 'tab-btn tab-btn-active' : 'tab-btn'}
+              onClick={() => setViewMode('edit')}
+            >
+              Edit Entries
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === 'preview'}
+              className={viewMode === 'preview' ? 'tab-btn tab-btn-active' : 'tab-btn'}
+              onClick={() => setViewMode('preview')}
+            >
+              Live Preview
+            </button>
+          </div>
         </div>
       </div>
 
@@ -521,6 +610,23 @@ export function ReportScreen({ session }: ReportScreenProps) {
                               </button>
                               {editable && (
                                 <>
+                                  <button
+                                    type="button"
+                                    className="btn-secondary btn-sm"
+                                    title="Add to active Follow-up Items"
+                                    disabled={promoteFollowupMutation.isPending}
+                                    onClick={() =>
+                                      promoteFollowupMutation.mutate({
+                                        categoryName: group.categoryName,
+                                        titleName: group.titleName,
+                                        statusText: entry.statusText,
+                                        completedByMemberId: entry.completedByMemberId,
+                                        completedByLabel: entry.completedByLabel,
+                                      })
+                                    }
+                                  >
+                                    → Follow-up
+                                  </button>
                                   <button
                                     type="button"
                                     className="btn-secondary btn-sm"

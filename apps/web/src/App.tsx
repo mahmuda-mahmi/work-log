@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Navigate, Route, Routes } from 'react-router';
 import { authApi } from './api/client';
+import { FollowupsScreen } from './screens/FollowupsScreen';
+import { HistoryScreen } from './screens/HistoryScreen';
 import { InviteAcceptScreen } from './screens/InviteAcceptScreen';
 import { LoginScreen } from './screens/LoginScreen';
 import { ReportScreen } from './screens/ReportScreen';
@@ -46,6 +48,8 @@ function AuthenticatedShell() {
         </div>
         <nav className="nav-links">
           <Link to="/">Today</Link>
+          <Link to="/followups">Follow-ups</Link>
+          <Link to="/history">History</Link>
           <Link to="/settings">Settings</Link>
           <button
             type="button"
@@ -60,6 +64,8 @@ function AuthenticatedShell() {
       <Routes>
         <Route path="/" element={<ReportScreen session={session} />} />
         <Route path="/reports/:date" element={<ReportScreen session={session} />} />
+        <Route path="/followups" element={<FollowupsScreen session={session} />} />
+        <Route path="/history" element={<HistoryScreen session={session} />} />
         <Route path="/settings" element={<SettingsScreen session={session} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

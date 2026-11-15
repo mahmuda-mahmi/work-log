@@ -4,14 +4,21 @@ import type {
   BootstrapLeadInput,
   CompletePasswordResetInput,
   CreateEntryInput,
+  CreateFollowupInput,
   CreateInviteInput,
   DailyReportDto,
   DictionaryCategory,
+  ExportFormat,
+  FinalizeReportInput,
+  FollowupItemDto,
   LoginInput,
   MemberSummary,
   ReorderIdsInput,
+  ReportExportInfo,
+  ReportHistoryItem,
   TeamSettings,
   UpdateEntryInput,
+  UpdateFollowupInput,
   UpdateGroupNumberingInput,
   UpdateTeamSettingsInput,
 } from '@cghq/contracts';
@@ -130,27 +137,29 @@ export const reportsApi = {
   getToday: (teamId: string) => apiFetch<DailyReportDto>(`/api/teams/${teamId}/reports/today`),
   getByDate: (teamId: string, date: string) =>
     apiFetch<DailyReportDto>(`/api/teams/${teamId}/reports/${date}`),
+  history: (teamId: string) =>
+    apiFetch<ReportHistoryItem[]>(`/api/teams/${teamId}/reports/history`),
   createEntry: (teamId: string, date: string, body: CreateEntryInput) =>
-    apiFetch<DailyReportDto>(`/api/teams/${teamId}/reports/${date}/entries`, {
+    apiFetch<{ ok: boolean; createdIds: string[] }>(`/api/teams/${teamId}/reports/${date}/entries`, {
       method: 'POST',
       body: JSON.stringify(body),
     }),
   updateEntry: (teamId: string, date: string, entryId: string, body: UpdateEntryInput) =>
-    apiFetch<DailyReportDto>(`/api/teams/${teamId}/reports/${date}/entries/${entryId}`, {
+    apiFetch<{ ok: boolean }>(`/api/teams/${teamId}/reports/${date}/entries/${entryId}`, {
       method: 'PATCH',
       body: JSON.stringify(body),
     }),
   deleteEntry: (teamId: string, date: string, entryId: string) =>
-    apiFetch<DailyReportDto>(`/api/teams/${teamId}/reports/${date}/entries/${entryId}`, {
+    apiFetch<{ ok: boolean }>(`/api/teams/${teamId}/reports/${date}/entries/${entryId}`, {
       method: 'DELETE',
     }),
   reorderGroups: (teamId: string, date: string, body: ReorderIdsInput) =>
-    apiFetch<DailyReportDto>(`/api/teams/${teamId}/reports/${date}/groups/reorder`, {
+    apiFetch<{ ok: boolean }>(`/api/teams/${teamId}/reports/${date}/groups/reorder`, {
       method: 'PUT',
       body: JSON.stringify(body),
     }),
   reorderEntries: (teamId: string, date: string, groupId: string, body: ReorderIdsInput) =>
-    apiFetch<DailyReportDto>(
+    apiFetch<{ ok: boolean }>(
       `/api/teams/${teamId}/reports/${date}/groups/${groupId}/entries/reorder`,
       { method: 'PUT', body: JSON.stringify(body) },
     ),
@@ -160,8 +169,47 @@ export const reportsApi = {
     groupId: string,
     body: UpdateGroupNumberingInput,
   ) =>
-    apiFetch<DailyReportDto>(
+    apiFetch<{ ok: boolean }>(
       `/api/teams/${teamId}/reports/${date}/groups/${groupId}/numbering`,
       { method: 'PATCH', body: JSON.stringify(body) },
     ),
+  finalize: (teamId: string, date: string, body: FinalizeReportInput = {}) =>
+    apiFetch<DailyReportDto>(`/api/teams/${teamId}/reports/${date}/finalize`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  reopen: (teamId: string, date: string) =>
+    apiFetch<DailyReportDto>(`/api/teams/${teamId}/reports/${date}/reopen`, {
+      method: 'POST',
+    }),
+  listExports: (teamId: string, date: string) =>
+    apiFetch<ReportExportInfo[]>(`/api/teams/${teamId}/reports/${date}/exports`),
+  getExportUrl: (teamId: string, date: string, format: ExportFormat) =>
+    `/api/teams/${teamId}/reports/${date}/export?format=${format}`,
+};
+
+export const followupsApi = {
+  list: (teamId: string, includeArchived = false) =>
+    apiFetch<FollowupItemDto[]>(
+      `/api/teams/${teamId}/followups${includeArchived ? '?includeArchived=true' : ''}`,
+    ),
+  create: (teamId: string, body: CreateFollowupInput) =>
+    apiFetch<FollowupItemDto>(`/api/teams/${teamId}/followups`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  update: (teamId: string, followupId: string, body: UpdateFollowupInput) =>
+    apiFetch<FollowupItemDto>(`/api/teams/${teamId}/followups/${followupId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  reorder: (teamId: string, body: ReorderIdsInput) =>
+    apiFetch<FollowupItemDto[]>(`/api/teams/${teamId}/followups/reorder`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+  archive: (teamId: string, followupId: string) =>
+    apiFetch<{ ok: boolean }>(`/api/teams/${teamId}/followups/${followupId}`, {
+      method: 'DELETE',
+    }),
 };

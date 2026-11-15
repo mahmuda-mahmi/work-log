@@ -117,3 +117,69 @@ export const DailyReportDtoSchema = z.object({
   followups: z.array(ReportFollowupDtoSchema),
 });
 export type DailyReportDto = z.infer<typeof DailyReportDtoSchema>;
+
+export const CreateFollowupSchema = z.object({
+  categoryName: z.string().trim().max(80).optional().default(''),
+  titleName: z.string().trim().min(1).max(120),
+  statusText: z.string().trim().min(1).max(4000),
+  completedByMemberId: z.string().uuid().nullable().optional().default(null),
+  completedByLabel: z.string().trim().min(1).max(80).nullable().optional().default('As Previous'),
+});
+export type CreateFollowupInput = z.infer<typeof CreateFollowupSchema>;
+
+export const UpdateFollowupSchema = z.object({
+  status: FollowupStatusSchema.optional(),
+  statusText: z.string().trim().min(1).max(4000).optional(),
+  completedByMemberId: z.string().uuid().nullable().optional(),
+  completedByLabel: z.string().trim().min(1).max(80).nullable().optional(),
+  completedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  version: z.number().int().min(1),
+});
+export type UpdateFollowupInput = z.infer<typeof UpdateFollowupSchema>;
+
+export const FollowupItemDtoSchema = z.object({
+  id: z.string().uuid(),
+  categoryId: z.string().uuid().nullable(),
+  categoryName: z.string(),
+  titleId: z.string().uuid().nullable(),
+  titleName: z.string(),
+  status: FollowupStatusSchema,
+  statusText: z.string(),
+  completedByMemberId: z.string().uuid().nullable(),
+  completedByLabel: z.string().nullable(),
+  completedByDisplay: z.string(),
+  completedOn: z.string().nullable(),
+  position: z.number().int(),
+  version: z.number().int(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type FollowupItemDto = z.infer<typeof FollowupItemDtoSchema>;
+
+export const FinalizeReportSchema = z.object({
+  preparedByName: z.string().trim().min(1).max(120).optional(),
+});
+export type FinalizeReportInput = z.infer<typeof FinalizeReportSchema>;
+
+export const ReportHistoryItemSchema = z.object({
+  id: z.string().uuid(),
+  reportDate: z.string(),
+  status: ReportStatusSchema,
+  revision: z.number().int(),
+  preparedByName: z.string(),
+  entryCount: z.number().int(),
+  exportCount: z.number().int(),
+  finalizedAt: z.string().nullable(),
+  updatedAt: z.string(),
+});
+export type ReportHistoryItem = z.infer<typeof ReportHistoryItemSchema>;
+
+export const ReportExportInfoSchema = z.object({
+  id: z.string().uuid(),
+  format: ExportFormatSchema,
+  fileName: z.string(),
+  byteSize: z.number().int(),
+  downloadCount: z.number().int(),
+  createdAt: z.string(),
+});
+export type ReportExportInfo = z.infer<typeof ReportExportInfoSchema>;
