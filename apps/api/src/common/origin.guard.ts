@@ -10,6 +10,7 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 /**
  * Verifies Origin / Referer on state-changing requests (NFR-8).
+ * Accepts configured PUBLIC_ORIGIN (comma-separated) or exact same-origin host.
  */
 @Injectable()
 export class OriginGuard implements CanActivate {
@@ -19,17 +20,31 @@ export class OriginGuard implements CanActivate {
       return true;
     }
 
-    const allowedOrigin = process.env.PUBLIC_ORIGIN?.trim();
-    const originHeader = req.headers.origin;
-    const refererHeader = req.headers.referer;
+    const allowedOrigins = new Set(
+      (process.env.PUBLIC_ORIGIN ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+    );
 
-    // Allow non-browser / local curl when PUBLIC_ORIGIN is not configured
-    if (!allowedOrigin) {
+    const forwardedHost = req.headers['x-forwarded-host'];
+    const hostHeader = typeof forwardedHost === 'string' ? forwardedHost : req.headers.host;
+    const forwardedProto = req.headers['x-forwarded-proto'];
+    const proto = typeof forwardedProto === 'string' ? forwardedProto.split(',')[0]!.trim() : 'https';
+    if (hostHeader) {
+      allowedOrigins.add(`${proto}://${hostHeader}`);
+      allowedOrigins.add(`https://${hostHeader}`);
+    }
+
+    if (allowedOrigins.size === 0) {
       return true;
     }
 
+    const originHeader = req.headers.origin;
+    const refererHeader = req.headers.referer;
+
     if (originHeader) {
-      if (originHeader === allowedOrigin) return true;
+      if (allowedOrigins.has(originHeader)) return true;
       throw new ForbiddenException({
         code: 'CSRF_ORIGIN_MISMATCH',
         message: 'Request origin is not allowed',
@@ -39,7 +54,7 @@ export class OriginGuard implements CanActivate {
     if (refererHeader) {
       try {
         const refOrigin = new URL(refererHeader).origin;
-        if (refOrigin === allowedOrigin) return true;
+        if (allowedOrigins.has(refOrigin)) return true;
       } catch {
         // fall through
       }
