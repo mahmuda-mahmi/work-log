@@ -41,14 +41,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build all packages and apps
+        run: pnpm build
+
       - name: Typecheck
         run: pnpm typecheck
 
       - name: Unit & contract tests
         run: pnpm test
-
-      - name: Build all packages and apps
-        run: pnpm build
 
       - name: Run MySQL migrations on clean DB
         env:
