@@ -25,10 +25,16 @@ async function main() {
     throw new Error('DATABASE_URL environment variable is required');
   }
 
+  const parsed = new URL(databaseUrl);
+  const useSsl = parsed.searchParams.has('ssl-mode') || parsed.searchParams.has('ssl');
+  parsed.searchParams.delete('ssl-mode');
+  parsed.searchParams.delete('ssl');
+
   const conn = await mysql.createConnection({
-    uri: databaseUrl,
+    uri: parsed.toString(),
     multipleStatements: true,
     timezone: '+00:00',
+    ...(useSsl ? { ssl: { rejectUnauthorized: false } } : {}),
   });
 
   try {

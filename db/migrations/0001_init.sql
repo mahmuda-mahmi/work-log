@@ -277,7 +277,6 @@ CREATE TABLE IF NOT EXISTS work_entries (
   CONSTRAINT work_entries_status_check CHECK (CHAR_LENGTH(TRIM(status_text)) BETWEEN 1 AND 4000),
   CONSTRAINT work_entries_position_check CHECK (position >= 0),
   CONSTRAINT work_entries_version_check CHECK (version >= 1),
-  CONSTRAINT work_entries_completed_by_check CHECK (completed_by_member_id IS NULL OR completed_by_label IS NULL),
   CONSTRAINT work_entries_label_check CHECK (completed_by_label IS NULL OR CHAR_LENGTH(TRIM(completed_by_label)) BETWEEN 1 AND 80)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
@@ -309,7 +308,6 @@ CREATE TABLE IF NOT EXISTS followup_items (
   CONSTRAINT followup_items_status_check CHECK (CHAR_LENGTH(TRIM(status_text)) BETWEEN 1 AND 4000),
   CONSTRAINT followup_items_position_check CHECK (position >= 0),
   CONSTRAINT followup_items_version_check CHECK (version >= 1),
-  CONSTRAINT followup_items_completed_by_check CHECK (completed_by_member_id IS NULL OR completed_by_label IS NULL),
   CONSTRAINT followup_items_label_check CHECK (completed_by_label IS NULL OR CHAR_LENGTH(TRIM(completed_by_label)) BETWEEN 1 AND 80)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 

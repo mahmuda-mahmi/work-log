@@ -11,13 +11,19 @@ export function getPool(): Pool | null {
     return null;
   }
   if (!pool) {
+    const parsed = new URL(uri);
+    const useSsl = parsed.searchParams.has('ssl-mode') || parsed.searchParams.has('ssl');
+    parsed.searchParams.delete('ssl-mode');
+    parsed.searchParams.delete('ssl');
+
     pool = mysql.createPool({
-      uri,
+      uri: parsed.toString(),
       connectionLimit: 2,
       maxIdle: 1,
       idleTimeout: 60_000,
       enableKeepAlive: true,
       timezone: '+00:00',
+      ...(useSsl ? { ssl: { rejectUnauthorized: false } } : {}),
     });
   }
   return pool;
