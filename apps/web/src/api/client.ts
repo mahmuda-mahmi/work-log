@@ -200,6 +200,14 @@ export const reportsApi = {
       method: 'PATCH',
       body: JSON.stringify(body),
     }),
+  deleteGroup: (teamId: string, date: string, groupId: string) =>
+    apiFetch<{ ok: boolean }>(`/api/teams/${teamId}/reports/${date}/groups/${groupId}`, {
+      method: 'DELETE',
+    }),
+  deleteReport: (teamId: string, date: string) =>
+    apiFetch<{ ok: boolean }>(`/api/teams/${teamId}/reports/${date}`, {
+      method: 'DELETE',
+    }),
   finalize: (teamId: string, date: string, body: FinalizeReportInput = {}) =>
     apiFetch<DailyReportDto>(`/api/teams/${teamId}/reports/${date}/finalize`, {
       method: 'POST',

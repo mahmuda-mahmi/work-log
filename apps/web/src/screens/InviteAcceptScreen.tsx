@@ -24,13 +24,24 @@ export function InviteAcceptScreen() {
   });
 
   return (
-    <main className="container">
-      <section className="card auth-card">
-        <h1>Accept Team Invite</h1>
-        <p className="subtitle">
-          One-time account setup to join the team. After joining, just sign in anytime.
-        </p>
-        {errorMsg && <p className="error">{errorMsg}</p>}
+    <main className="auth-shell">
+      <section className="auth-card">
+        <div className="auth-logo-wrap">
+          <img src="/default-logo.png" alt="Solution Art" className="auth-logo" />
+        </div>
+        <div className="auth-header">
+          <h1>Accept Team Invite</h1>
+          <p className="subtitle">
+            One-time setup to join your workspace. Next time, sign in directly.
+          </p>
+        </div>
+
+        {errorMsg && (
+          <div className="alert-error" style={{ marginBottom: 12 }}>
+            {errorMsg}
+          </div>
+        )}
+
         <form
           className="stack"
           onSubmit={(e) => {
@@ -66,10 +77,10 @@ export function InviteAcceptScreen() {
               </button>
             </div>
           </label>
-          <button type="submit" className="btn-primary" disabled={mutation.isPending}>
+          <button type="submit" className="btn-primary btn-block" disabled={mutation.isPending}>
             {mutation.isPending ? 'Joining…' : 'Join Team'}
           </button>
-          <p className="muted" style={{ margin: 0, textAlign: 'center' }}>
+          <p className="auth-footer">
             Already joined? <Link to="/login">Sign In</Link>
           </p>
         </form>

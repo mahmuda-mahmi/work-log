@@ -105,6 +105,16 @@ export const UPDATE_WORK_GROUP_CAT_TITLE = `
   WHERE id = ? AND report_id = ?
 `;
 
+export const DELETE_WORK_GROUP = `
+  DELETE FROM work_groups
+  WHERE id = ? AND report_id = ?
+`;
+
+export const DELETE_DAILY_REPORT = `
+  DELETE FROM daily_reports
+  WHERE id = ? AND team_id = ?
+`;
+
 export const SELECT_NEXT_ENTRY_POSITION = `
   SELECT COALESCE(MAX(position), 0) + 10 AS next_pos
   FROM work_entries

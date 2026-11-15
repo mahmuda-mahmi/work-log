@@ -16,6 +16,20 @@ import {
 } from '../api/client.js';
 import { EntryComposer } from '../components/EntryComposer.js';
 import { ReportPreview } from '../components/ReportPreview.js';
+import {
+  IconArrowDown,
+  IconArrowUp,
+  IconCalendar,
+  IconCheck,
+  IconDownload,
+  IconEdit,
+  IconForward,
+  IconLock,
+  IconPlus,
+  IconRefresh,
+  IconTrash,
+  IconUnlock,
+} from '../components/ui/icons.js';
 
 interface ReportScreenProps {
   session: AuthSession;
@@ -276,6 +290,30 @@ export function ReportScreen({ session }: ReportScreenProps) {
     },
   });
 
+  const deleteGroupMutation = useMutation({
+    mutationFn: (groupId: string) => reportsApi.deleteGroup(teamId, activeDate, groupId),
+    onSuccess: () => {
+      setActionError(null);
+      syncReportCache();
+    },
+    onError: (err) => {
+      setActionError(err instanceof ApiError ? err.message : 'Failed to delete row');
+    },
+  });
+
+  const deleteReportMutation = useMutation({
+    mutationFn: () => reportsApi.deleteReport(teamId, activeDate),
+    onSuccess: () => {
+      setActionError(null);
+      void queryClient.invalidateQueries({ queryKey: ['report-history', teamId] });
+      void queryClient.removeQueries({ queryKey: ['report', teamId, activeDate] });
+      navigate('/history');
+    },
+    onError: (err) => {
+      setActionError(err instanceof ApiError ? err.message : 'Failed to delete log');
+    },
+  });
+
   function startEditEntry(entry: WorkEntryDto) {
     setActionError(null);
     setEditingEntry({
@@ -305,7 +343,7 @@ export function ReportScreen({ session }: ReportScreenProps) {
   if (reportQuery.isLoading) {
     return (
       <div className="card">
-        <p className="muted">Loading daily report...</p>
+        <p className="muted">Loading daily report…</p>
       </div>
     );
   }
@@ -315,10 +353,10 @@ export function ReportScreen({ session }: ReportScreenProps) {
     return (
       <div className="card">
         <h2>Unable to load report</h2>
-        <p className="alert-error">
+        <p className="alert-error" style={{ marginTop: 8, marginBottom: 12 }}>
           {err instanceof ApiError ? err.message : 'Could not load report for this date.'}
         </p>
-        <button type="button" className="btn-secondary" onClick={() => navigate('/')}>
+        <button type="button" className="btn-secondary btn-sm" onClick={() => navigate('/')}>
           Go to Today&apos;s Report
         </button>
       </div>
@@ -332,11 +370,10 @@ export function ReportScreen({ session }: ReportScreenProps) {
       {showNewDayBanner && (
         <div className="banner-info">
           <span>
-            New day started in {session.team.timezone}: today is{' '}
-            <strong>{report.todayDate}</strong> (you are viewing{' '}
-            <strong>{report.reportDate}</strong>).
+            New day started in {session.team.timezone}: today is <strong>{report.todayDate}</strong>{' '}
+            (you are viewing <strong>{report.reportDate}</strong>).
           </span>
-          <button type="button" className="btn-secondary btn-sm" onClick={() => navigate('/')}>
+          <button type="button" className="btn-dark btn-sm" onClick={() => navigate('/')}>
             Jump to Today
           </button>
         </div>
@@ -345,6 +382,7 @@ export function ReportScreen({ session }: ReportScreenProps) {
       <div className="card report-toolbar">
         <div className="toolbar-left">
           <label className="date-picker-label">
+            <IconCalendar size={14} />
             <span>Report Date</span>
             <input
               type="date"
@@ -362,7 +400,13 @@ export function ReportScreen({ session }: ReportScreenProps) {
             />
           </label>
           <span className={`badge badge-${report.status}`}>
-            {report.status.toUpperCase()} · rev {report.revision}
+            {isFinalized ? <IconLock size={11} /> : <IconUnlock size={11} />}
+            {report.status}
+          </span>
+          <span className="badge badge-muted">rev {report.revision}</span>
+          <span className="badge badge-sync">
+            <IconRefresh size={11} />
+            Auto-sync 15s
           </span>
         </div>
 
@@ -375,6 +419,7 @@ export function ReportScreen({ session }: ReportScreenProps) {
                 disabled={reopenMutation.isPending}
                 onClick={() => reopenMutation.mutate()}
               >
+                <IconUnlock size={13} />
                 {reopenMutation.isPending ? 'Reopening...' : 'Reopen'}
               </button>
             ) : (
@@ -392,6 +437,7 @@ export function ReportScreen({ session }: ReportScreenProps) {
                   }
                 }}
               >
+                <IconCheck size={13} />
                 {finalizeMutation.isPending ? 'Finalizing...' : 'Finalize'}
               </button>
             ))}
@@ -399,128 +445,166 @@ export function ReportScreen({ session }: ReportScreenProps) {
           {isFinalized ? (
             <>
               <a
-                className="btn-primary btn-sm"
+                className="btn-dark btn-sm"
                 href={reportsApi.getExportUrl(teamId, report.reportDate, 'pdf')}
               >
+                <IconDownload size={13} />
                 Export PDF
               </a>
               <a
                 className="btn-secondary btn-sm"
                 href={reportsApi.getExportUrl(teamId, report.reportDate, 'docx')}
               >
+                <IconDownload size={13} />
                 Export DOCX
               </a>
             </>
           ) : (
-            <span className="muted" title="Team Lead must finalize before exporting (Q7)">
+            <span className="badge badge-muted" title="Team Lead must finalize before exporting">
               Finalize to export
             </span>
+          )}
+
+          {session.member.role === 'lead' && (
+            <button
+              type="button"
+              className="btn-danger btn-sm"
+              disabled={deleteReportMutation.isPending}
+              onClick={() => {
+                if (
+                  window.confirm(
+                    `Delete the entire daily log for ${report.reportDate}? This cannot be undone.`,
+                  )
+                ) {
+                  deleteReportMutation.mutate();
+                }
+              }}
+            >
+              <IconTrash size={13} />
+              {deleteReportMutation.isPending ? 'Deleting...' : 'Delete Log'}
+            </button>
           )}
         </div>
       </div>
 
       {actionError && <div className="alert-error">{actionError}</div>}
 
-      <div className="report-workspace">
-        <EntryComposer
-          teamId={teamId}
-          reportDate={report.reportDate}
-          dictionary={dictionaryQuery.data ?? []}
-          members={membersQuery.data ?? []}
-          currentMemberId={session.member.id}
-          disabled={isFinalized}
-        />
+      <EntryComposer
+        teamId={teamId}
+        reportDate={report.reportDate}
+        dictionary={dictionaryQuery.data ?? []}
+        members={membersQuery.data ?? []}
+        currentMemberId={session.member.id}
+        disabled={isFinalized}
+      />
 
-        <div className="card">
-          <div className="section-heading">
-            <h2>Daily Work Table ({report.groups.length} sections)</h2>
-            <span className="muted">Auto-refreshes every 15s</span>
-          </div>
+      <div className="card work-table-card">
+        <div className="section-heading">
+          <h2>Daily Work Table</h2>
+          <span className="badge badge-muted">{report.groups.length} sections</span>
+        </div>
 
-          <div className="preview-table-wrap">
-            <table className="preview-table">
-              <thead>
-                <tr>
-                  <th className="col-ser">Ser</th>
-                  <th className="col-cat">Report Category</th>
-                  <th className="col-title">Title</th>
-                  <th className="col-status">Status</th>
-                  <th className="col-by">Task Completed By</th>
-                </tr>
-              </thead>
-              <tbody>
-                {report.groups.map((group, gIdx) => {
-                  const isEditingThisGroup = editingGroup?.groupId === group.id;
-                  const isQuickAdding = quickAdd?.groupId === group.id;
-                  const editCat = activeCategories.find(
-                    (c) => c.name === editingGroup?.categoryName,
-                  );
-                  const editTitles = editCat?.titles ?? [];
+        <div className="work-table-wrap">
+          <table className="work-table">
+            <thead>
+              <tr>
+                <th className="col-ser">Ser</th>
+                <th className="col-cat">Report Category</th>
+                <th className="col-title">Title</th>
+                <th className="col-status">Status</th>
+                <th className="col-by">Task Completed By</th>
+              </tr>
+            </thead>
+            <tbody>
+              {report.groups.map((group, gIdx) => {
+                const isEditingThisGroup = editingGroup?.groupId === group.id;
+                const isQuickAdding = quickAdd?.groupId === group.id;
+                const editCat = activeCategories.find(
+                  (c) => c.name === editingGroup?.categoryName,
+                );
+                const editTitles = editCat?.titles ?? [];
 
-                  return (
-                    <Fragment key={group.id}>
-                      <tr>
-                        <td className="col-ser">
-                          <div>
-                            <strong>{gIdx + 1}</strong>
+                return (
+                  <Fragment key={group.id}>
+                    <tr>
+                      <td className="col-ser">
+                        <span className="ser-badge">{gIdx + 1}</span>
+                        {!isFinalized && (
+                          <div className="ser-controls">
+                            <button
+                              type="button"
+                              className="btn-secondary ser-move-btn"
+                              title="Move row up"
+                              disabled={gIdx === 0 || reorderGroupsMutation.isPending}
+                              onClick={() =>
+                                reorderGroupsMutation.mutate(
+                                  moveItem(report.groups, gIdx, -1).map((g) => g.id),
+                                )
+                              }
+                            >
+                              <IconArrowUp size={12} />
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-secondary ser-move-btn"
+                              title="Move row down"
+                              disabled={
+                                gIdx === report.groups.length - 1 ||
+                                reorderGroupsMutation.isPending
+                              }
+                              onClick={() =>
+                                reorderGroupsMutation.mutate(
+                                  moveItem(report.groups, gIdx, 1).map((g) => g.id),
+                                )
+                              }
+                            >
+                              <IconArrowDown size={12} />
+                            </button>
                           </div>
-                          {!isFinalized && (
-                            <div className="ser-controls">
-                              <button
-                                type="button"
-                                className="btn-secondary btn-xs"
-                                title="Move row up"
-                                disabled={gIdx === 0 || reorderGroupsMutation.isPending}
-                                onClick={() =>
-                                  reorderGroupsMutation.mutate(
-                                    moveItem(report.groups, gIdx, -1).map((g) => g.id),
-                                  )
-                                }
-                              >
-                                ↑
-                              </button>
-                              <button
-                                type="button"
-                                className="btn-secondary btn-xs"
-                                title="Move row down"
-                                disabled={
-                                  gIdx === report.groups.length - 1 ||
-                                  reorderGroupsMutation.isPending
-                                }
-                                onClick={() =>
-                                  reorderGroupsMutation.mutate(
-                                    moveItem(report.groups, gIdx, 1).map((g) => g.id),
-                                  )
-                                }
-                              >
-                                ↓
-                              </button>
-                            </div>
-                          )}
-                        </td>
+                        )}
+                      </td>
 
-                        <td className="col-cat">
-                          <div>{group.categoryName}</div>
-                          {!isFinalized && (
+                      <td className="col-cat">
+                        <div className="cat-title">{group.categoryName}</div>
+                        {!isFinalized && (
+                          <div className="inline-entry-actions">
                             <button
                               type="button"
                               className="btn-secondary btn-xs"
-                              style={{ marginTop: 6 }}
                               onClick={() => startEditGroup(group)}
                             >
+                              <IconEdit size={11} />
                               Edit
                             </button>
-                          )}
-                        </td>
+                            <button
+                              type="button"
+                              className="btn-danger btn-xs"
+                              disabled={deleteGroupMutation.isPending}
+                              onClick={() => {
+                                const msg =
+                                  group.entries.length > 0
+                                    ? `Delete "${group.categoryName} — ${group.titleName}" and its ${group.entries.length} entry/entries?`
+                                    : `Delete row "${group.categoryName} — ${group.titleName}"?`;
+                                if (window.confirm(msg)) {
+                                  deleteGroupMutation.mutate(group.id);
+                                }
+                              }}
+                            >
+                              <IconTrash size={11} />
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </td>
 
-                        <td className="col-title">
-                          <div>{group.titleName}</div>
-                          {!isFinalized &&
-                            group.categoryName.trim().toLowerCase() === 'support' && (
+                      <td className="col-title">
+                        <div className="title-sub">{group.titleName}</div>
+                        {!isFinalized &&
+                          group.categoryName.trim().toLowerCase() === 'support' && (
+                            <div className="inline-entry-actions">
                               <button
                                 type="button"
                                 className="btn-secondary btn-xs"
-                                style={{ marginTop: 6 }}
                                 title="Toggle numbered vs plain status lines"
                                 onClick={() =>
                                   toggleNumberingMutation.mutate({
@@ -532,481 +616,481 @@ export function ReportScreen({ session }: ReportScreenProps) {
                               >
                                 {group.numberingMode === 'numbered' ? '1. 2. 3.' : 'Plain'}
                               </button>
-                            )}
-                        </td>
-
-                        <td className="col-status" colSpan={2} style={{ padding: 0 }}>
-                          {group.entries.length === 0 ? (
-                            <div className="table-empty-slot">
-                              <span className="muted">No status added yet</span>
-                              {!isFinalized && (
-                                <button
-                                  type="button"
-                                  className="btn-primary btn-xs"
-                                  onClick={() =>
-                                    setQuickAdd({
-                                      groupId: group.id,
-                                      categoryName: group.categoryName,
-                                      titleName: group.titleName,
-                                      statusText: '',
-                                      completedByMemberIds: [session.member.id],
-                                    })
-                                  }
-                                >
-                                  + Add Status
-                                </button>
-                              )}
                             </div>
-                          ) : (
-                            <table className="inner-status-table">
-                              <tbody>
-                                {group.entries.map((entry, eIdx) => {
-                                  const isEditingThis = editingEntry?.entryId === entry.id;
-                                  const editable = canMutateEntry(entry);
+                          )}
+                      </td>
 
-                                  if (isEditingThis && editingEntry) {
-                                    return (
-                                      <tr key={entry.id}>
-                                        <td colSpan={2} className="followup-edit-cell">
-                                          <div className="entry-edit-box">
-                                            {editingEntry.conflictCurrent && (
-                                              <div className="alert-warn conflict-box">
-                                                <div>
-                                                  <strong>Edit conflict (FR-32):</strong> Another
-                                                  member updated this entry.
-                                                  <div className="conflict-theirs">
-                                                    <em>Their version:</em> &ldquo;
-                                                    {editingEntry.conflictCurrent.statusText}
-                                                    &rdquo; (by{' '}
-                                                    {
-                                                      editingEntry.conflictCurrent
-                                                        .completedByDisplay
-                                                    }
-                                                    )
-                                                  </div>
-                                                </div>
-                                                <div className="conflict-actions">
-                                                  <button
-                                                    type="button"
-                                                    className="btn-primary btn-sm"
-                                                    onClick={() =>
-                                                      updateEntryMutation.mutate({
-                                                        entryId: editingEntry.entryId,
-                                                        statusText: editingEntry.statusText,
-                                                        completedByMemberId:
-                                                          editingEntry.completedByMemberId,
-                                                        completedByLabel:
-                                                          editingEntry.completedByLabel,
-                                                        version:
-                                                          editingEntry.conflictCurrent!.version,
-                                                      })
-                                                    }
-                                                  >
-                                                    Keep Mine
-                                                  </button>
-                                                  <button
-                                                    type="button"
-                                                    className="btn-secondary btn-sm"
-                                                    onClick={() => {
-                                                      setEditingEntry(null);
-                                                      void queryClient.invalidateQueries({
-                                                        queryKey: ['report', teamId],
-                                                      });
-                                                    }}
-                                                  >
-                                                    Take Theirs
-                                                  </button>
-                                                </div>
-                                              </div>
-                                            )}
+                      <td colSpan={2} style={{ padding: 0 }}>
+                        {group.entries.length === 0 ? (
+                          <div className="table-empty-slot">
+                            <span className="muted">No status added yet</span>
+                            {!isFinalized && (
+                              <button
+                                type="button"
+                                className="btn-primary btn-xs"
+                                onClick={() =>
+                                  setQuickAdd({
+                                    groupId: group.id,
+                                    categoryName: group.categoryName,
+                                    titleName: group.titleName,
+                                    statusText: '',
+                                    completedByMemberIds: [session.member.id],
+                                  })
+                                }
+                              >
+                                <IconPlus size={11} />
+                                Add Status
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <table className="inner-status-table">
+                            <colgroup>
+                              <col style={{ width: '70%' }} />
+                              <col style={{ width: '30%' }} />
+                            </colgroup>
+                            <tbody>
+                              {group.entries.map((entry, eIdx) => {
+                                const isEditingThis = editingEntry?.entryId === entry.id;
+                                const editable = canMutateEntry(entry);
 
-                                            <label className="field">
-                                              <span>Status</span>
-                                              <textarea
-                                                rows={3}
-                                                value={editingEntry.statusText}
-                                                onChange={(e) =>
-                                                  setEditingEntry({
-                                                    ...editingEntry,
-                                                    statusText: e.target.value,
-                                                  })
-                                                }
-                                              />
-                                            </label>
-
-                                            <div className="field">
-                                              <span>Task Completed By</span>
-                                              <div className="member-pills">
-                                                {activeMembers.map((m) => {
-                                                  const selected =
-                                                    editingEntry.completedByMemberId === m.id;
-                                                  return (
-                                                    <button
-                                                      key={m.id}
-                                                      type="button"
-                                                      className={
-                                                        selected ? 'pill pill-active' : 'pill'
-                                                      }
-                                                      onClick={() =>
-                                                        setEditingEntry({
-                                                          ...editingEntry,
-                                                          completedByMemberId: m.id,
-                                                          completedByLabel: null,
-                                                        })
-                                                      }
-                                                    >
-                                                      {m.displayName}
-                                                    </button>
-                                                  );
-                                                })}
-                                              </div>
-                                            </div>
-
-                                            <div className="entry-edit-actions">
-                                              <button
-                                                type="button"
-                                                className="btn-primary btn-sm"
-                                                disabled={updateEntryMutation.isPending}
-                                                onClick={() =>
-                                                  updateEntryMutation.mutate({
-                                                    entryId: editingEntry.entryId,
-                                                    statusText: editingEntry.statusText,
-                                                    completedByMemberId:
-                                                      editingEntry.completedByMemberId,
-                                                    completedByLabel:
-                                                      editingEntry.completedByLabel,
-                                                    version: editingEntry.version,
-                                                  })
-                                                }
-                                              >
-                                                {updateEntryMutation.isPending
-                                                  ? 'Saving...'
-                                                  : 'Save'}
-                                              </button>
-                                              <button
-                                                type="button"
-                                                className="btn-secondary btn-sm"
-                                                onClick={() => setEditingEntry(null)}
-                                              >
-                                                Cancel
-                                              </button>
-                                            </div>
-                                          </div>
-                                        </td>
-                                      </tr>
-                                    );
-                                  }
-
+                                if (isEditingThis && editingEntry) {
                                   return (
                                     <tr key={entry.id}>
-                                      <td className="inner-col-status">
-                                        <div>
-                                          {group.numberingMode === 'numbered' ? (
-                                            <strong>{eIdx + 1}. </strong>
-                                          ) : null}
-                                          {entry.statusText}
-                                        </div>
-                                        {!isFinalized && (
-                                          <div className="inline-entry-actions">
-                                            <button
-                                              type="button"
-                                              className="btn-secondary btn-xs"
-                                              disabled={
-                                                eIdx === 0 || reorderEntriesMutation.isPending
-                                              }
-                                              onClick={() =>
-                                                reorderEntriesMutation.mutate({
-                                                  groupId: group.id,
-                                                  ids: moveItem(group.entries, eIdx, -1).map(
-                                                    (item) => item.id,
-                                                  ),
-                                                })
-                                              }
-                                            >
-                                              ↑
-                                            </button>
-                                            <button
-                                              type="button"
-                                              className="btn-secondary btn-xs"
-                                              disabled={
-                                                eIdx === group.entries.length - 1 ||
-                                                reorderEntriesMutation.isPending
-                                              }
-                                              onClick={() =>
-                                                reorderEntriesMutation.mutate({
-                                                  groupId: group.id,
-                                                  ids: moveItem(group.entries, eIdx, 1).map(
-                                                    (item) => item.id,
-                                                  ),
-                                                })
-                                              }
-                                            >
-                                              ↓
-                                            </button>
-                                            {editable && (
-                                              <>
+                                      <td colSpan={2} className="followup-edit-cell">
+                                        <div className="entry-edit-box">
+                                          {editingEntry.conflictCurrent && (
+                                            <div className="alert-warn conflict-box">
+                                              <div>
+                                                <strong>Edit conflict:</strong> Another member
+                                                updated this entry.
+                                                <div className="conflict-theirs">
+                                                  <em>Their version:</em> &ldquo;
+                                                  {editingEntry.conflictCurrent.statusText}&rdquo;
+                                                  (by{' '}
+                                                  {editingEntry.conflictCurrent.completedByDisplay})
+                                                </div>
+                                              </div>
+                                              <div className="conflict-actions">
                                                 <button
                                                   type="button"
-                                                  className="btn-secondary btn-xs"
-                                                  onClick={() => startEditEntry(entry)}
-                                                >
-                                                  Edit
-                                                </button>
-                                                <button
-                                                  type="button"
-                                                  className="btn-secondary btn-xs"
+                                                  className="btn-primary btn-xs"
                                                   onClick={() =>
-                                                    promoteFollowupMutation.mutate({
-                                                      categoryName: group.categoryName,
-                                                      titleName: group.titleName,
-                                                      statusText: entry.statusText,
+                                                    updateEntryMutation.mutate({
+                                                      entryId: editingEntry.entryId,
+                                                      statusText: editingEntry.statusText,
                                                       completedByMemberId:
-                                                        entry.completedByMemberId,
-                                                      completedByLabel: entry.completedByLabel,
+                                                        editingEntry.completedByMemberId,
+                                                      completedByLabel:
+                                                        editingEntry.completedByLabel,
+                                                      version:
+                                                        editingEntry.conflictCurrent!.version,
                                                     })
                                                   }
                                                 >
-                                                  → Follow-up
+                                                  Keep Mine
                                                 </button>
                                                 <button
                                                   type="button"
-                                                  className="btn-danger btn-xs"
+                                                  className="btn-secondary btn-xs"
                                                   onClick={() => {
-                                                    if (window.confirm('Delete this work entry?')) {
-                                                      deleteEntryMutation.mutate(entry.id);
-                                                    }
+                                                    setEditingEntry(null);
+                                                    void queryClient.invalidateQueries({
+                                                      queryKey: ['report', teamId],
+                                                    });
                                                   }}
                                                 >
-                                                  Delete
+                                                  Take Theirs
                                                 </button>
-                                              </>
-                                            )}
+                                              </div>
+                                            </div>
+                                          )}
+
+                                          <label className="field">
+                                            <span>Status</span>
+                                            <textarea
+                                              rows={3}
+                                              value={editingEntry.statusText}
+                                              onChange={(e) =>
+                                                setEditingEntry({
+                                                  ...editingEntry,
+                                                  statusText: e.target.value,
+                                                })
+                                              }
+                                            />
+                                          </label>
+
+                                          <div className="field">
+                                            <span>Task Completed By</span>
+                                            <div className="member-pills">
+                                              {activeMembers.map((m) => {
+                                                const selected =
+                                                  editingEntry.completedByMemberId === m.id;
+                                                return (
+                                                  <button
+                                                    key={m.id}
+                                                    type="button"
+                                                    className={selected ? 'pill pill-active' : 'pill'}
+                                                    onClick={() =>
+                                                      setEditingEntry({
+                                                        ...editingEntry,
+                                                        completedByMemberId: m.id,
+                                                        completedByLabel: null,
+                                                      })
+                                                    }
+                                                  >
+                                                    {m.displayName}
+                                                  </button>
+                                                );
+                                              })}
+                                            </div>
                                           </div>
-                                        )}
+
+                                          <div className="entry-edit-actions">
+                                            <button
+                                              type="button"
+                                              className="btn-primary btn-sm"
+                                              disabled={updateEntryMutation.isPending}
+                                              onClick={() =>
+                                                updateEntryMutation.mutate({
+                                                  entryId: editingEntry.entryId,
+                                                  statusText: editingEntry.statusText,
+                                                  completedByMemberId:
+                                                    editingEntry.completedByMemberId,
+                                                  completedByLabel: editingEntry.completedByLabel,
+                                                  version: editingEntry.version,
+                                                })
+                                              }
+                                            >
+                                              {updateEntryMutation.isPending ? 'Saving...' : 'Save'}
+                                            </button>
+                                            <button
+                                              type="button"
+                                              className="btn-secondary btn-sm"
+                                              onClick={() => setEditingEntry(null)}
+                                            >
+                                              Cancel
+                                            </button>
+                                          </div>
+                                        </div>
                                       </td>
-                                      <td className="inner-col-by">{entry.completedByDisplay}</td>
                                     </tr>
                                   );
-                                })}
-                                {!isFinalized && (
-                                  <tr>
-                                    <td colSpan={2} className="table-add-footer">
-                                      <button
-                                        type="button"
-                                        className="btn-secondary btn-xs"
-                                        onClick={() =>
-                                          setQuickAdd({
-                                            groupId: group.id,
-                                            categoryName: group.categoryName,
-                                            titleName: group.titleName,
-                                            statusText: '',
-                                            completedByMemberIds: [session.member.id],
-                                          })
-                                        }
-                                      >
-                                        + Add Status to Ser {gIdx + 1}
-                                      </button>
+                                }
+
+                                return (
+                                  <tr key={entry.id}>
+                                    <td className="inner-col-status">
+                                      <div className="entry-status-text">
+                                        {group.numberingMode === 'numbered' ? (
+                                          <span className="entry-index">{eIdx + 1}.</span>
+                                        ) : null}
+                                        {entry.statusText}
+                                      </div>
+                                      {!isFinalized && (
+                                        <div className="inline-entry-actions">
+                                          <button
+                                            type="button"
+                                            className="btn-secondary btn-xs"
+                                            title="Move status up"
+                                            disabled={eIdx === 0 || reorderEntriesMutation.isPending}
+                                            onClick={() =>
+                                              reorderEntriesMutation.mutate({
+                                                groupId: group.id,
+                                                ids: moveItem(group.entries, eIdx, -1).map(
+                                                  (item) => item.id,
+                                                ),
+                                              })
+                                            }
+                                          >
+                                            <IconArrowUp size={11} />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            className="btn-secondary btn-xs"
+                                            title="Move status down"
+                                            disabled={
+                                              eIdx === group.entries.length - 1 ||
+                                              reorderEntriesMutation.isPending
+                                            }
+                                            onClick={() =>
+                                              reorderEntriesMutation.mutate({
+                                                groupId: group.id,
+                                                ids: moveItem(group.entries, eIdx, 1).map(
+                                                  (item) => item.id,
+                                                ),
+                                              })
+                                            }
+                                          >
+                                            <IconArrowDown size={11} />
+                                          </button>
+                                          {editable && (
+                                            <>
+                                              <button
+                                                type="button"
+                                                className="btn-secondary btn-xs"
+                                                onClick={() => startEditEntry(entry)}
+                                              >
+                                                <IconEdit size={11} />
+                                                Edit
+                                              </button>
+                                              <button
+                                                type="button"
+                                                className="btn-secondary btn-xs"
+                                                onClick={() =>
+                                                  promoteFollowupMutation.mutate({
+                                                    categoryName: group.categoryName,
+                                                    titleName: group.titleName,
+                                                    statusText: entry.statusText,
+                                                    completedByMemberId: entry.completedByMemberId,
+                                                    completedByLabel: entry.completedByLabel,
+                                                  })
+                                                }
+                                              >
+                                                <IconForward size={11} />
+                                                Follow-up
+                                              </button>
+                                              <button
+                                                type="button"
+                                                className="btn-danger btn-xs"
+                                                onClick={() => {
+                                                  if (window.confirm('Delete this work entry?')) {
+                                                    deleteEntryMutation.mutate(entry.id);
+                                                  }
+                                                }}
+                                              >
+                                                <IconTrash size={11} />
+                                                Delete
+                                              </button>
+                                            </>
+                                          )}
+                                        </div>
+                                      )}
+                                    </td>
+                                    <td className="inner-col-by">
+                                      <span className="assignee-chip">
+                                        {entry.completedByDisplay}
+                                      </span>
                                     </td>
                                   </tr>
-                                )}
-                              </tbody>
-                            </table>
-                          )}
+                                );
+                              })}
+                              {!isFinalized && (
+                                <tr>
+                                  <td colSpan={2} className="table-add-footer">
+                                    <button
+                                      type="button"
+                                      className="btn-secondary btn-xs"
+                                      onClick={() =>
+                                        setQuickAdd({
+                                          groupId: group.id,
+                                          categoryName: group.categoryName,
+                                          titleName: group.titleName,
+                                          statusText: '',
+                                          completedByMemberIds: [session.member.id],
+                                        })
+                                      }
+                                    >
+                                      <IconPlus size={11} />
+                                      Add Status to Ser {gIdx + 1}
+                                    </button>
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        )}
+                      </td>
+                    </tr>
+
+                    {isEditingThisGroup && editingGroup && (
+                      <tr>
+                        <td colSpan={5} className="followup-edit-cell">
+                          <div className="entry-edit-box">
+                            <div className="group-header">
+                              <strong>Edit Category &amp; Title for Ser {gIdx + 1}</strong>
+                            </div>
+                            <div className="composer-grid">
+                              <label className="field">
+                                <span>Report Category</span>
+                                <select
+                                  value={editingGroup.categoryName}
+                                  onChange={(e) => {
+                                    const nextCatName = e.target.value;
+                                    const nextCat = activeCategories.find(
+                                      (c) => c.name === nextCatName,
+                                    );
+                                    setEditingGroup({
+                                      ...editingGroup,
+                                      categoryName: nextCatName,
+                                      titleName: nextCat?.titles[0]?.name ?? editingGroup.titleName,
+                                    });
+                                  }}
+                                >
+                                  {!activeCategories.some(
+                                    (c) => c.name === editingGroup.categoryName,
+                                  ) && (
+                                    <option value={editingGroup.categoryName}>
+                                      {editingGroup.categoryName}
+                                    </option>
+                                  )}
+                                  {activeCategories.map((c) => (
+                                    <option key={c.id} value={c.name}>
+                                      {c.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label className="field">
+                                <span>Title</span>
+                                <select
+                                  value={editingGroup.titleName}
+                                  onChange={(e) =>
+                                    setEditingGroup({
+                                      ...editingGroup,
+                                      titleName: e.target.value,
+                                    })
+                                  }
+                                >
+                                  {!editTitles.some((t) => t.name === editingGroup.titleName) && (
+                                    <option value={editingGroup.titleName}>
+                                      {editingGroup.titleName}
+                                    </option>
+                                  )}
+                                  {editTitles.map((t) => (
+                                    <option key={t.id} value={t.name}>
+                                      {t.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            </div>
+                            <div className="entry-edit-actions">
+                              <button
+                                type="button"
+                                className="btn-primary btn-sm"
+                                disabled={updateGroupMutation.isPending}
+                                onClick={() => updateGroupMutation.mutate(editingGroup)}
+                              >
+                                {updateGroupMutation.isPending ? 'Saving...' : 'Save Changes'}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-secondary btn-sm"
+                                onClick={() => setEditingGroup(null)}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
                         </td>
                       </tr>
+                    )}
 
-                      {isEditingThisGroup && editingGroup && (
-                        <tr>
-                          <td colSpan={5} className="followup-edit-cell">
-                            <div className="entry-edit-box">
-                              <div className="group-header">
-                                <strong>Edit Category &amp; Title for Ser {gIdx + 1}</strong>
-                              </div>
-                              <div className="composer-grid">
-                                <label className="field">
-                                  <span>Report Category</span>
-                                  <select
-                                    value={editingGroup.categoryName}
-                                    onChange={(e) => {
-                                      const nextCatName = e.target.value;
-                                      const nextCat = activeCategories.find(
-                                        (c) => c.name === nextCatName,
-                                      );
-                                      setEditingGroup({
-                                        ...editingGroup,
-                                        categoryName: nextCatName,
-                                        titleName:
-                                          nextCat?.titles[0]?.name ?? editingGroup.titleName,
-                                      });
-                                    }}
-                                  >
-                                    {!activeCategories.some(
-                                      (c) => c.name === editingGroup.categoryName,
-                                    ) && (
-                                      <option value={editingGroup.categoryName}>
-                                        {editingGroup.categoryName}
-                                      </option>
-                                    )}
-                                    {activeCategories.map((c) => (
-                                      <option key={c.id} value={c.name}>
-                                        {c.name}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </label>
-                                <label className="field">
-                                  <span>Title</span>
-                                  <select
-                                    value={editingGroup.titleName}
-                                    onChange={(e) =>
-                                      setEditingGroup({
-                                        ...editingGroup,
-                                        titleName: e.target.value,
-                                      })
-                                    }
-                                  >
-                                    {!editTitles.some(
-                                      (t) => t.name === editingGroup.titleName,
-                                    ) && (
-                                      <option value={editingGroup.titleName}>
-                                        {editingGroup.titleName}
-                                      </option>
-                                    )}
-                                    {editTitles.map((t) => (
-                                      <option key={t.id} value={t.name}>
-                                        {t.name}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </label>
-                              </div>
-                              <div className="entry-edit-actions">
-                                <button
-                                  type="button"
-                                  className="btn-primary btn-sm"
-                                  disabled={updateGroupMutation.isPending}
-                                  onClick={() => updateGroupMutation.mutate(editingGroup)}
-                                >
-                                  {updateGroupMutation.isPending ? 'Saving...' : 'Save Changes'}
-                                </button>
-                                <button
-                                  type="button"
-                                  className="btn-secondary btn-sm"
-                                  onClick={() => setEditingGroup(null)}
-                                >
-                                  Cancel
-                                </button>
+                    {isQuickAdding && quickAdd && (
+                      <tr>
+                        <td colSpan={5} className="followup-edit-cell">
+                          <div className="entry-edit-box">
+                            <div className="group-header">
+                              <strong>
+                                Add Status to Ser {gIdx + 1} ({group.categoryName} /{' '}
+                                {group.titleName})
+                              </strong>
+                            </div>
+                            <label className="field">
+                              <span>Status</span>
+                              <textarea
+                                rows={2}
+                                value={quickAdd.statusText}
+                                onChange={(e) =>
+                                  setQuickAdd({ ...quickAdd, statusText: e.target.value })
+                                }
+                                placeholder="Enter status..."
+                              />
+                            </label>
+                            <div className="field">
+                              <span>Task Completed By</span>
+                              <div className="member-pills">
+                                {activeMembers.map((m) => {
+                                  const selected = quickAdd.completedByMemberIds.includes(m.id);
+                                  return (
+                                    <button
+                                      key={m.id}
+                                      type="button"
+                                      className={selected ? 'pill pill-active' : 'pill'}
+                                      onClick={() => {
+                                        const exists = quickAdd.completedByMemberIds.includes(m.id);
+                                        const next = exists
+                                          ? quickAdd.completedByMemberIds.length > 1
+                                            ? quickAdd.completedByMemberIds.filter(
+                                                (id) => id !== m.id,
+                                              )
+                                            : quickAdd.completedByMemberIds
+                                          : [...quickAdd.completedByMemberIds, m.id];
+                                        setQuickAdd({
+                                          ...quickAdd,
+                                          completedByMemberIds: next,
+                                        });
+                                      }}
+                                    >
+                                      {m.displayName}
+                                    </button>
+                                  );
+                                })}
                               </div>
                             </div>
-                          </td>
-                        </tr>
-                      )}
-
-                      {isQuickAdding && quickAdd && (
-                        <tr>
-                          <td colSpan={5} className="followup-edit-cell">
-                            <div className="entry-edit-box">
-                              <div className="group-header">
-                                <strong>
-                                  Add Status to Ser {gIdx + 1} ({group.categoryName} /{' '}
-                                  {group.titleName})
-                                </strong>
-                              </div>
-                              <label className="field">
-                                <span>Status</span>
-                                <textarea
-                                  rows={2}
-                                  value={quickAdd.statusText}
-                                  onChange={(e) =>
-                                    setQuickAdd({ ...quickAdd, statusText: e.target.value })
-                                  }
-                                  placeholder="Enter status..."
-                                />
-                              </label>
-                              <div className="field">
-                                <span>Task Completed By</span>
-                                <div className="member-pills">
-                                  {activeMembers.map((m) => {
-                                    const selected = quickAdd.completedByMemberIds.includes(m.id);
-                                    return (
-                                      <button
-                                        key={m.id}
-                                        type="button"
-                                        className={selected ? 'pill pill-active' : 'pill'}
-                                        onClick={() => {
-                                          const exists =
-                                            quickAdd.completedByMemberIds.includes(m.id);
-                                          const next = exists
-                                            ? quickAdd.completedByMemberIds.length > 1
-                                              ? quickAdd.completedByMemberIds.filter(
-                                                  (id) => id !== m.id,
-                                                )
-                                              : quickAdd.completedByMemberIds
-                                            : [...quickAdd.completedByMemberIds, m.id];
-                                          setQuickAdd({
-                                            ...quickAdd,
-                                            completedByMemberIds: next,
-                                          });
-                                        }}
-                                      >
-                                        {m.displayName}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                              <div className="entry-edit-actions">
-                                <button
-                                  type="button"
-                                  className="btn-primary btn-sm"
-                                  disabled={
-                                    quickAddMutation.isPending || !quickAdd.statusText.trim()
-                                  }
-                                  onClick={() => quickAddMutation.mutate(quickAdd)}
-                                >
-                                  {quickAddMutation.isPending ? 'Adding...' : 'Add Status'}
-                                </button>
-                                <button
-                                  type="button"
-                                  className="btn-secondary btn-sm"
-                                  onClick={() => setQuickAdd(null)}
-                                >
-                                  Cancel
-                                </button>
-                              </div>
+                            <div className="entry-edit-actions">
+                              <button
+                                type="button"
+                                className="btn-primary btn-sm"
+                                disabled={
+                                  quickAddMutation.isPending || !quickAdd.statusText.trim()
+                                }
+                                onClick={() => quickAddMutation.mutate(quickAdd)}
+                              >
+                                <IconPlus size={12} />
+                                {quickAddMutation.isPending ? 'Adding...' : 'Add Status'}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-secondary btn-sm"
+                                onClick={() => setQuickAdd(null)}
+                              >
+                                Cancel
+                              </button>
                             </div>
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
+      </div>
 
-        <div className="preview-section">
-          <div className="section-heading">
-            <h2>
-              {isFinalized
-                ? 'Finalized Report Preview (Full Team)'
-                : `Live Preview (${session.member.displayName}'s Entries)`}
-            </h2>
-            {!isFinalized && (
-              <span className="muted">
-                Showing your entries while in draft; full team document appears once finalized.
-              </span>
-            )}
-          </div>
-          <ReportPreview
-            report={report}
-            documentTitle={session.team.documentTitle}
-            hasLogo={session.team.hasLogo}
-            filterMemberId={isFinalized ? undefined : session.member.id}
-            filterUserId={isFinalized ? undefined : session.user.id}
-          />
+      <div className="preview-section">
+        <div className="section-heading" style={{ marginBottom: 4 }}>
+          <h2>
+            {isFinalized
+              ? 'Finalized Report Preview (Full Team)'
+              : `Live Preview (${session.member.displayName}'s Entries)`}
+          </h2>
+          {!isFinalized && (
+            <span className="section-heading-sub">
+              Showing your entries while in draft; full team document appears once finalized.
+            </span>
+          )}
         </div>
+        <ReportPreview
+          report={report}
+          documentTitle={session.team.documentTitle}
+          hasLogo={session.team.hasLogo}
+          filterMemberId={isFinalized ? undefined : session.member.id}
+          filterUserId={isFinalized ? undefined : session.user.id}
+        />
       </div>
     </div>
   );

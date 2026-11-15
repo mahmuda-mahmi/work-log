@@ -12,6 +12,8 @@ import { sha256Hex } from '../../common/crypto.js';
 import {
   BUMP_DAILY_REPORT_VERSION,
   COUNT_WORK_GROUPS_BY_REPORT,
+  DELETE_DAILY_REPORT,
+  DELETE_WORK_GROUP,
   INSERT_IGNORE_DAILY_REPORT,
   INSERT_WORK_ENTRY,
   INSERT_WORK_GROUP,
@@ -439,4 +441,22 @@ export async function updateWorkGroupCategoryTitle(
     reportId,
   ]);
   return { ok: res.affectedRows === 1, duplicate: false };
+}
+
+export async function deleteWorkGroup(
+  conn: PoolConnection,
+  reportId: string,
+  groupId: string,
+): Promise<boolean> {
+  const [res] = await conn.execute<ResultSetHeader>(DELETE_WORK_GROUP, [groupId, reportId]);
+  return res.affectedRows === 1;
+}
+
+export async function deleteDailyReport(
+  conn: PoolConnection,
+  teamId: string,
+  reportId: string,
+): Promise<boolean> {
+  const [res] = await conn.execute<ResultSetHeader>(DELETE_DAILY_REPORT, [reportId, teamId]);
+  return res.affectedRows === 1;
 }

@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { DictionaryCategory, MemberSummary } from '@cghq/contracts';
 import { findUnsupportedLatinChars } from '@cghq/document/date';
 import { ApiError, reportsApi } from '../api/client.js';
+import { IconPlus } from './ui/icons.js';
 
 interface EntryComposerProps {
   teamId: string;
@@ -49,10 +50,7 @@ export function EntryComposer({
   const draftKey = `cghq:draft:${teamId}:${reportDate}`;
   const lastPairKey = `cghq:lastPair:${teamId}`;
 
-  const activeMembers = useMemo(
-    () => members.filter((m) => m.isActive),
-    [members],
-  );
+  const activeMembers = useMemo(() => members.filter((m) => m.isActive), [members]);
 
   const activeCategories = useMemo(
     () =>
@@ -69,9 +67,7 @@ export function EntryComposer({
   const [categoryName, setCategoryName] = useState('');
   const [titleName, setTitleName] = useState('');
   const [statusText, setStatusText] = useState('');
-  const [completedByMemberIds, setCompletedByMemberIds] = useState<string[]>([
-    currentMemberId,
-  ]);
+  const [completedByMemberIds, setCompletedByMemberIds] = useState<string[]>([currentMemberId]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Restore draft for this date, or fall back to last-used category/title
@@ -197,21 +193,43 @@ export function EntryComposer({
   }
 
   return (
-    <form className="card composer-card" onSubmit={handleSubmit}>
+    <form className="card card-accent composer-card" onSubmit={handleSubmit}>
       <div className="composer-header">
-        <h2>Add Work Entry</h2>
-        {disabled && <span className="badge badge-muted">Finalized (read-only)</span>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <h2>Add Work Entry</h2>
+          {disabled && <span className="badge badge-muted">Finalized (read-only)</span>}
+        </div>
+
+        <div className="composer-assignees">
+          <span className="composer-assignees-label">Task Completed By:</span>
+          <div className="member-pills">
+            {activeMembers.map((m) => {
+              const selected = completedByMemberIds.includes(m.id);
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  className={selected ? 'pill pill-active' : 'pill'}
+                  onClick={() => toggleMember(m.id)}
+                  disabled={disabled || createMutation.isPending}
+                >
+                  {m.displayName}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {errorMsg && <div className="alert-error">{errorMsg}</div>}
       {unsupportedChars.length > 0 && (
         <div className="alert-warn">
-          Unsupported non-Latin characters detected ({unsupportedChars.join(' ')}). PDF export
-          only supports Latin script (FR-20).
+          Unsupported non-Latin characters detected ({unsupportedChars.join(' ')}). PDF export only
+          supports Latin script (FR-20).
         </div>
       )}
 
-      <div className="composer-grid">
+      <div className="composer-workbench">
         <label className="field">
           <span>Report Category</span>
           <select
@@ -256,48 +274,30 @@ export function EntryComposer({
             )}
           </select>
         </label>
-      </div>
 
-      <label className="field">
-        <span>Status</span>
-        <textarea
-          rows={3}
-          value={statusText}
-          onChange={(e) => setStatusText(e.target.value)}
-          placeholder="Describe completed work or current status..."
-          disabled={disabled || createMutation.isPending}
-          required
-        />
-      </label>
+        <label className="field composer-status-field">
+          <span>Status (one line per item)</span>
+          <textarea
+            className="composer-textarea"
+            rows={1}
+            value={statusText}
+            onChange={(e) => setStatusText(e.target.value)}
+            placeholder="Describe completed work or current status..."
+            disabled={disabled || createMutation.isPending}
+            required
+          />
+        </label>
 
-      <div className="field">
-        <span>Task Completed By</span>
-        <div className="member-pills">
-          {activeMembers.map((m) => {
-            const selected = completedByMemberIds.includes(m.id);
-            return (
-              <button
-                key={m.id}
-                type="button"
-                className={selected ? 'pill pill-active' : 'pill'}
-                onClick={() => toggleMember(m.id)}
-                disabled={disabled || createMutation.isPending}
-              >
-                {m.displayName}
-              </button>
-            );
-          })}
+        <div className="composer-actions">
+          <button
+            type="submit"
+            className="btn-primary"
+            disabled={disabled || createMutation.isPending}
+          >
+            <IconPlus size={14} />
+            {createMutation.isPending ? 'Saving...' : 'Add Entry'}
+          </button>
         </div>
-      </div>
-
-      <div className="composer-actions">
-        <button
-          type="submit"
-          className="btn-primary"
-          disabled={disabled || createMutation.isPending}
-        >
-          {createMutation.isPending ? 'Saving...' : 'Add Entry'}
-        </button>
       </div>
     </form>
   );

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AuthSession, FollowupItemDto, FollowupStatus } from '@cghq/contracts';
 import { ApiError, dictionaryApi, followupsApi, teamsApi } from '../api/client.js';
+import { IconEdit, IconPlus, IconTrash } from '../components/ui/icons.js';
 
 interface FollowupsScreenProps {
   session: AuthSession;
@@ -156,38 +157,20 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
 
   return (
     <div className="report-page">
-      <div className="card">
-        <div className="section-heading">
-          <h2>Follow-up Items</h2>
-          <div className="toolbar-actions">
-            <label className="checkbox-inline">
-              <input
-                type="checkbox"
-                checked={includeArchived}
-                onChange={(e) => setIncludeArchived(e.target.checked)}
-              />
-              <span>Show archived</span>
-            </label>
-            <button
-              type="button"
-              className="btn-primary btn-sm"
-              onClick={() => setShowAddForm((v) => !v)}
-            >
-              {showAddForm ? 'Close Form' : '+ Add New Follow-up'}
-            </button>
-          </div>
-        </div>
-        <p className="muted">
-          Default follow-up items stay active and carry forward into your final report
-          automatically unless edited or deleted.
-        </p>
-      </div>
-
       {errorMsg && <div className="alert-error">{errorMsg}</div>}
 
       {showAddForm && (
-        <form className="card composer-card" onSubmit={handleCreate}>
-          <h3>Add New Follow-up Item</h3>
+        <form className="card card-accent composer-card" onSubmit={handleCreate}>
+          <div className="composer-header">
+            <h2>Add New Follow-up Item</h2>
+            <button
+              type="button"
+              className="btn-secondary btn-xs"
+              onClick={() => setShowAddForm(false)}
+            >
+              Close
+            </button>
+          </div>
 
           <div className="composer-grid">
             <label className="field">
@@ -219,20 +202,7 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
                 ))}
               </select>
             </label>
-          </div>
 
-          <label className="field">
-            <span>Status</span>
-            <textarea
-              rows={2}
-              value={statusText}
-              onChange={(e) => setStatusText(e.target.value)}
-              placeholder="Describe pending follow-up action..."
-              required
-            />
-          </label>
-
-          <div className="composer-grid">
             <label className="field">
               <span>Task Completed By</span>
               <select
@@ -261,32 +231,72 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
             )}
           </div>
 
+          <label className="field">
+            <span>Status</span>
+            <textarea
+              rows={2}
+              value={statusText}
+              onChange={(e) => setStatusText(e.target.value)}
+              placeholder="Describe pending follow-up action..."
+              required
+            />
+          </label>
+
           <div className="composer-actions">
-            <button type="submit" className="btn-primary" disabled={createMutation.isPending}>
+            <button type="submit" className="btn-primary btn-sm" disabled={createMutation.isPending}>
+              <IconPlus size={13} />
               {createMutation.isPending ? 'Adding...' : 'Add Follow-up'}
             </button>
           </div>
         </form>
       )}
 
-      <div className="card">
+      <div className="card card-accent">
+        <div className="section-heading">
+          <div>
+            <h2>Follow-up Items</h2>
+            <p className="muted" style={{ marginTop: 2 }}>
+              Active follow-ups carry forward automatically into daily reports unless edited or
+              deleted.
+            </p>
+          </div>
+          <div className="toolbar-actions">
+            <label className="checkbox-inline">
+              <input
+                type="checkbox"
+                checked={includeArchived}
+                onChange={(e) => setIncludeArchived(e.target.checked)}
+              />
+              <span>Show archived</span>
+            </label>
+            <button
+              type="button"
+              className="btn-primary btn-sm"
+              onClick={() => setShowAddForm((v) => !v)}
+            >
+              <IconPlus size={13} />
+              {showAddForm ? 'Close Form' : 'New Follow-up'}
+            </button>
+          </div>
+        </div>
+
         {followupsQuery.isLoading ? (
-          <p className="muted">Loading follow-ups...</p>
+          <p className="muted">Loading follow-ups…</p>
         ) : items.length === 0 ? (
           <p className="muted">
             No follow-up items. Finalized reports will display &ldquo;None&rdquo;.
           </p>
         ) : (
-          <div className="preview-table-wrap">
-            <table className="preview-table">
+          <div className="work-table-wrap">
+            <table className="work-table">
               <thead>
                 <tr>
-                  <th className="col-ser">Ser</th>
-                  <th className="col-cat">Report Category</th>
-                  <th className="col-title">Title</th>
-                  <th className="col-status">Status</th>
-                  <th className="col-by">Task Completed By</th>
-                  <th style={{ width: 150 }}>Actions</th>
+                  <th style={{ width: '5%', textAlign: 'center' }}>Ser</th>
+                  <th style={{ width: '14%' }}>Report Category</th>
+                  <th style={{ width: '19%' }}>Title</th>
+                  <th style={{ width: '34%' }}>Status</th>
+                  <th style={{ width: '14%' }}>Task Completed By</th>
+                  <th style={{ width: '14%', textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -351,20 +361,6 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
                                   ))}
                                 </select>
                               </label>
-                            </div>
-
-                            <label className="field">
-                              <span>Status</span>
-                              <textarea
-                                rows={3}
-                                value={editing.statusText}
-                                onChange={(e) =>
-                                  setEditing({ ...editing, statusText: e.target.value })
-                                }
-                              />
-                            </label>
-
-                            <div className="composer-grid">
                               <label className="field">
                                 <span>Follow-up State</span>
                                 <select
@@ -402,6 +398,17 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
                               </label>
                             </div>
 
+                            <label className="field">
+                              <span>Status</span>
+                              <textarea
+                                rows={3}
+                                value={editing.statusText}
+                                onChange={(e) =>
+                                  setEditing({ ...editing, statusText: e.target.value })
+                                }
+                              />
+                            </label>
+
                             <div className="entry-edit-actions">
                               <button
                                 type="button"
@@ -427,38 +434,44 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
 
                   return (
                     <tr key={item.id}>
-                      <td className="col-ser">{idx + 1}</td>
-                      <td>{item.categoryName}</td>
-                      <td>{item.titleName}</td>
+                      <td className="col-ser">
+                        <span className="ser-badge">{idx + 1}</span>
+                      </td>
+                      <td className="cat-title">{item.categoryName}</td>
+                      <td className="title-sub">{item.titleName}</td>
                       <td>
-                        <div>{item.statusText}</div>
+                        <div className="entry-status-text">{item.statusText}</div>
                         <span
                           className={`badge badge-followup-${item.status}`}
-                          style={{ marginTop: 4 }}
+                          style={{ marginTop: 6 }}
                         >
                           {item.status}
                         </span>
                       </td>
-                      <td>{item.completedByDisplay}</td>
                       <td>
+                        <span className="assignee-chip">{item.completedByDisplay}</span>
+                      </td>
+                      <td className="col-actions">
                         {item.status !== 'archived' && (
                           <div className="history-actions">
                             <button
                               type="button"
-                              className="btn-secondary btn-sm"
+                              className="btn-secondary btn-xs"
                               onClick={() => startEdit(item)}
                             >
+                              <IconEdit size={11} />
                               Edit
                             </button>
                             <button
                               type="button"
-                              className="btn-danger btn-sm"
+                              className="btn-danger btn-xs"
                               onClick={() => {
                                 if (window.confirm('Delete this follow-up item?')) {
                                   archiveMutation.mutate(item.id);
                                 }
                               }}
                             >
+                              <IconTrash size={11} />
                               Delete
                             </button>
                           </div>

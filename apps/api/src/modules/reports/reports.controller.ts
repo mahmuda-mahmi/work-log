@@ -72,6 +72,8 @@ import { listTeamFollowups } from '../../db/repositories/followups.repo.js';
 import {
   assembleDailyReportDto,
   bumpDailyReportVersion,
+  deleteDailyReport,
+  deleteWorkGroup,
   findOrCreateWorkGroup,
   findReportByDate,
   findReportForUpdate,
@@ -520,6 +522,75 @@ export class ReportsController {
         throw new NotFoundException({ code: 'GROUP_NOT_FOUND', message: 'Group not found' });
       }
       await bumpDailyReportVersion(conn, report.id);
+    });
+
+    return { ok: true };
+  }
+
+  @Delete(':date/groups/:groupId')
+  async removeGroup(
+    @Param('teamId') teamId: string,
+    @Param('date') dateParam: string,
+    @Param('groupId') groupId: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const pool = getPool()!;
+    const auth = req.auth!;
+    const reportDate = assertValidIsoDate(dateParam);
+
+    await withTransaction(pool, async (conn) => {
+      const report = await findReportForUpdate(conn, teamId, reportDate);
+      if (!report) {
+        throw new NotFoundException({ code: 'REPORT_NOT_FOUND', message: 'Report not found' });
+      }
+      if (report.status === 'finalized') {
+        throw new ConflictException({ code: 'REPORT_FINALIZED', message: 'Report is finalized' });
+      }
+
+      const ok = await deleteWorkGroup(conn, report.id, groupId);
+      if (!ok) {
+        throw new NotFoundException({ code: 'GROUP_NOT_FOUND', message: 'Group not found' });
+      }
+      await bumpDailyReportVersion(conn, report.id);
+      await appendAuditEvent(conn, {
+        teamId,
+        actorUserId: auth.userId,
+        action: 'group.deleted',
+        entityType: 'work_group',
+        entityId: groupId,
+        metadata: { reportDate },
+      });
+    });
+
+    return { ok: true };
+  }
+
+  @Delete(':date')
+  @UseGuards(TeamLeadGuard)
+  async removeReport(
+    @Param('teamId') teamId: string,
+    @Param('date') dateParam: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const pool = getPool()!;
+    const auth = req.auth!;
+    const reportDate = assertValidIsoDate(dateParam);
+
+    await withTransaction(pool, async (conn) => {
+      const report = await findReportForUpdate(conn, teamId, reportDate);
+      if (!report) {
+        throw new NotFoundException({ code: 'REPORT_NOT_FOUND', message: 'Report not found' });
+      }
+
+      await deleteDailyReport(conn, teamId, report.id);
+      await appendAuditEvent(conn, {
+        teamId,
+        actorUserId: auth.userId,
+        action: 'report.deleted',
+        entityType: 'daily_report',
+        entityId: report.id,
+        metadata: { reportDate },
+      });
     });
 
     return { ok: true };

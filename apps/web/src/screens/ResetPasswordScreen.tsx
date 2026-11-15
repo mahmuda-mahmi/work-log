@@ -17,14 +17,28 @@ export function ResetPasswordScreen() {
   });
 
   return (
-    <main className="container">
-      <section className="card auth-card">
-        <h1>Reset Password</h1>
-        {errorMsg && <p className="error">{errorMsg}</p>}
+    <main className="auth-shell">
+      <section className="auth-card">
+        <div className="auth-logo-wrap">
+          <img src="/default-logo.png" alt="Solution Art" className="auth-logo" />
+        </div>
+        <div className="auth-header">
+          <h1>Reset Password</h1>
+          <p className="subtitle">Choose a new password of at least 8 characters.</p>
+        </div>
+
+        {errorMsg && (
+          <div className="alert-error" style={{ marginBottom: 12 }}>
+            {errorMsg}
+          </div>
+        )}
+
         {done ? (
           <div className="stack">
-            <p className="ok">Password updated. All previous sessions have been revoked.</p>
-            <Link to="/login" className="btn-primary">
+            <div className="alert-success">
+              Password updated. All previous sessions have been revoked.
+            </div>
+            <Link to="/login" className="btn-primary btn-block">
               Go to Sign In
             </Link>
           </div>
@@ -56,7 +70,7 @@ export function ResetPasswordScreen() {
                 </button>
               </div>
             </label>
-            <button type="submit" className="btn-primary" disabled={mutation.isPending}>
+            <button type="submit" className="btn-primary btn-block" disabled={mutation.isPending}>
               {mutation.isPending ? 'Updating…' : 'Set New Password'}
             </button>
           </form>

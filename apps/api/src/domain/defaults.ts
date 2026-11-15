@@ -155,7 +155,7 @@ export async function ensureDefaultReportGroups(
   actorUserId: string,
 ): Promise<void> {
   const count = await countWorkGroupsByReport(pool, reportId);
-  if (count >= DEFAULT_REPORT_GROUPS.length) return;
+  if (count > 0) return;
 
   await withTransaction(pool, async (conn) => {
     for (let i = 0; i < DEFAULT_REPORT_GROUPS.length; i += 1) {
