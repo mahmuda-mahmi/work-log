@@ -121,6 +121,19 @@ export const teamsApi = {
 
 export const dictionaryApi = {
   list: (teamId: string) => apiFetch<DictionaryCategory[]>(`/api/teams/${teamId}/dictionary`),
+  createCategory: (teamId: string, name: string) =>
+    apiFetch<{ id: string; name: string }>(`/api/teams/${teamId}/dictionary/categories`, {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
+  createTitle: (teamId: string, categoryId: string, name: string) =>
+    apiFetch<{ id: string; name: string }>(
+      `/api/teams/${teamId}/dictionary/categories/${categoryId}/titles`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ name }),
+      },
+    ),
   updateCategory: (
     teamId: string,
     categoryId: string,

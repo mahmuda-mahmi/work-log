@@ -6,6 +6,8 @@ interface ReportPreviewProps {
   report: DailyReportDto;
   documentTitle: string;
   hasLogo: boolean;
+  filterMemberId?: string;
+  filterUserId?: string;
 }
 
 function computeRowSpans(rows: DocumentRow[]): number[] {
@@ -29,18 +31,35 @@ function computeRowSpans(rows: DocumentRow[]): number[] {
   return spans;
 }
 
-export function ReportPreview({ report, documentTitle, hasLogo }: ReportPreviewProps) {
-  const [logoVisible, setLogoVisible] = useState(hasLogo);
+export function ReportPreview({
+  report,
+  documentTitle,
+  hasLogo,
+  filterMemberId,
+  filterUserId,
+}: ReportPreviewProps) {
+  const [logoSrc, setLogoSrc] = useState(
+    hasLogo ? `/api/teams/${report.teamId}/logo` : '/default-logo.png',
+  );
+  const [logoVisible, setLogoVisible] = useState(true);
 
   const model = useMemo(() => {
     const entries: ReportEntryInput[] = report.groups.flatMap((group) =>
-      group.entries.map((entry) => ({
-        categoryName: group.categoryName,
-        titleName: group.titleName,
-        statusText: entry.statusText,
-        completedBy: entry.completedByDisplay,
-        numberingMode: group.numberingMode,
-      })),
+      group.entries
+        .filter((entry) => {
+          if (!filterMemberId && !filterUserId) return true;
+          return (
+            entry.completedByMemberId === filterMemberId ||
+            entry.createdByUserId === filterUserId
+          );
+        })
+        .map((entry) => ({
+          categoryName: group.categoryName,
+          titleName: group.titleName,
+          statusText: entry.statusText,
+          completedBy: entry.completedByDisplay,
+          numberingMode: group.numberingMode,
+        })),
     );
 
     return buildDocumentModel({
@@ -55,7 +74,7 @@ export function ReportPreview({ report, documentTitle, hasLogo }: ReportPreviewP
         completedBy: f.completedByDisplay,
       })),
     });
-  }, [report, documentTitle]);
+  }, [report, documentTitle, filterMemberId, filterUserId]);
 
   const mainRowSpans = useMemo(() => computeRowSpans(model.mainRows), [model.mainRows]);
 
@@ -64,10 +83,16 @@ export function ReportPreview({ report, documentTitle, hasLogo }: ReportPreviewP
       <div className="preview-header">
         {logoVisible && (
           <img
-            src={`/api/teams/${report.teamId}/logo`}
+            src={logoSrc}
             alt="Team logo"
             className="preview-logo"
-            onError={() => setLogoVisible(false)}
+            onError={() => {
+              if (logoSrc !== '/default-logo.png') {
+                setLogoSrc('/default-logo.png');
+              } else {
+                setLogoVisible(false);
+              }
+            }}
           />
         )}
         <div className="preview-title-block">

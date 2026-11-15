@@ -44,7 +44,6 @@ export function ReportScreen({ session }: ReportScreenProps) {
   const queryClient = useQueryClient();
   const teamId = session.team.id;
 
-  const [viewMode, setViewMode] = useState<'edit' | 'preview'>('edit');
   const [actionError, setActionError] = useState<string | null>(null);
   const [editing, setEditing] = useState<EditingState | null>(null);
 
@@ -338,48 +337,20 @@ export function ReportScreen({ session }: ReportScreenProps) {
               Finalize to export
             </span>
           )}
-
-          <div className="view-toggle" role="tablist" aria-label="Report view mode">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={viewMode === 'edit'}
-              className={viewMode === 'edit' ? 'tab-btn tab-btn-active' : 'tab-btn'}
-              onClick={() => setViewMode('edit')}
-            >
-              Edit Entries
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={viewMode === 'preview'}
-              className={viewMode === 'preview' ? 'tab-btn tab-btn-active' : 'tab-btn'}
-              onClick={() => setViewMode('preview')}
-            >
-              Live Preview
-            </button>
-          </div>
         </div>
       </div>
 
       {actionError && <div className="alert-error">{actionError}</div>}
 
-      {viewMode === 'preview' ? (
-        <ReportPreview
-          report={report}
-          documentTitle={session.team.documentTitle}
-          hasLogo={session.team.hasLogo}
+      <div className="report-workspace">
+        <EntryComposer
+          teamId={teamId}
+          reportDate={report.reportDate}
+          dictionary={dictionaryQuery.data ?? []}
+          members={membersQuery.data ?? []}
+          currentMemberId={session.member.id}
+          disabled={isFinalized}
         />
-      ) : (
-        <div className="report-workspace">
-          <EntryComposer
-            teamId={teamId}
-            reportDate={report.reportDate}
-            dictionary={dictionaryQuery.data ?? []}
-            members={membersQuery.data ?? []}
-            currentMemberId={session.member.id}
-            disabled={isFinalized}
-          />
 
           <div className="groups-section">
             <div className="section-heading">
@@ -667,8 +638,29 @@ export function ReportScreen({ session }: ReportScreenProps) {
               ))
             )}
           </div>
+
+        <div className="preview-section">
+          <div className="section-heading">
+            <h2>
+              {isFinalized
+                ? 'Finalized Report Preview (Full Team)'
+                : `Live Preview (${session.member.displayName}'s Entries)`}
+            </h2>
+            {!isFinalized && (
+              <span className="muted">
+                Showing your entries while in draft; full team document appears once finalized.
+              </span>
+            )}
+          </div>
+          <ReportPreview
+            report={report}
+            documentTitle={session.team.documentTitle}
+            hasLogo={session.team.hasLogo}
+            filterMemberId={isFinalized ? undefined : session.member.id}
+            filterUserId={isFinalized ? undefined : session.user.id}
+          />
         </div>
-      )}
+      </div>
     </div>
   );
 }

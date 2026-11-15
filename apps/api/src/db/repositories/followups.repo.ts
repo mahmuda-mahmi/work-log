@@ -2,6 +2,7 @@ import type { Pool, PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql
 import type { FollowupItemDto, FollowupStatus } from '@cghq/contracts';
 import {
   ARCHIVE_FOLLOWUP_ITEM,
+  COUNT_FOLLOWUPS_BY_TEAM,
   INSERT_FOLLOWUP_ITEM,
   SELECT_FOLLOWUPS_BY_TEAM,
   SELECT_FOLLOWUP_BY_ID,
@@ -111,11 +112,21 @@ export async function insertFollowupItem(
   ]);
 }
 
+export async function countTeamFollowups(conn: Conn, teamId: string): Promise<number> {
+  const [rows] = await conn.execute<(RowDataPacket & { cnt: number })[]>(
+    COUNT_FOLLOWUPS_BY_TEAM,
+    [teamId],
+  );
+  return Number(rows[0]?.cnt ?? 0);
+}
+
 export async function updateFollowupItemOptimistic(
   conn: Conn,
   input: {
     teamId: string;
     followupId: string;
+    categoryId: string | null;
+    titleId: string | null;
     status: FollowupStatus;
     statusText: string;
     completedByMemberId: string | null;
@@ -126,6 +137,8 @@ export async function updateFollowupItemOptimistic(
   },
 ): Promise<boolean> {
   const [res] = await conn.execute<ResultSetHeader>(UPDATE_FOLLOWUP_ITEM_OPTIMISTIC, [
+    input.categoryId,
+    input.titleId,
     input.status,
     input.statusText,
     input.completedByMemberId,

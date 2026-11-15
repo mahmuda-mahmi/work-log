@@ -1,19 +1,21 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AuthSession, FollowupItemDto, FollowupStatus } from '@cghq/contracts';
-import { ApiError, followupsApi, teamsApi } from '../api/client.js';
+import { ApiError, dictionaryApi, followupsApi, teamsApi } from '../api/client.js';
 
 interface FollowupsScreenProps {
   session: AuthSession;
 }
 
-function moveItem<T>(items: T[], index: number, direction: -1 | 1): T[] {
-  const target = index + direction;
-  if (target < 0 || target >= items.length) return items;
-  const copy = [...items];
-  const [removed] = copy.splice(index, 1);
-  copy.splice(target, 0, removed!);
-  return copy;
+interface EditRowState {
+  id: string;
+  categoryName: string;
+  titleName: string;
+  status: FollowupStatus;
+  statusText: string;
+  completedByMemberId: string;
+  completedByLabel: string;
+  version: number;
 }
 
 export function FollowupsScreen({ session }: FollowupsScreenProps) {
@@ -21,11 +23,13 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
   const teamId = session.team.id;
 
   const [includeArchived, setIncludeArchived] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
   const [categoryName, setCategoryName] = useState('');
   const [titleName, setTitleName] = useState('');
   const [statusText, setStatusText] = useState('');
   const [completedByMemberId, setCompletedByMemberId] = useState<string>('');
   const [completedByLabel, setCompletedByLabel] = useState('As Previous');
+  const [editing, setEditing] = useState<EditRowState | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const followupsQuery = useQuery({
@@ -33,10 +37,42 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
     queryFn: () => followupsApi.list(teamId, includeArchived),
   });
 
+  const dictionaryQuery = useQuery({
+    queryKey: ['dictionary', teamId],
+    queryFn: () => dictionaryApi.list(teamId),
+  });
+
   const membersQuery = useQuery({
     queryKey: ['members', teamId],
     queryFn: () => teamsApi.listMembers(teamId),
   });
+
+  const activeCategories = useMemo(
+    () =>
+      (dictionaryQuery.data ?? [])
+        .filter((c) => c.isActive)
+        .map((c) => ({
+          ...c,
+          titles: c.titles.filter((t) => t.isActive),
+        }))
+        .filter((c) => c.titles.length > 0),
+    [dictionaryQuery.data],
+  );
+
+  // Default dropdown selections when dictionary loads
+  useEffect(() => {
+    if (activeCategories.length === 0) return;
+    if (!categoryName || !activeCategories.some((c) => c.name === categoryName)) {
+      const firstCat = activeCategories[0]!;
+      setCategoryName(firstCat.name);
+      setTitleName(firstCat.titles[0]?.name ?? '');
+    }
+  }, [activeCategories, categoryName]);
+
+  const titleOptions = useMemo(() => {
+    const cat = activeCategories.find((c) => c.name === categoryName);
+    return cat?.titles ?? [];
+  }, [activeCategories, categoryName]);
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -49,9 +85,8 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
       }),
     onSuccess: () => {
       setErrorMsg(null);
-      setCategoryName('');
-      setTitleName('');
       setStatusText('');
+      setShowAddForm(false);
       void queryClient.invalidateQueries({ queryKey: ['followups', teamId] });
       void queryClient.invalidateQueries({ queryKey: ['report', teamId] });
     },
@@ -60,24 +95,27 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
     },
   });
 
-  const updateStatusMutation = useMutation({
-    mutationFn: ({ item, status }: { item: FollowupItemDto; status: FollowupStatus }) =>
-      followupsApi.update(teamId, item.id, { status, version: item.version }),
+  const updateMutation = useMutation({
+    mutationFn: (payload: EditRowState) =>
+      followupsApi.update(teamId, payload.id, {
+        categoryName: payload.categoryName.trim(),
+        titleName: payload.titleName.trim(),
+        status: payload.status,
+        statusText: payload.statusText.trim(),
+        completedByMemberId: payload.completedByMemberId || null,
+        completedByLabel: payload.completedByMemberId
+          ? null
+          : payload.completedByLabel.trim() || 'As Previous',
+        version: payload.version,
+      }),
     onSuccess: () => {
       setErrorMsg(null);
+      setEditing(null);
       void queryClient.invalidateQueries({ queryKey: ['followups', teamId] });
       void queryClient.invalidateQueries({ queryKey: ['report', teamId] });
     },
     onError: (err) => {
       setErrorMsg(err instanceof ApiError ? err.message : 'Failed to update follow-up');
-    },
-  });
-
-  const reorderMutation = useMutation({
-    mutationFn: (ids: string[]) => followupsApi.reorder(teamId, { ids }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['followups', teamId] });
-      void queryClient.invalidateQueries({ queryKey: ['report', teamId] });
     },
   });
 
@@ -91,6 +129,20 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
 
   const activeMembers = (membersQuery.data ?? []).filter((m) => m.isActive);
   const items = followupsQuery.data ?? [];
+
+  function startEdit(item: FollowupItemDto) {
+    setErrorMsg(null);
+    setEditing({
+      id: item.id,
+      categoryName: item.categoryName,
+      titleName: item.titleName,
+      status: item.status,
+      statusText: item.statusText,
+      completedByMemberId: item.completedByMemberId ?? '',
+      completedByLabel: item.completedByLabel ?? 'As Previous',
+      version: item.version,
+    });
+  }
 
   function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -107,169 +159,297 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
       <div className="card">
         <div className="section-heading">
           <h2>Follow-up Items</h2>
-          <label className="checkbox-inline">
-            <input
-              type="checkbox"
-              checked={includeArchived}
-              onChange={(e) => setIncludeArchived(e.target.checked)}
-            />
-            <span>Show archived</span>
-          </label>
+          <div className="toolbar-actions">
+            <label className="checkbox-inline">
+              <input
+                type="checkbox"
+                checked={includeArchived}
+                onChange={(e) => setIncludeArchived(e.target.checked)}
+              />
+              <span>Show archived</span>
+            </label>
+            <button
+              type="button"
+              className="btn-primary btn-sm"
+              onClick={() => setShowAddForm((v) => !v)}
+            >
+              {showAddForm ? 'Close Form' : '+ Add New Follow-up'}
+            </button>
+          </div>
         </div>
         <p className="muted">
-          Open and in-progress items automatically carry forward into every draft daily report
-          until marked done or archived.
+          Default follow-up items stay active and carry forward into your final report
+          automatically unless edited or deleted.
         </p>
       </div>
 
-      <form className="card composer-card" onSubmit={handleCreate}>
-        <h3>Add Follow-up Item</h3>
-        {errorMsg && <div className="alert-error">{errorMsg}</div>}
+      {errorMsg && <div className="alert-error">{errorMsg}</div>}
 
-        <div className="composer-grid">
+      {showAddForm && (
+        <form className="card composer-card" onSubmit={handleCreate}>
+          <h3>Add New Follow-up Item</h3>
+
+          <div className="composer-grid">
+            <label className="field">
+              <span>Report Category</span>
+              <select
+                value={categoryName}
+                onChange={(e) => {
+                  const nextCatName = e.target.value;
+                  setCategoryName(nextCatName);
+                  const nextCat = activeCategories.find((c) => c.name === nextCatName);
+                  setTitleName(nextCat?.titles[0]?.name ?? '');
+                }}
+              >
+                {activeCategories.map((cat) => (
+                  <option key={cat.id} value={cat.name}>
+                    {cat.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="field">
+              <span>Title</span>
+              <select value={titleName} onChange={(e) => setTitleName(e.target.value)}>
+                {titleOptions.map((t) => (
+                  <option key={t.id} value={t.name}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
           <label className="field">
-            <span>Report Category (optional)</span>
-            <input
-              type="text"
-              value={categoryName}
-              onChange={(e) => setCategoryName(e.target.value)}
-              placeholder="e.g. Operations"
-            />
-          </label>
-          <label className="field">
-            <span>Title</span>
-            <input
-              type="text"
-              value={titleName}
-              onChange={(e) => setTitleName(e.target.value)}
-              placeholder="e.g. SSL Certificate Renewal"
+            <span>Status</span>
+            <textarea
+              rows={2}
+              value={statusText}
+              onChange={(e) => setStatusText(e.target.value)}
+              placeholder="Describe pending follow-up action..."
               required
             />
           </label>
-        </div>
 
-        <label className="field">
-          <span>Status</span>
-          <textarea
-            rows={2}
-            value={statusText}
-            onChange={(e) => setStatusText(e.target.value)}
-            placeholder="Describe pending follow-up action..."
-            required
-          />
-        </label>
-
-        <div className="composer-grid">
-          <label className="field">
-            <span>Assigned Member (optional)</span>
-            <select
-              value={completedByMemberId}
-              onChange={(e) => setCompletedByMemberId(e.target.value)}
-            >
-              <option value="">Use Label (default: As Previous)</option>
-              {activeMembers.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.displayName}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {!completedByMemberId && (
+          <div className="composer-grid">
             <label className="field">
-              <span>Task Completed By Label</span>
-              <input
-                type="text"
-                value={completedByLabel}
-                onChange={(e) => setCompletedByLabel(e.target.value)}
-                placeholder="As Previous"
-              />
+              <span>Task Completed By</span>
+              <select
+                value={completedByMemberId}
+                onChange={(e) => setCompletedByMemberId(e.target.value)}
+              >
+                <option value="">As Previous (or custom label)</option>
+                {activeMembers.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.displayName}
+                  </option>
+                ))}
+              </select>
             </label>
-          )}
-        </div>
 
-        <div className="composer-actions">
-          <button type="submit" className="btn-primary" disabled={createMutation.isPending}>
-            {createMutation.isPending ? 'Adding...' : 'Add Follow-up'}
-          </button>
-        </div>
-      </form>
+            {!completedByMemberId && (
+              <label className="field">
+                <span>Custom Label</span>
+                <input
+                  type="text"
+                  value={completedByLabel}
+                  onChange={(e) => setCompletedByLabel(e.target.value)}
+                  placeholder="As Previous"
+                />
+              </label>
+            )}
+          </div>
+
+          <div className="composer-actions">
+            <button type="submit" className="btn-primary" disabled={createMutation.isPending}>
+              {createMutation.isPending ? 'Adding...' : 'Add Follow-up'}
+            </button>
+          </div>
+        </form>
+      )}
 
       <div className="card">
         {followupsQuery.isLoading ? (
           <p className="muted">Loading follow-ups...</p>
         ) : items.length === 0 ? (
-          <p className="muted">No follow-up items yet. Daily reports will show &ldquo;None&rdquo;.</p>
+          <p className="muted">
+            No follow-up items. Finalized reports will display &ldquo;None&rdquo;.
+          </p>
         ) : (
-          <div className="entries-list">
-            {items.map((item, idx) => (
-              <div key={item.id} className="entry-row">
-                <div className="entry-body">
-                  <div className="followup-title-line">
-                    <span className={`badge badge-followup-${item.status}`}>{item.status}</span>
-                    {item.categoryName && (
-                      <span className="muted">{item.categoryName} / </span>
-                    )}
-                    <strong>{item.titleName}</strong>
-                  </div>
-                  <div className="entry-status">{item.statusText}</div>
-                  <div className="entry-meta">
-                    Completed by: <strong>{item.completedByDisplay}</strong>
-                    {item.completedOn ? ` · Completed on ${item.completedOn}` : ''}
-                  </div>
-                </div>
+          <div className="preview-table-wrap">
+            <table className="preview-table">
+              <thead>
+                <tr>
+                  <th className="col-ser">Ser</th>
+                  <th className="col-cat">Report Category</th>
+                  <th className="col-title">Title</th>
+                  <th className="col-status">Status</th>
+                  <th className="col-by">Task Completed By</th>
+                  <th style={{ width: 150 }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item, idx) => {
+                  const isEditingThis = editing?.id === item.id;
+                  if (isEditingThis && editing) {
+                    const editCat = activeCategories.find(
+                      (c) => c.name === editing.categoryName,
+                    );
+                    const editTitles = editCat?.titles ?? [];
+                    return (
+                      <tr key={item.id}>
+                        <td className="col-ser">{idx + 1}</td>
+                        <td>
+                          <select
+                            value={editing.categoryName}
+                            onChange={(e) => {
+                              const nextCatName = e.target.value;
+                              const nextCat = activeCategories.find(
+                                (c) => c.name === nextCatName,
+                              );
+                              setEditing({
+                                ...editing,
+                                categoryName: nextCatName,
+                                titleName: nextCat?.titles[0]?.name ?? editing.titleName,
+                              });
+                            }}
+                          >
+                            {!activeCategories.some((c) => c.name === editing.categoryName) && (
+                              <option value={editing.categoryName}>
+                                {editing.categoryName || 'General'}
+                              </option>
+                            )}
+                            {activeCategories.map((c) => (
+                              <option key={c.id} value={c.name}>
+                                {c.name}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>
+                          <select
+                            value={editing.titleName}
+                            onChange={(e) =>
+                              setEditing({ ...editing, titleName: e.target.value })
+                            }
+                          >
+                            {!editTitles.some((t) => t.name === editing.titleName) && (
+                              <option value={editing.titleName}>{editing.titleName}</option>
+                            )}
+                            {editTitles.map((t) => (
+                              <option key={t.id} value={t.name}>
+                                {t.name}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>
+                          <textarea
+                            rows={3}
+                            style={{ width: '100%' }}
+                            value={editing.statusText}
+                            onChange={(e) =>
+                              setEditing({ ...editing, statusText: e.target.value })
+                            }
+                          />
+                          <select
+                            style={{ marginTop: 4 }}
+                            value={editing.status}
+                            onChange={(e) =>
+                              setEditing({
+                                ...editing,
+                                status: e.target.value as FollowupStatus,
+                              })
+                            }
+                          >
+                            <option value="open">Open (carry forward)</option>
+                            <option value="in_progress">In Progress (carry forward)</option>
+                            <option value="done">Done (stop carrying forward)</option>
+                          </select>
+                        </td>
+                        <td>
+                          <select
+                            value={editing.completedByMemberId}
+                            onChange={(e) =>
+                              setEditing({ ...editing, completedByMemberId: e.target.value })
+                            }
+                          >
+                            <option value="">Label ({editing.completedByLabel})</option>
+                            {activeMembers.map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.displayName}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>
+                          <div className="history-actions">
+                            <button
+                              type="button"
+                              className="btn-primary btn-sm"
+                              disabled={updateMutation.isPending}
+                              onClick={() => updateMutation.mutate(editing)}
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-secondary btn-sm"
+                              onClick={() => setEditing(null)}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  }
 
-                {item.status !== 'archived' && (
-                  <div className="entry-actions">
-                    <select
-                      aria-label="Follow-up status"
-                      value={item.status}
-                      onChange={(e) =>
-                        updateStatusMutation.mutate({
-                          item,
-                          status: e.target.value as FollowupStatus,
-                        })
-                      }
-                    >
-                      <option value="open">Open</option>
-                      <option value="in_progress">In Progress</option>
-                      <option value="done">Done</option>
-                    </select>
-                    <button
-                      type="button"
-                      className="btn-secondary btn-sm"
-                      disabled={idx === 0 || reorderMutation.isPending}
-                      onClick={() =>
-                        reorderMutation.mutate(moveItem(items, idx, -1).map((x) => x.id))
-                      }
-                    >
-                      ↑
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-secondary btn-sm"
-                      disabled={idx === items.length - 1 || reorderMutation.isPending}
-                      onClick={() =>
-                        reorderMutation.mutate(moveItem(items, idx, 1).map((x) => x.id))
-                      }
-                    >
-                      ↓
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-danger btn-sm"
-                      onClick={() => {
-                        if (window.confirm('Archive this follow-up item?')) {
-                          archiveMutation.mutate(item.id);
-                        }
-                      }}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
+                  return (
+                    <tr key={item.id}>
+                      <td className="col-ser">{idx + 1}</td>
+                      <td>{item.categoryName}</td>
+                      <td>{item.titleName}</td>
+                      <td>
+                        <div>{item.statusText}</div>
+                        <span
+                          className={`badge badge-followup-${item.status}`}
+                          style={{ marginTop: 4 }}
+                        >
+                          {item.status}
+                        </span>
+                      </td>
+                      <td>{item.completedByDisplay}</td>
+                      <td>
+                        {item.status !== 'archived' && (
+                          <div className="history-actions">
+                            <button
+                              type="button"
+                              className="btn-secondary btn-sm"
+                              onClick={() => startEdit(item)}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-danger btn-sm"
+                              onClick={() => {
+                                if (window.confirm('Delete this follow-up item?')) {
+                                  archiveMutation.mutate(item.id);
+                                }
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

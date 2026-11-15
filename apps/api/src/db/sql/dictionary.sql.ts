@@ -59,3 +59,16 @@ export const UPDATE_TITLE = `
   SET name = COALESCE(?, name), is_active = COALESCE(?, is_active)
   WHERE id = ? AND team_id = ?
 `;
+
+export const COUNT_CATEGORY_BY_LOWER_NAME = `
+  SELECT COUNT(*) AS cnt
+  FROM categories
+  WHERE team_id = ? AND LOWER(name) = LOWER(?)
+`;
+
+export const SELECT_CATEGORY_BY_ID = `
+  SELECT id, name, is_active
+  FROM categories
+  WHERE id = ? AND team_id = ?
+  LIMIT 1
+`;

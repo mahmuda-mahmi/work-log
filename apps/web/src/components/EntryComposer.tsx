@@ -54,6 +54,18 @@ export function EntryComposer({
     [members],
   );
 
+  const activeCategories = useMemo(
+    () =>
+      dictionary
+        .filter((c) => c.isActive)
+        .map((c) => ({
+          ...c,
+          titles: c.titles.filter((t) => t.isActive),
+        }))
+        .filter((c) => c.titles.length > 0),
+    [dictionary],
+  );
+
   const [categoryName, setCategoryName] = useState('');
   const [titleName, setTitleName] = useState('');
   const [statusText, setStatusText] = useState('');
@@ -84,9 +96,25 @@ export function EntryComposer({
     setCompletedByMemberIds([currentMemberId]);
   }, [draftKey, lastPairKey, currentMemberId]);
 
+  // Ensure selected category & title always match valid dropdown options once dictionary loads
+  useEffect(() => {
+    if (activeCategories.length === 0) return;
+    const matchedCat =
+      activeCategories.find((c) => c.name === categoryName) ?? activeCategories[0]!;
+    if (matchedCat.name !== categoryName) {
+      setCategoryName(matchedCat.name);
+      setTitleName(matchedCat.titles[0]?.name ?? '');
+      return;
+    }
+    const matchedTitle = matchedCat.titles.find((t) => t.name === titleName);
+    if (!matchedTitle) {
+      setTitleName(matchedCat.titles[0]?.name ?? '');
+    }
+  }, [activeCategories, categoryName, titleName]);
+
   // Persist unsaved draft locally so navigation or refresh never loses typing (FR-30)
   useEffect(() => {
-    if (!categoryName && !titleName && !statusText) {
+    if (!statusText) {
       try {
         window.localStorage.removeItem(draftKey);
       } catch {
@@ -102,17 +130,12 @@ export function EntryComposer({
     } satisfies StoredDraft);
   }, [draftKey, categoryName, titleName, statusText, completedByMemberIds]);
 
-  const matchingCategory = useMemo(() => {
-    const needle = categoryName.trim().toLowerCase();
-    return dictionary.find((c) => c.name.toLowerCase() === needle) ?? null;
-  }, [dictionary, categoryName]);
+  const selectedCategory = useMemo(
+    () => activeCategories.find((c) => c.name === categoryName) ?? activeCategories[0] ?? null,
+    [activeCategories, categoryName],
+  );
 
-  const titleSuggestions = useMemo(() => {
-    if (matchingCategory) {
-      return matchingCategory.titles;
-    }
-    return dictionary.flatMap((c) => c.titles);
-  }, [dictionary, matchingCategory]);
+  const titleOptions = selectedCategory?.titles ?? [];
 
   const unsupportedChars = useMemo(
     () => findUnsupportedLatinChars(`${categoryName}\n${titleName}\n${statusText}`),
@@ -167,7 +190,7 @@ export function EntryComposer({
     e.preventDefault();
     setErrorMsg(null);
     if (!categoryName.trim() || !titleName.trim() || !statusText.trim()) {
-      setErrorMsg('Category, Title, and Status are required.');
+      setErrorMsg('Report Category, Title, and Status are required.');
       return;
     }
     createMutation.mutate();
@@ -191,38 +214,47 @@ export function EntryComposer({
       <div className="composer-grid">
         <label className="field">
           <span>Report Category</span>
-          <input
-            type="text"
-            list="cghq-category-options"
+          <select
             value={categoryName}
-            onChange={(e) => setCategoryName(e.target.value)}
-            placeholder="e.g. Ops / Development / Support"
-            disabled={disabled || createMutation.isPending}
+            onChange={(e) => {
+              const nextCatName = e.target.value;
+              setCategoryName(nextCatName);
+              const nextCat = activeCategories.find((c) => c.name === nextCatName);
+              setTitleName(nextCat?.titles[0]?.name ?? '');
+            }}
+            disabled={disabled || createMutation.isPending || activeCategories.length === 0}
             required
-          />
-          <datalist id="cghq-category-options">
-            {dictionary.map((cat) => (
-              <option key={cat.id} value={cat.name} />
-            ))}
-          </datalist>
+          >
+            {activeCategories.length === 0 ? (
+              <option value="">Loading categories...</option>
+            ) : (
+              activeCategories.map((cat) => (
+                <option key={cat.id} value={cat.name}>
+                  {cat.name}
+                </option>
+              ))
+            )}
+          </select>
         </label>
 
         <label className="field">
           <span>Title</span>
-          <input
-            type="text"
-            list="cghq-title-options"
+          <select
             value={titleName}
             onChange={(e) => setTitleName(e.target.value)}
-            placeholder="e.g. API Hardening"
-            disabled={disabled || createMutation.isPending}
+            disabled={disabled || createMutation.isPending || titleOptions.length === 0}
             required
-          />
-          <datalist id="cghq-title-options">
-            {titleSuggestions.map((t) => (
-              <option key={t.id} value={t.name} />
-            ))}
-          </datalist>
+          >
+            {titleOptions.length === 0 ? (
+              <option value="">No titles in category</option>
+            ) : (
+              titleOptions.map((t) => (
+                <option key={t.id} value={t.name}>
+                  {t.name}
+                </option>
+              ))
+            )}
+          </select>
         </label>
       </div>
 

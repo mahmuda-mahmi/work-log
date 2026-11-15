@@ -34,6 +34,7 @@ import {
 import {
   buildDocumentModel,
   buildExportFileName,
+  getDefaultLogoBytes,
   renderDocx,
   renderPdf,
   type ReportEntryInput,
@@ -83,6 +84,7 @@ import {
   updateWorkGroupPosition,
 } from '../../db/repositories/reports.repo.js';
 import { findTeamLogo, findTeamSettings } from '../../db/repositories/teams.repo.js';
+import { ensureDefaultFollowups } from '../../domain/defaults.js';
 import {
   assertDateAllowedForCreate,
   assertValidIsoDate,
@@ -129,6 +131,7 @@ export class ReportsController {
     const auth = req.auth!;
     const todayDate = getTeamTodayDate(auth.teamTimezone);
 
+    await ensureDefaultFollowups(pool, teamId, auth.userId);
     let report = await findReportByDate(pool, teamId, reportDate);
     if (!report) {
       assertDateAllowedForCreate(reportDate, todayDate, auth.role);
@@ -685,7 +688,7 @@ export class ReportsController {
         documentTitle: settings?.documentTitle,
         reportDate,
         preparedBy: dto.preparedByName,
-        logoBytes: logo?.bytes ?? null,
+        logoBytes: logo?.bytes ?? getDefaultLogoBytes(),
         entries,
         followups: dto.followups.map((f) => ({
           categoryName: f.categoryName,

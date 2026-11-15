@@ -40,6 +40,7 @@ import {
   updateFollowupItemOptimistic,
   updateFollowupPosition,
 } from '../../db/repositories/followups.repo.js';
+import { ensureDefaultFollowups } from '../../domain/defaults.js';
 
 @Controller('teams/:teamId/followups')
 @UseGuards(SessionGuard, TeamScopeGuard)
@@ -47,9 +48,11 @@ export class FollowupsController {
   @Get()
   async list(
     @Param('teamId') teamId: string,
+    @Req() req: AuthenticatedRequest,
     @Query('includeArchived') includeArchived?: string,
   ) {
     const pool = getPool()!;
+    await ensureDefaultFollowups(pool, teamId, req.auth!.userId);
     return listTeamFollowups(pool, teamId, includeArchived === 'true');
   }
 
@@ -117,6 +120,24 @@ export class FollowupsController {
         throw new NotFoundException({ code: 'FOLLOWUP_NOT_FOUND', message: 'Follow-up not found' });
       }
 
+      const nextCatName =
+        body.categoryName !== undefined ? body.categoryName.trim() : existing.categoryName;
+      const nextTitleName =
+        body.titleName !== undefined ? body.titleName.trim() : existing.titleName;
+
+      let nextCategoryId = existing.categoryId;
+      let nextTitleId = existing.titleId;
+      if (body.categoryName !== undefined || body.titleName !== undefined) {
+        const resolved = await findOrCreateCategoryAndTitle(
+          conn,
+          teamId,
+          nextCatName || 'General',
+          nextTitleName,
+        );
+        nextCategoryId = nextCatName ? resolved.categoryId : null;
+        nextTitleId = resolved.titleId;
+      }
+
       const nextStatus = body.status ?? existing.status;
       const nextText = body.statusText ?? existing.statusText;
       const nextMemberId =
@@ -139,6 +160,8 @@ export class FollowupsController {
       const updated = await updateFollowupItemOptimistic(conn, {
         teamId,
         followupId,
+        categoryId: nextCategoryId,
+        titleId: nextTitleId,
         status: nextStatus,
         statusText: nextText,
         completedByMemberId: nextMemberId,

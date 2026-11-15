@@ -39,6 +39,16 @@ export const RenameDictionarySchema = z.object({
 });
 export type RenameDictionaryInput = z.infer<typeof RenameDictionarySchema>;
 
+export const CreateCategorySchema = z.object({
+  name: z.string().trim().min(1).max(80),
+});
+export type CreateCategoryInput = z.infer<typeof CreateCategorySchema>;
+
+export const CreateTitleSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+});
+export type CreateTitleInput = z.infer<typeof CreateTitleSchema>;
+
 export const CreateEntrySchema = z.object({
   categoryName: z.string().trim().min(1).max(80),
   titleName: z.string().trim().min(1).max(120),
@@ -128,6 +138,8 @@ export const CreateFollowupSchema = z.object({
 export type CreateFollowupInput = z.infer<typeof CreateFollowupSchema>;
 
 export const UpdateFollowupSchema = z.object({
+  categoryName: z.string().trim().max(80).optional(),
+  titleName: z.string().trim().min(1).max(120).optional(),
   status: FollowupStatusSchema.optional(),
   statusText: z.string().trim().min(1).max(4000).optional(),
   completedByMemberId: z.string().uuid().nullable().optional(),

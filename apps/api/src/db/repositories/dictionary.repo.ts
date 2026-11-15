@@ -2,9 +2,11 @@ import type { Pool, PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql
 import type { DictionaryCategory, DictionaryTitle } from '@cghq/contracts';
 import { uuidv7 } from '../../common/uuid.js';
 import {
+  COUNT_CATEGORY_BY_LOWER_NAME,
   INSERT_CATEGORY,
   INSERT_TITLE,
   SELECT_CATEGORIES_BY_TEAM,
+  SELECT_CATEGORY_BY_ID,
   SELECT_CATEGORY_BY_NAME,
   SELECT_NEXT_CATEGORY_POSITION,
   SELECT_NEXT_TITLE_POSITION,
@@ -98,6 +100,62 @@ export async function findOrCreateCategoryAndTitle(
   }
 
   return { categoryId, titleId };
+}
+
+export async function hasCategoryByLowerName(
+  conn: Conn,
+  teamId: string,
+  name: string,
+): Promise<boolean> {
+  const [rows] = await conn.execute<(RowDataPacket & { cnt: number })[]>(
+    COUNT_CATEGORY_BY_LOWER_NAME,
+    [teamId, name.trim()],
+  );
+  return Number(rows[0]?.cnt ?? 0) > 0;
+}
+
+export async function createCategoryOnly(
+  conn: Conn,
+  teamId: string,
+  name: string,
+): Promise<{ id: string; name: string }> {
+  const trimmed = name.trim();
+  const [existing] = await conn.execute<FoundRow[]>(SELECT_CATEGORY_BY_NAME, [teamId, trimmed]);
+  if (existing[0]) {
+    return { id: existing[0].id, name: trimmed };
+  }
+  const id = uuidv7();
+  const [posRows] = await conn.execute<NextPosRow[]>(SELECT_NEXT_CATEGORY_POSITION, [teamId]);
+  const nextPos = Number(posRows[0]?.next_pos ?? 10);
+  await conn.execute(INSERT_CATEGORY, [id, teamId, trimmed, nextPos]);
+  return { id, name: trimmed };
+}
+
+export async function createTitleUnderCategory(
+  conn: Conn,
+  teamId: string,
+  categoryId: string,
+  name: string,
+): Promise<{ id: string; name: string } | null> {
+  const [cats] = await conn.execute<FoundRow[]>(SELECT_CATEGORY_BY_ID, [categoryId, teamId]);
+  if (!cats[0]) return null;
+  const trimmed = name.trim();
+  const [existing] = await conn.execute<FoundRow[]>(SELECT_TITLE_BY_NAME, [
+    teamId,
+    categoryId,
+    trimmed,
+  ]);
+  if (existing[0]) {
+    return { id: existing[0].id, name: trimmed };
+  }
+  const id = uuidv7();
+  const [posRows] = await conn.execute<NextPosRow[]>(SELECT_NEXT_TITLE_POSITION, [
+    teamId,
+    categoryId,
+  ]);
+  const nextPos = Number(posRows[0]?.next_pos ?? 10);
+  await conn.execute(INSERT_TITLE, [id, teamId, categoryId, trimmed, nextPos]);
+  return { id, name: trimmed };
 }
 
 export async function updateCategory(

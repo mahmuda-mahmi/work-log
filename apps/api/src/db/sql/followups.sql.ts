@@ -79,6 +79,8 @@ export const INSERT_FOLLOWUP_ITEM = `
 export const UPDATE_FOLLOWUP_ITEM_OPTIMISTIC = `
   UPDATE followup_items
   SET
+    category_id = ?,
+    title_id = ?,
     status = ?,
     status_text = ?,
     completed_by_member_id = ?,
@@ -87,6 +89,12 @@ export const UPDATE_FOLLOWUP_ITEM_OPTIMISTIC = `
     updated_by_user_id = ?,
     version = version + 1
   WHERE team_id = ? AND id = ? AND version = ?
+`;
+
+export const COUNT_FOLLOWUPS_BY_TEAM = `
+  SELECT COUNT(*) AS cnt
+  FROM followup_items
+  WHERE team_id = ?
 `;
 
 export const UPDATE_FOLLOWUP_POSITION = `
