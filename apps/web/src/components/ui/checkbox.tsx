@@ -28,7 +28,7 @@ export function Checkbox({
       className={cn(
         'inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer',
         checked
-          ? 'border-primary bg-primary text-zinc-950'
+          ? 'border-primary bg-primary text-white'
           : 'border-zinc-300 bg-white text-transparent',
         className,
       )}

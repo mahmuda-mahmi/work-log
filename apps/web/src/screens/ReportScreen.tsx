@@ -832,7 +832,6 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                                       type="button"
                                                       size="xs"
                                                       variant={selected ? 'dark' : 'outline'}
-                                                      className={selected ? 'text-primary' : ''}
                                                       onClick={() =>
                                                         setEditingEntry({
                                                           ...editingEntry,
@@ -1149,7 +1148,6 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                         type="button"
                                         size="xs"
                                         variant={selected ? 'dark' : 'outline'}
-                                        className={selected ? 'text-primary' : ''}
                                         onClick={() => {
                                           const exists = quickAdd.completedByMemberIds.includes(
                                             m.id,

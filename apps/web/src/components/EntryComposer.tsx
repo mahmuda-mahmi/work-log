@@ -222,7 +222,6 @@ export function EntryComposer({
                     type="button"
                     size="xs"
                     variant={selected ? 'dark' : 'outline'}
-                    className={selected ? 'text-primary' : ''}
                     onClick={() => toggleMember(m.id)}
                     disabled={disabled || createMutation.isPending}
                   >

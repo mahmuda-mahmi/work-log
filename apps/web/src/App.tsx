@@ -93,7 +93,7 @@ function AuthenticatedShell() {
                 className={cn(
                   'inline-flex h-8 items-center justify-center rounded-md px-3 text-xs font-medium transition-colors whitespace-nowrap',
                   item.active
-                    ? 'bg-primary text-zinc-950 font-bold'
+                    ? 'bg-primary text-white font-bold'
                     : 'text-zinc-400 hover:bg-zinc-900 hover:text-white',
                 )}
               >
