@@ -90,7 +90,7 @@ export const SELECT_NEXT_GROUP_POSITION = `
 
 export const INSERT_WORK_GROUP = `
   INSERT INTO work_groups (id, report_id, category_id, title_id, position, numbering_mode, created_by_user_id)
-  VALUES (?, ?, ?, ?, ?, 'numbered', ?)
+  VALUES (?, ?, ?, ?, ?, ?, ?)
 `;
 
 export const COUNT_WORK_GROUPS_BY_REPORT = `

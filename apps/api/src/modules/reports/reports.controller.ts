@@ -245,6 +245,7 @@ export class ReportsController {
         reportId: report.id,
         categoryId,
         titleId,
+        numberingMode: body.categoryName.trim().toLowerCase() === 'support' ? 'numbered' : 'plain',
         createdByUserId: auth.userId,
       });
 

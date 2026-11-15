@@ -17,13 +17,19 @@ import {
 export const DEFAULT_REPORT_GROUPS: ReadonlyArray<{
   categoryName: string;
   titleName: string;
+  numberingMode: 'numbered' | 'plain';
 }> = [
-  { categoryName: 'Support', titleName: 'Daily Calls from User and Desk Support' },
-  { categoryName: 'Communication', titleName: 'New Comer' },
-  { categoryName: 'Communication', titleName: 'Over the Phone' },
+  {
+    categoryName: 'Support',
+    titleName: 'Daily Calls from User and Desk Support',
+    numberingMode: 'numbered',
+  },
+  { categoryName: 'Communication', titleName: 'New Comer', numberingMode: 'plain' },
+  { categoryName: 'Communication', titleName: 'Over the Phone', numberingMode: 'plain' },
   {
     categoryName: 'Physically Visit',
     titleName: 'Department Visit for Use of CGRPMS and Any Other Reason',
+    numberingMode: 'plain',
   },
 ];
 
@@ -166,6 +172,7 @@ export async function ensureDefaultReportGroups(
         categoryId,
         titleId,
         position: (i + 1) * 10,
+        numberingMode: grp.numberingMode,
         actorUserId,
       });
     }

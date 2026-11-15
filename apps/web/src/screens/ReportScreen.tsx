@@ -515,23 +515,24 @@ export function ReportScreen({ session }: ReportScreenProps) {
 
                         <td className="col-title">
                           <div>{group.titleName}</div>
-                          {!isFinalized && (
-                            <button
-                              type="button"
-                              className="btn-secondary btn-xs"
-                              style={{ marginTop: 6 }}
-                              title="Toggle numbered vs plain status lines"
-                              onClick={() =>
-                                toggleNumberingMutation.mutate({
-                                  groupId: group.id,
-                                  numberingMode:
-                                    group.numberingMode === 'numbered' ? 'plain' : 'numbered',
-                                })
-                              }
-                            >
-                              {group.numberingMode === 'numbered' ? '1. 2. 3.' : 'Plain'}
-                            </button>
-                          )}
+                          {!isFinalized &&
+                            group.categoryName.trim().toLowerCase() === 'support' && (
+                              <button
+                                type="button"
+                                className="btn-secondary btn-xs"
+                                style={{ marginTop: 6 }}
+                                title="Toggle numbered vs plain status lines"
+                                onClick={() =>
+                                  toggleNumberingMutation.mutate({
+                                    groupId: group.id,
+                                    numberingMode:
+                                      group.numberingMode === 'numbered' ? 'plain' : 'numbered',
+                                  })
+                                }
+                              >
+                                {group.numberingMode === 'numbered' ? '1. 2. 3.' : 'Plain'}
+                              </button>
+                            )}
                         </td>
 
                         <td className="col-status" colSpan={2} style={{ padding: 0 }}>

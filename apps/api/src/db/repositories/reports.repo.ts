@@ -172,7 +172,7 @@ export async function assembleDailyReportDto(
     titleId: g.title_id,
     titleName: g.title_name,
     position: g.position,
-    numberingMode: g.numbering_mode,
+    numberingMode: g.category_name.trim().toLowerCase() === 'support' ? g.numbering_mode : 'plain',
     entries: entriesByGroup.get(g.id) ?? [],
   }));
 
@@ -237,6 +237,7 @@ export async function findOrCreateWorkGroup(
     reportId: string;
     categoryId: string;
     titleId: string;
+    numberingMode?: NumberingMode;
     createdByUserId: string;
   },
 ): Promise<string> {
@@ -257,6 +258,7 @@ export async function findOrCreateWorkGroup(
     params.categoryId,
     params.titleId,
     nextPos,
+    params.numberingMode ?? 'plain',
     params.createdByUserId,
   ]);
   return params.groupId;
@@ -394,6 +396,7 @@ export async function insertWorkGroupAtPosition(
     categoryId: string;
     titleId: string;
     position: number;
+    numberingMode?: NumberingMode;
     actorUserId: string;
   },
 ): Promise<void> {
@@ -409,6 +412,7 @@ export async function insertWorkGroupAtPosition(
     input.categoryId,
     input.titleId,
     input.position,
+    input.numberingMode ?? 'plain',
     input.actorUserId,
   ]);
 }
