@@ -3,9 +3,9 @@ import cookieParser from 'cookie-parser';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { AppModule } from '../src/app.module.js';
-import { DomainExceptionFilter } from '../src/common/domain-exception.filter.js';
-import { ZodValidationPipe } from '../src/common/zod-validation.pipe.js';
+import { AppModule } from '../dist/app.module.js';
+import { DomainExceptionFilter } from '../dist/common/domain-exception.filter.js';
+import { ZodValidationPipe } from '../dist/common/zod-validation.pipe.js';
 
 let cached: Promise<NestExpressApplication> | null = null;
 
