@@ -93,6 +93,18 @@ export const INSERT_WORK_GROUP = `
   VALUES (?, ?, ?, ?, ?, 'numbered', ?)
 `;
 
+export const COUNT_WORK_GROUPS_BY_REPORT = `
+  SELECT COUNT(*) AS cnt
+  FROM work_groups
+  WHERE report_id = ?
+`;
+
+export const UPDATE_WORK_GROUP_CAT_TITLE = `
+  UPDATE work_groups
+  SET category_id = ?, title_id = ?
+  WHERE id = ? AND report_id = ?
+`;
+
 export const SELECT_NEXT_ENTRY_POSITION = `
   SELECT COALESCE(MAX(position), 0) + 10 AS next_pos
   FROM work_entries

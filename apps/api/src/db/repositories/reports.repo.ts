@@ -11,6 +11,7 @@ import type {
 import { sha256Hex } from '../../common/crypto.js';
 import {
   BUMP_DAILY_REPORT_VERSION,
+  COUNT_WORK_GROUPS_BY_REPORT,
   INSERT_IGNORE_DAILY_REPORT,
   INSERT_WORK_ENTRY,
   INSERT_WORK_GROUP,
@@ -27,11 +28,14 @@ import {
   SOFT_DELETE_WORK_ENTRY,
   UPDATE_WORK_ENTRY_OPTIMISTIC,
   UPDATE_WORK_ENTRY_POSITION,
+  UPDATE_WORK_GROUP_CAT_TITLE,
   UPDATE_WORK_GROUP_NUMBERING,
   UPDATE_WORK_GROUP_POSITION,
 } from '../sql/reports.sql.js';
 
 type Conn = Pool | PoolConnection;
+
+type GroupIdRow = RowDataPacket & { id: string };
 
 type ReportRow = RowDataPacket & {
   id: string;
@@ -161,18 +165,16 @@ export async function assembleDailyReportDto(
     entriesByGroup.set(e.group_id, list);
   }
 
-  const groups: WorkGroupDto[] = groupRows
-    .map((g) => ({
-      id: g.id,
-      categoryId: g.category_id,
-      categoryName: g.category_name,
-      titleId: g.title_id,
-      titleName: g.title_name,
-      position: g.position,
-      numberingMode: g.numbering_mode,
-      entries: entriesByGroup.get(g.id) ?? [],
-    }))
-    .filter((g) => g.entries.length > 0);
+  const groups: WorkGroupDto[] = groupRows.map((g) => ({
+    id: g.id,
+    categoryId: g.category_id,
+    categoryName: g.category_name,
+    titleId: g.title_id,
+    titleName: g.title_name,
+    position: g.position,
+    numberingMode: g.numbering_mode,
+    entries: entriesByGroup.get(g.id) ?? [],
+  }));
 
   let followups: ReportFollowupDto[] = [];
   if (report.status === 'finalized') {
@@ -374,4 +376,63 @@ export async function updateWorkGroupNumbering(
     teamId,
   ]);
   return res.affectedRows === 1;
+}
+
+export async function countWorkGroupsByReport(conn: Conn, reportId: string): Promise<number> {
+  const [rows] = await conn.execute<(RowDataPacket & { cnt: number })[]>(
+    COUNT_WORK_GROUPS_BY_REPORT,
+    [reportId],
+  );
+  return Number(rows[0]?.cnt ?? 0);
+}
+
+export async function insertWorkGroupAtPosition(
+  conn: PoolConnection,
+  input: {
+    id: string;
+    reportId: string;
+    categoryId: string;
+    titleId: string;
+    position: number;
+    actorUserId: string;
+  },
+): Promise<void> {
+  const [existing] = await conn.execute<GroupIdRow[]>(SELECT_GROUP_BY_REPORT_CAT_TITLE, [
+    input.reportId,
+    input.categoryId,
+    input.titleId,
+  ]);
+  if (existing[0]) return;
+  await conn.execute(INSERT_WORK_GROUP, [
+    input.id,
+    input.reportId,
+    input.categoryId,
+    input.titleId,
+    input.position,
+    input.actorUserId,
+  ]);
+}
+
+export async function updateWorkGroupCategoryTitle(
+  conn: PoolConnection,
+  reportId: string,
+  groupId: string,
+  categoryId: string,
+  titleId: string,
+): Promise<{ ok: boolean; duplicate: boolean }> {
+  const [existing] = await conn.execute<GroupIdRow[]>(SELECT_GROUP_BY_REPORT_CAT_TITLE, [
+    reportId,
+    categoryId,
+    titleId,
+  ]);
+  if (existing[0] && existing[0].id !== groupId) {
+    return { ok: false, duplicate: true };
+  }
+  const [res] = await conn.execute<ResultSetHeader>(UPDATE_WORK_GROUP_CAT_TITLE, [
+    categoryId,
+    titleId,
+    groupId,
+    reportId,
+  ]);
+  return { ok: res.affectedRows === 1, duplicate: false };
 }

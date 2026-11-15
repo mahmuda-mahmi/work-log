@@ -9,6 +9,23 @@ import {
   countTeamFollowups,
   insertFollowupItem,
 } from '../db/repositories/followups.repo.js';
+import {
+  countWorkGroupsByReport,
+  insertWorkGroupAtPosition,
+} from '../db/repositories/reports.repo.js';
+
+export const DEFAULT_REPORT_GROUPS: ReadonlyArray<{
+  categoryName: string;
+  titleName: string;
+}> = [
+  { categoryName: 'Support', titleName: 'Daily Calls from User and Desk Support' },
+  { categoryName: 'Communication', titleName: 'New Comer' },
+  { categoryName: 'Communication', titleName: 'Over the Phone' },
+  {
+    categoryName: 'Physically Visit',
+    titleName: 'Department Visit for Use of CGRPMS and Any Other Reason',
+  },
+];
 
 export const DEFAULT_DICTIONARY_PAIRS: ReadonlyArray<{
   categoryName: string;
@@ -115,6 +132,40 @@ export async function ensureDefaultFollowups(
         completedByLabel: item.completedByLabel,
         completedByMemberId: null,
         position: (i + 1) * 1000,
+        actorUserId,
+      });
+    }
+  });
+}
+
+/**
+ * Ensures the 4 default report groups (Ser 1..4) from the reference CGHQ report exist
+ * on a draft/reopened report in their canonical serial order.
+ */
+export async function ensureDefaultReportGroups(
+  pool: Pool,
+  teamId: string,
+  reportId: string,
+  actorUserId: string,
+): Promise<void> {
+  const count = await countWorkGroupsByReport(pool, reportId);
+  if (count >= DEFAULT_REPORT_GROUPS.length) return;
+
+  await withTransaction(pool, async (conn) => {
+    for (let i = 0; i < DEFAULT_REPORT_GROUPS.length; i += 1) {
+      const grp = DEFAULT_REPORT_GROUPS[i]!;
+      const { categoryId, titleId } = await findOrCreateCategoryAndTitle(
+        conn,
+        teamId,
+        grp.categoryName,
+        grp.titleName,
+      );
+      await insertWorkGroupAtPosition(conn, {
+        id: uuidv7(),
+        reportId,
+        categoryId,
+        titleId,
+        position: (i + 1) * 10,
         actorUserId,
       });
     }

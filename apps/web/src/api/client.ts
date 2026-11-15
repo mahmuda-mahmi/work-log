@@ -19,6 +19,7 @@ import type {
   TeamSettings,
   UpdateEntryInput,
   UpdateFollowupInput,
+  UpdateGroupInput,
   UpdateGroupNumberingInput,
   UpdateTeamSettingsInput,
 } from '@cghq/contracts';
@@ -194,6 +195,11 @@ export const reportsApi = {
       `/api/teams/${teamId}/reports/${date}/groups/${groupId}/numbering`,
       { method: 'PATCH', body: JSON.stringify(body) },
     ),
+  updateGroup: (teamId: string, date: string, groupId: string, body: UpdateGroupInput) =>
+    apiFetch<{ ok: boolean }>(`/api/teams/${teamId}/reports/${date}/groups/${groupId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
   finalize: (teamId: string, date: string, body: FinalizeReportInput = {}) =>
     apiFetch<DailyReportDto>(`/api/teams/${teamId}/reports/${date}/finalize`, {
       method: 'POST',

@@ -24,11 +24,13 @@ import {
   ReorderIdsSchema,
   UpdateEntrySchema,
   UpdateGroupNumberingSchema,
+  UpdateGroupSchema,
   type CreateEntryInput,
   type ExportFormat,
   type FinalizeReportInput,
   type ReorderIdsInput,
   type UpdateEntryInput,
+  type UpdateGroupInput,
   type UpdateGroupNumberingInput,
 } from '@cghq/contracts';
 import {
@@ -80,11 +82,15 @@ import {
   softDeleteWorkEntry,
   updateWorkEntryOptimistic,
   updateWorkEntryPosition,
+  updateWorkGroupCategoryTitle,
   updateWorkGroupNumbering,
   updateWorkGroupPosition,
 } from '../../db/repositories/reports.repo.js';
 import { findTeamLogo, findTeamSettings } from '../../db/repositories/teams.repo.js';
-import { ensureDefaultFollowups } from '../../domain/defaults.js';
+import {
+  ensureDefaultFollowups,
+  ensureDefaultReportGroups,
+} from '../../domain/defaults.js';
 import {
   assertDateAllowedForCreate,
   assertValidIsoDate,
@@ -157,6 +163,10 @@ export class ReportsController {
         });
       }
       report = await findReportByDate(pool, teamId, reportDate);
+    }
+
+    if (report && report.status !== 'finalized') {
+      await ensureDefaultReportGroups(pool, teamId, report.id, auth.userId);
     }
 
     if (!report) {
@@ -467,6 +477,53 @@ export class ReportsController {
     return { ok: true };
   }
 
+  @Patch(':date/groups/:groupId')
+  async updateGroup(
+    @Param('teamId') teamId: string,
+    @Param('date') dateParam: string,
+    @Param('groupId') groupId: string,
+    @Body(new ZodValidationPipe(UpdateGroupSchema)) body: UpdateGroupInput,
+  ) {
+    const pool = getPool()!;
+    const reportDate = assertValidIsoDate(dateParam);
+
+    await withTransaction(pool, async (conn) => {
+      const report = await findReportForUpdate(conn, teamId, reportDate);
+      if (!report) {
+        throw new NotFoundException({ code: 'REPORT_NOT_FOUND', message: 'Report not found' });
+      }
+      if (report.status === 'finalized') {
+        throw new ConflictException({ code: 'REPORT_FINALIZED', message: 'Report is finalized' });
+      }
+
+      const { categoryId, titleId } = await findOrCreateCategoryAndTitle(
+        conn,
+        teamId,
+        body.categoryName,
+        body.titleName,
+      );
+      const res = await updateWorkGroupCategoryTitle(
+        conn,
+        report.id,
+        groupId,
+        categoryId,
+        titleId,
+      );
+      if (res.duplicate) {
+        throw new ConflictException({
+          code: 'DUPLICATE_GROUP',
+          message: 'That Report Category and Title already exists in this report',
+        });
+      }
+      if (!res.ok) {
+        throw new NotFoundException({ code: 'GROUP_NOT_FOUND', message: 'Group not found' });
+      }
+      await bumpDailyReportVersion(conn, report.id);
+    });
+
+    return { ok: true };
+  }
+
   @Post(':date/finalize')
   @UseGuards(TeamLeadGuard)
   async finalizeReport(
@@ -675,15 +732,17 @@ export class ReportsController {
     if (!fileBytes) {
       const dto = await assembleDailyReportDto(pool, report, todayDate);
       const logo = await findTeamLogo(pool, teamId);
-      const entries: ReportEntryInput[] = dto.groups.flatMap((g) =>
-        g.entries.map((e) => ({
-          categoryName: g.categoryName,
-          titleName: g.titleName,
-          statusText: e.statusText,
-          completedBy: e.completedByDisplay,
-          numberingMode: g.numberingMode,
-        })),
-      );
+      const entries: ReportEntryInput[] = dto.groups
+        .filter((g) => g.entries.length > 0)
+        .flatMap((g) =>
+          g.entries.map((e) => ({
+            categoryName: g.categoryName,
+            titleName: g.titleName,
+            statusText: e.statusText,
+            completedBy: e.completedByDisplay,
+            numberingMode: g.numberingMode,
+          })),
+        );
       const model = buildDocumentModel({
         documentTitle: settings?.documentTitle,
         reportDate,

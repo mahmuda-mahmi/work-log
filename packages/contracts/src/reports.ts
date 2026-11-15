@@ -76,6 +76,12 @@ export const UpdateGroupNumberingSchema = z.object({
 });
 export type UpdateGroupNumberingInput = z.infer<typeof UpdateGroupNumberingSchema>;
 
+export const UpdateGroupSchema = z.object({
+  categoryName: z.string().trim().min(1).max(80),
+  titleName: z.string().trim().min(1).max(120),
+});
+export type UpdateGroupInput = z.infer<typeof UpdateGroupSchema>;
+
 export const WorkEntryDtoSchema = z.object({
   id: z.string().uuid(),
   groupId: z.string().uuid(),

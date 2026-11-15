@@ -44,23 +44,25 @@ export function ReportPreview({
   const [logoVisible, setLogoVisible] = useState(true);
 
   const model = useMemo(() => {
-    const entries: ReportEntryInput[] = report.groups.flatMap((group) =>
-      group.entries
-        .filter((entry) => {
-          if (!filterMemberId && !filterUserId) return true;
-          return (
-            entry.completedByMemberId === filterMemberId ||
-            entry.createdByUserId === filterUserId
-          );
-        })
-        .map((entry) => ({
-          categoryName: group.categoryName,
-          titleName: group.titleName,
-          statusText: entry.statusText,
-          completedBy: entry.completedByDisplay,
-          numberingMode: group.numberingMode,
-        })),
-    );
+    const entries: ReportEntryInput[] = report.groups
+      .filter((group) => group.entries.length > 0)
+      .flatMap((group) =>
+        group.entries
+          .filter((entry) => {
+            if (!filterMemberId && !filterUserId) return true;
+            return (
+              entry.completedByMemberId === filterMemberId ||
+              entry.createdByUserId === filterUserId
+            );
+          })
+          .map((entry) => ({
+            categoryName: group.categoryName,
+            titleName: group.titleName,
+            statusText: entry.statusText,
+            completedBy: entry.completedByDisplay,
+            numberingMode: group.numberingMode,
+          })),
+      );
 
     return buildDocumentModel({
       documentTitle,
