@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AuthSession } from '@cghq/contracts';
-import { teamsApi } from '../api/client';
+import { dictionaryApi, teamsApi } from '../api/client';
 
 export function SettingsScreen({ session }: { session: AuthSession }) {
   const queryClient = useQueryClient();
@@ -16,6 +16,30 @@ export function SettingsScreen({ session }: { session: AuthSession }) {
   const { data: members = [] } = useQuery({
     queryKey: ['team-members', teamId],
     queryFn: () => teamsApi.listMembers(teamId),
+  });
+
+  const { data: dictionary = [] } = useQuery({
+    queryKey: ['dictionary', teamId],
+    queryFn: () => dictionaryApi.list(teamId),
+    enabled: isLead,
+  });
+
+  const renameCategoryMutation = useMutation({
+    mutationFn: ({ id, name, isActive }: { id: string; name?: string; isActive?: boolean }) =>
+      dictionaryApi.updateCategory(teamId, id, { name, isActive }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['dictionary', teamId] });
+    },
+    onError: (err: Error) => setStatusMsg(err.message),
+  });
+
+  const renameTitleMutation = useMutation({
+    mutationFn: ({ id, name, isActive }: { id: string; name?: string; isActive?: boolean }) =>
+      dictionaryApi.updateTitle(teamId, id, { name, isActive }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['dictionary', teamId] });
+    },
+    onError: (err: Error) => setStatusMsg(err.message),
   });
 
   const [inviteEmail, setInviteEmail] = useState('');
@@ -243,6 +267,71 @@ export function SettingsScreen({ session }: { session: AuthSession }) {
           </form>
         )}
       </section>
+
+      {isLead && (
+        <section className="card">
+          <h2>Categories &amp; Titles Dictionary</h2>
+          <p className="muted">
+            Rename or archive autocomplete categories and titles used in daily work entries.
+          </p>
+          {dictionary.length === 0 ? (
+            <p className="muted">No categories created yet.</p>
+          ) : (
+            <div className="entries-list" style={{ marginTop: 12 }}>
+              {dictionary.map((cat) => (
+                <div key={cat.id} className="entry-edit-box">
+                  <div className="group-header">
+                    <strong>{cat.name}</strong>
+                    <div className="group-controls">
+                      <button
+                        type="button"
+                        className="btn-secondary btn-sm"
+                        onClick={() => {
+                          const next = window.prompt('Rename category:', cat.name);
+                          if (next && next.trim() && next.trim() !== cat.name) {
+                            renameCategoryMutation.mutate({ id: cat.id, name: next.trim() });
+                          }
+                        }}
+                      >
+                        Rename
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-secondary btn-sm"
+                        onClick={() =>
+                          renameCategoryMutation.mutate({ id: cat.id, isActive: !cat.isActive })
+                        }
+                      >
+                        {cat.isActive ? 'Archive' : 'Restore'}
+                      </button>
+                    </div>
+                  </div>
+                  {cat.titles.length > 0 && (
+                    <div className="member-pills">
+                      {cat.titles.map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          className={t.isActive ? 'pill' : 'pill badge-muted'}
+                          title="Click to rename title"
+                          onClick={() => {
+                            const next = window.prompt('Rename title:', t.name);
+                            if (next && next.trim() && next.trim() !== t.name) {
+                              renameTitleMutation.mutate({ id: t.id, name: next.trim() });
+                            }
+                          }}
+                        >
+                          {t.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 }

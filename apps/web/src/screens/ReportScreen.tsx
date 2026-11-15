@@ -86,7 +86,8 @@ export function ReportScreen({ session }: ReportScreenProps) {
   }
 
   const finalizeMutation = useMutation({
-    mutationFn: () => reportsApi.finalize(teamId, activeDate),
+    mutationFn: (preparedByName?: string) =>
+      reportsApi.finalize(teamId, activeDate, preparedByName ? { preparedByName } : {}),
     onSuccess: (updated) => {
       setActionError(null);
       syncReportCache(updated);
@@ -303,7 +304,15 @@ export function ReportScreen({ session }: ReportScreenProps) {
                 type="button"
                 className="btn-primary btn-sm"
                 disabled={finalizeMutation.isPending}
-                onClick={() => finalizeMutation.mutate()}
+                onClick={() => {
+                  const chosen = window.prompt(
+                    'Confirm "Prepared By" name for this finalized report:',
+                    report.preparedByName,
+                  );
+                  if (chosen !== null) {
+                    finalizeMutation.mutate(chosen.trim() || report.preparedByName);
+                  }
+                }}
               >
                 {finalizeMutation.isPending ? 'Finalizing...' : 'Finalize'}
               </button>

@@ -121,15 +121,23 @@ export const teamsApi = {
 
 export const dictionaryApi = {
   list: (teamId: string) => apiFetch<DictionaryCategory[]>(`/api/teams/${teamId}/dictionary`),
-  renameCategory: (teamId: string, categoryId: string, name: string) =>
+  updateCategory: (
+    teamId: string,
+    categoryId: string,
+    body: { name?: string; isActive?: boolean },
+  ) =>
     apiFetch<{ ok: boolean }>(`/api/teams/${teamId}/dictionary/categories/${categoryId}`, {
       method: 'PATCH',
-      body: JSON.stringify({ name }),
+      body: JSON.stringify(body),
     }),
-  renameTitle: (teamId: string, titleId: string, name: string) =>
+  updateTitle: (
+    teamId: string,
+    titleId: string,
+    body: { name?: string; isActive?: boolean },
+  ) =>
     apiFetch<{ ok: boolean }>(`/api/teams/${teamId}/dictionary/titles/${titleId}`, {
       method: 'PATCH',
-      body: JSON.stringify({ name }),
+      body: JSON.stringify(body),
     }),
 };
 

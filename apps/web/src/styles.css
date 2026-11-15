@@ -689,3 +689,59 @@ a.btn-secondary {
   flex-wrap: wrap;
   gap: 6px;
 }
+
+/* Phase 5: Accessibility, Mobile Polish & Print */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .topbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .nav-links {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .report-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .preview-sheet {
+    padding: 14px 10px;
+  }
+
+  .preview-logo {
+    position: static;
+    margin-bottom: 6px;
+  }
+
+  .preview-header {
+    flex-direction: column;
+  }
+}
+
+@media print {
+  .topbar,
+  .report-toolbar,
+  .banner-info,
+  .alert-error {
+    display: none !important;
+  }
+
+  .preview-sheet {
+    border: none;
+    box-shadow: none;
+    padding: 0;
+  }
+}
