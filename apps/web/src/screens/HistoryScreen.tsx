@@ -2,8 +2,13 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AuthSession } from '@cghq/contracts';
+import { Download, Trash2 } from 'lucide-react';
 import { ApiError, reportsApi } from '../api/client.js';
-import { IconDownload, IconTrash } from '../components/ui/icons.js';
+import { Alert } from '../components/ui/alert.js';
+import { Badge } from '../components/ui/badge.js';
+import { Button, buttonVariants } from '../components/ui/button.js';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.js';
+import { ConfirmDialog } from '../components/ui/confirm-dialog.js';
 
 interface HistoryScreenProps {
   session: AuthSession;
@@ -13,6 +18,7 @@ export function HistoryScreen({ session }: HistoryScreenProps) {
   const teamId = session.team.id;
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
+  const [deleteDate, setDeleteDate] = useState<string | null>(null);
 
   const historyQuery = useQuery({
     queryKey: ['report-history', teamId],
@@ -23,6 +29,7 @@ export function HistoryScreen({ session }: HistoryScreenProps) {
     mutationFn: (reportDate: string) => reportsApi.deleteReport(teamId, reportDate),
     onSuccess: (_data, reportDate) => {
       setError(null);
+      setDeleteDate(null);
       void queryClient.invalidateQueries({ queryKey: ['report-history', teamId] });
       void queryClient.removeQueries({ queryKey: ['report', teamId, reportDate] });
     },
@@ -34,106 +41,148 @@ export function HistoryScreen({ session }: HistoryScreenProps) {
   const rows = historyQuery.data ?? [];
 
   return (
-    <div className="report-page">
-      <div className="card card-accent">
-        <div className="section-heading">
-          <h2>Report History</h2>
-          <span className="badge badge-muted">Last 90 daily reports</span>
-        </div>
+    <div className="flex flex-col gap-3.5">
+      <Card className="border-t-2 border-t-primary">
+        <CardHeader className="py-3">
+          <CardTitle>Report History</CardTitle>
+          <Badge variant="secondary" size="sm">
+            Last 90 daily reports
+          </Badge>
+        </CardHeader>
 
-        {error && (
-          <div className="alert-error" style={{ marginBottom: 12 }}>
-            {error}
-          </div>
-        )}
+        <CardContent className="p-3">
+          {error && (
+            <Alert variant="destructive" className="mb-3">
+              {error}
+            </Alert>
+          )}
 
-        {historyQuery.isLoading ? (
-          <p className="muted">Loading report history…</p>
-        ) : rows.length === 0 ? (
-          <p className="muted">No daily reports created yet.</p>
-        ) : (
-          <div className="work-table-wrap">
-            <table className="work-table">
-              <thead>
-                <tr>
-                  <th style={{ width: '16%' }}>Date</th>
-                  <th style={{ width: '14%' }}>Status</th>
-                  <th style={{ width: '10%' }}>Rev</th>
-                  <th style={{ width: '12%' }}>Entries</th>
-                  <th style={{ width: '20%' }}>Prepared By</th>
-                  <th style={{ width: '28%', textAlign: 'right' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.id}>
-                    <td>
-                      <Link
-                        to={`/reports/${row.reportDate}`}
-                        style={{ color: 'var(--fg-primary)', textDecoration: 'none', fontWeight: 700 }}
-                      >
-                        {row.reportDate}
-                      </Link>
-                    </td>
-                    <td>
-                      <span className={`badge badge-${row.status}`}>{row.status}</span>
-                    </td>
-                    <td>
-                      <span className="badge badge-muted">rev {row.revision}</span>
-                    </td>
-                    <td>{row.entryCount}</td>
-                    <td>{row.preparedByName}</td>
-                    <td>
-                      <div className="history-actions">
-                        <Link className="btn-secondary btn-xs" to={`/reports/${row.reportDate}`}>
-                          Open
-                        </Link>
-                        {row.status === 'finalized' && (
-                          <>
-                            <a
-                              className="btn-dark btn-xs"
-                              href={reportsApi.getExportUrl(teamId, row.reportDate, 'pdf')}
-                            >
-                              <IconDownload size={11} />
-                              PDF
-                            </a>
-                            <a
-                              className="btn-secondary btn-xs"
-                              href={reportsApi.getExportUrl(teamId, row.reportDate, 'docx')}
-                            >
-                              <IconDownload size={11} />
-                              DOCX
-                            </a>
-                          </>
-                        )}
-                        {session.member.role === 'lead' && (
-                          <button
-                            type="button"
-                            className="btn-danger btn-xs"
-                            disabled={deleteMutation.isPending}
-                            onClick={() => {
-                              if (
-                                window.confirm(
-                                  `Delete the daily log for ${row.reportDate}? This cannot be undone.`,
-                                )
-                              ) {
-                                deleteMutation.mutate(row.reportDate);
-                              }
-                            }}
-                          >
-                            <IconTrash size={11} />
-                            Delete
-                          </button>
-                        )}
-                      </div>
-                    </td>
+          {historyQuery.isLoading ? (
+            <p className="text-sm text-zinc-500">Loading report history…</p>
+          ) : rows.length === 0 ? (
+            <p className="text-sm text-zinc-500">No daily reports created yet.</p>
+          ) : (
+            <div className="w-full overflow-x-auto rounded-md border border-zinc-200 bg-white">
+              <table className="w-full table-fixed border-collapse text-sm">
+                <thead>
+                  <tr className="bg-zinc-950 text-white border-b-2 border-b-primary">
+                    <th className="w-[16%] border-r border-zinc-800 px-3 py-2.5 text-left text-xs font-bold">
+                      Date
+                    </th>
+                    <th className="w-[14%] border-r border-zinc-800 px-3 py-2.5 text-left text-xs font-bold">
+                      Status
+                    </th>
+                    <th className="w-[10%] border-r border-zinc-800 px-3 py-2.5 text-left text-xs font-bold">
+                      Rev
+                    </th>
+                    <th className="w-[12%] border-r border-zinc-800 px-3 py-2.5 text-left text-xs font-bold">
+                      Entries
+                    </th>
+                    <th className="w-[20%] border-r border-zinc-800 px-3 py-2.5 text-left text-xs font-bold">
+                      Prepared By
+                    </th>
+                    <th className="w-[28%] px-3 py-2.5 text-right text-xs font-bold">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                </thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr key={row.id} className="border-b border-zinc-200 last:border-b-0">
+                      <td className="border-r border-zinc-200 px-3 py-2.5 font-bold">
+                        <Link
+                          to={`/reports/${row.reportDate}`}
+                          className="text-zinc-950 hover:text-orange-600 hover:underline"
+                        >
+                          {row.reportDate}
+                        </Link>
+                      </td>
+                      <td className="border-r border-zinc-200 px-3 py-2.5">
+                        <Badge
+                          variant={
+                            row.status === 'finalized'
+                              ? 'dark'
+                              : row.status === 'reopened'
+                                ? 'warning'
+                                : 'default'
+                          }
+                          size="sm"
+                        >
+                          {row.status}
+                        </Badge>
+                      </td>
+                      <td className="border-r border-zinc-200 px-3 py-2.5">
+                        <Badge variant="secondary" size="sm">
+                          rev {row.revision}
+                        </Badge>
+                      </td>
+                      <td className="border-r border-zinc-200 px-3 py-2.5 text-zinc-700">
+                        {row.entryCount}
+                      </td>
+                      <td className="border-r border-zinc-200 px-3 py-2.5 text-zinc-700">
+                        {row.preparedByName}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <div className="flex flex-wrap items-center justify-end gap-1.5">
+                          <Link
+                            className={buttonVariants({ variant: 'outline', size: 'xs' })}
+                            to={`/reports/${row.reportDate}`}
+                          >
+                            Open
+                          </Link>
+                          {row.status === 'finalized' && (
+                            <>
+                              <a
+                                className={buttonVariants({ variant: 'dark', size: 'xs' })}
+                                href={reportsApi.getExportUrl(teamId, row.reportDate, 'pdf')}
+                              >
+                                <Download className="h-3 w-3" />
+                                PDF
+                              </a>
+                              <a
+                                className={buttonVariants({ variant: 'outline', size: 'xs' })}
+                                href={reportsApi.getExportUrl(teamId, row.reportDate, 'docx')}
+                              >
+                                <Download className="h-3 w-3" />
+                                DOCX
+                              </a>
+                            </>
+                          )}
+                          {session.member.role === 'lead' && (
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="xs"
+                              disabled={deleteMutation.isPending}
+                              onClick={() => setDeleteDate(row.reportDate)}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                              Delete
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <ConfirmDialog
+        open={Boolean(deleteDate)}
+        onOpenChange={(open) => {
+          if (!open) setDeleteDate(null);
+        }}
+        title={`Delete Daily Log (${deleteDate ?? ''})`}
+        description="Permanently delete this entire daily report and all of its entries? This cannot be undone."
+        confirmLabel="Delete Log"
+        destructive
+        pending={deleteMutation.isPending}
+        onConfirm={() => {
+          if (deleteDate) deleteMutation.mutate(deleteDate);
+        }}
+      />
     </div>
   );
 }

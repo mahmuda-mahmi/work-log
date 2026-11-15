@@ -2,8 +2,21 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { DictionaryCategory, MemberSummary } from '@cghq/contracts';
 import { findUnsupportedLatinChars } from '@cghq/document/date';
+import { Plus } from 'lucide-react';
 import { ApiError, reportsApi } from '../api/client.js';
-import { IconPlus } from './ui/icons.js';
+import { Alert } from './ui/alert.js';
+import { Badge } from './ui/badge.js';
+import { Button } from './ui/button.js';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js';
+import { Label } from './ui/label.js';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './ui/select.js';
+import { Textarea } from './ui/textarea.js';
 
 interface EntryComposerProps {
   teamId: string;
@@ -70,7 +83,6 @@ export function EntryComposer({
   const [completedByMemberIds, setCompletedByMemberIds] = useState<string[]>([currentMemberId]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Restore draft for this date, or fall back to last-used category/title
   useEffect(() => {
     const savedDraft = readJsonStorage<StoredDraft>(draftKey);
     if (savedDraft) {
@@ -92,7 +104,6 @@ export function EntryComposer({
     setCompletedByMemberIds([currentMemberId]);
   }, [draftKey, lastPairKey, currentMemberId]);
 
-  // Ensure selected category & title always match valid dropdown options once dictionary loads
   useEffect(() => {
     if (activeCategories.length === 0) return;
     const matchedCat =
@@ -108,7 +119,6 @@ export function EntryComposer({
     }
   }, [activeCategories, categoryName, titleName]);
 
-  // Persist unsaved draft locally so navigation or refresh never loses typing (FR-30)
   useEffect(() => {
     if (!statusText) {
       try {
@@ -193,112 +203,116 @@ export function EntryComposer({
   }
 
   return (
-    <form className="card card-accent composer-card" onSubmit={handleSubmit}>
-      <div className="composer-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <h2>Add Work Entry</h2>
-          {disabled && <span className="badge badge-muted">Finalized (read-only)</span>}
-        </div>
-
-        <div className="composer-assignees">
-          <span className="composer-assignees-label">Task Completed By:</span>
-          <div className="member-pills">
-            {activeMembers.map((m) => {
-              const selected = completedByMemberIds.includes(m.id);
-              return (
-                <button
-                  key={m.id}
-                  type="button"
-                  className={selected ? 'pill pill-active' : 'pill'}
-                  onClick={() => toggleMember(m.id)}
-                  disabled={disabled || createMutation.isPending}
-                >
-                  {m.displayName}
-                </button>
-              );
-            })}
+    <Card className="no-print border-t-2 border-t-primary">
+      <form onSubmit={handleSubmit}>
+        <CardHeader className="py-2.5">
+          <div className="flex items-center gap-2.5">
+            <CardTitle>Add Work Entry</CardTitle>
+            {disabled && <Badge variant="secondary">Finalized (read-only)</Badge>}
           </div>
-        </div>
-      </div>
 
-      {errorMsg && <div className="alert-error">{errorMsg}</div>}
-      {unsupportedChars.length > 0 && (
-        <div className="alert-warn">
-          Unsupported non-Latin characters detected ({unsupportedChars.join(' ')}). PDF export only
-          supports Latin script (FR-20).
-        </div>
-      )}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold text-zinc-500">Task Completed By:</span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {activeMembers.map((m) => {
+                const selected = completedByMemberIds.includes(m.id);
+                return (
+                  <Button
+                    key={m.id}
+                    type="button"
+                    size="xs"
+                    variant={selected ? 'dark' : 'outline'}
+                    className={selected ? 'text-primary' : ''}
+                    onClick={() => toggleMember(m.id)}
+                    disabled={disabled || createMutation.isPending}
+                  >
+                    {m.displayName}
+                  </Button>
+                );
+              })}
+            </div>
+          </div>
+        </CardHeader>
 
-      <div className="composer-workbench">
-        <label className="field">
-          <span>Report Category</span>
-          <select
-            value={categoryName}
-            onChange={(e) => {
-              const nextCatName = e.target.value;
-              setCategoryName(nextCatName);
-              const nextCat = activeCategories.find((c) => c.name === nextCatName);
-              setTitleName(nextCat?.titles[0]?.name ?? '');
-            }}
-            disabled={disabled || createMutation.isPending || activeCategories.length === 0}
-            required
-          >
-            {activeCategories.length === 0 ? (
-              <option value="">Loading categories...</option>
-            ) : (
-              activeCategories.map((cat) => (
-                <option key={cat.id} value={cat.name}>
-                  {cat.name}
-                </option>
-              ))
-            )}
-          </select>
-        </label>
+        <CardContent className="grid gap-3 pt-3">
+          {errorMsg && <Alert variant="destructive">{errorMsg}</Alert>}
+          {unsupportedChars.length > 0 && (
+            <Alert variant="warning">
+              Unsupported non-Latin characters detected ({unsupportedChars.join(' ')}). PDF export
+              only supports Latin script (FR-20).
+            </Alert>
+          )}
 
-        <label className="field">
-          <span>Title</span>
-          <select
-            value={titleName}
-            onChange={(e) => setTitleName(e.target.value)}
-            disabled={disabled || createMutation.isPending || titleOptions.length === 0}
-            required
-          >
-            {titleOptions.length === 0 ? (
-              <option value="">No titles in category</option>
-            ) : (
-              titleOptions.map((t) => (
-                <option key={t.id} value={t.name}>
-                  {t.name}
-                </option>
-              ))
-            )}
-          </select>
-        </label>
+          <div className="grid grid-cols-1 items-end gap-3 md:grid-cols-2 lg:grid-cols-[1fr_1.3fr_2.2fr_auto]">
+            <div className="grid gap-1.5">
+              <Label>Report Category</Label>
+              <Select
+                value={categoryName}
+                onValueChange={(nextCatName) => {
+                  setCategoryName(nextCatName);
+                  const nextCat = activeCategories.find((c) => c.name === nextCatName);
+                  setTitleName(nextCat?.titles[0]?.name ?? '');
+                }}
+                disabled={disabled || createMutation.isPending || activeCategories.length === 0}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {activeCategories.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.name}>
+                      {cat.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-        <label className="field composer-status-field">
-          <span>Status (one line per item)</span>
-          <textarea
-            className="composer-textarea"
-            rows={1}
-            value={statusText}
-            onChange={(e) => setStatusText(e.target.value)}
-            placeholder="Describe completed work or current status..."
-            disabled={disabled || createMutation.isPending}
-            required
-          />
-        </label>
+            <div className="grid gap-1.5">
+              <Label>Title</Label>
+              <Select
+                value={titleName}
+                onValueChange={setTitleName}
+                disabled={disabled || createMutation.isPending || titleOptions.length === 0}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select title" />
+                </SelectTrigger>
+                <SelectContent>
+                  {titleOptions.map((t) => (
+                    <SelectItem key={t.id} value={t.name}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-        <div className="composer-actions">
-          <button
-            type="submit"
-            className="btn-primary"
-            disabled={disabled || createMutation.isPending}
-          >
-            <IconPlus size={14} />
-            {createMutation.isPending ? 'Saving...' : 'Add Entry'}
-          </button>
-        </div>
-      </div>
-    </form>
+            <div className="grid gap-1.5 md:col-span-2 lg:col-span-1">
+              <Label htmlFor="composer-status">Status (one line per item)</Label>
+              <Textarea
+                id="composer-status"
+                rows={1}
+                className="h-9 min-h-[36px] resize-y py-1.5"
+                value={statusText}
+                onChange={(e) => setStatusText(e.target.value)}
+                placeholder="Describe completed work or current status..."
+                disabled={disabled || createMutation.isPending}
+                required
+              />
+            </div>
+
+            <Button
+              type="submit"
+              className="h-9 px-4 md:col-span-2 lg:col-span-1"
+              disabled={disabled || createMutation.isPending}
+            >
+              <Plus className="h-4 w-4" />
+              {createMutation.isPending ? 'Saving...' : 'Add Entry'}
+            </Button>
+          </div>
+        </CardContent>
+      </form>
+    </Card>
   );
 }

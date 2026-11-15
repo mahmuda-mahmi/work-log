@@ -1,8 +1,28 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AuthSession } from '@cghq/contracts';
+import { Check, Copy, Plus } from 'lucide-react';
 import { dictionaryApi, teamsApi } from '../api/client';
-import { IconCheck, IconCopy, IconPlus } from '../components/ui/icons';
+import { Alert } from '../components/ui/alert';
+import { Badge } from '../components/ui/badge';
+import { Button } from '../components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import { PromptDialog } from '../components/ui/confirm-dialog';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select';
+import { cn } from '../lib/utils';
+
+type RenamePromptState =
+  | { type: 'category'; id: string; currentName: string }
+  | { type: 'title'; id: string; currentName: string }
+  | null;
 
 export function SettingsScreen({ session }: { session: AuthSession }) {
   const queryClient = useQueryClient();
@@ -35,6 +55,7 @@ export function SettingsScreen({ session }: { session: AuthSession }) {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
   const [newTitleName, setNewTitleName] = useState('');
+  const [renamePrompt, setRenamePrompt] = useState<RenamePromptState>(null);
 
   const [docTitle, setDocTitle] = useState<string | null>(null);
   const [filePrefix, setFilePrefix] = useState<string | null>(null);
@@ -69,6 +90,7 @@ export function SettingsScreen({ session }: { session: AuthSession }) {
     mutationFn: ({ id, name, isActive }: { id: string; name?: string; isActive?: boolean }) =>
       dictionaryApi.updateCategory(teamId, id, { name, isActive }),
     onSuccess: async () => {
+      setRenamePrompt(null);
       await queryClient.invalidateQueries({ queryKey: ['dictionary', teamId] });
     },
     onError: (err: Error) => setStatusMsg(err.message),
@@ -103,6 +125,7 @@ export function SettingsScreen({ session }: { session: AuthSession }) {
     mutationFn: ({ id, name, isActive }: { id: string; name?: string; isActive?: boolean }) =>
       dictionaryApi.updateTitle(teamId, id, { name, isActive }),
     onSuccess: async () => {
+      setRenamePrompt(null);
       await queryClient.invalidateQueries({ queryKey: ['dictionary', teamId] });
     },
     onError: (err: Error) => setStatusMsg(err.message),
@@ -158,388 +181,438 @@ export function SettingsScreen({ session }: { session: AuthSession }) {
     onError: (err: Error) => setStatusMsg(err.message),
   });
 
+  const activeCategoryIdForTitle = selectedCategoryId || dictionary[0]?.id || '';
+
   return (
-    <div className="report-page">
-      {statusMsg && <div className="alert-success">{statusMsg}</div>}
+    <div className="flex flex-col gap-3.5">
+      {statusMsg && <Alert variant="success">{statusMsg}</Alert>}
 
-      <div className="settings-grid">
-        <div className="col-span-5 stack">
-          <section className="card card-accent">
-            <div className="section-heading">
-              <h2>Team Settings &amp; Branding</h2>
-            </div>
-
-            {settings && (
-              <form
-                className="stack"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  saveSettings.mutate();
-                }}
-              >
-                <label className="field">
-                  <span>Document Title</span>
-                  <input
-                    disabled={!isLead}
-                    value={docTitle ?? settings.documentTitle}
-                    onChange={(e) => setDocTitle(e.target.value)}
-                  />
-                </label>
-                <label className="field">
-                  <span>File Prefix</span>
-                  <input
-                    disabled={!isLead}
-                    value={filePrefix ?? settings.filePrefix}
-                    onChange={(e) => setFilePrefix(e.target.value)}
-                  />
-                </label>
-                <label className="field">
-                  <span>Default Prepared By</span>
-                  <input
-                    disabled={!isLead}
-                    value={preparedBy ?? settings.preparedByDefault ?? ''}
-                    onChange={(e) => setPreparedBy(e.target.value)}
-                  />
-                </label>
-                {isLead && (
-                  <div className="composer-actions">
-                    <button
-                      type="submit"
-                      className="btn-primary btn-sm"
-                      disabled={saveSettings.isPending}
-                    >
-                      <IconCheck size={13} />
-                      Save Settings
-                    </button>
-                  </div>
-                )}
-              </form>
-            )}
-
-            {isLead && (
-              <div
-                className="field"
-                style={{
-                  marginTop: 14,
-                  paddingTop: 12,
-                  borderTop: '1px solid var(--border-default)',
-                }}
-              >
-                <span>Team Logo (PNG/JPEG, max 1 MB, max 1000 px)</span>
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) logoMutation.mutate(file);
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
+        {/* Left Column (5 cols) */}
+        <div className="flex flex-col gap-4 lg:col-span-5">
+          <Card className="border-t-2 border-t-primary">
+            <CardHeader className="py-3">
+              <CardTitle>Team Settings &amp; Branding</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 pt-3">
+              {settings && (
+                <form
+                  className="grid gap-3"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    saveSettings.mutate();
                   }}
-                />
-              </div>
-            )}
-          </section>
+                >
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="set-doc-title">Document Title</Label>
+                    <Input
+                      id="set-doc-title"
+                      disabled={!isLead}
+                      value={docTitle ?? settings.documentTitle}
+                      onChange={(e) => setDocTitle(e.target.value)}
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="set-file-prefix">File Prefix</Label>
+                    <Input
+                      id="set-file-prefix"
+                      disabled={!isLead}
+                      value={filePrefix ?? settings.filePrefix}
+                      onChange={(e) => setFilePrefix(e.target.value)}
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="set-prepared-by">Default Prepared By</Label>
+                    <Input
+                      id="set-prepared-by"
+                      disabled={!isLead}
+                      value={preparedBy ?? settings.preparedByDefault ?? ''}
+                      onChange={(e) => setPreparedBy(e.target.value)}
+                    />
+                  </div>
+                  {isLead && (
+                    <div className="flex justify-end">
+                      <Button type="submit" size="sm" disabled={saveSettings.isPending}>
+                        <Check className="h-3.5 w-3.5" />
+                        Save Settings
+                      </Button>
+                    </div>
+                  )}
+                </form>
+              )}
+
+              {isLead && (
+                <div className="grid gap-1.5 border-t border-zinc-100 pt-3">
+                  <Label htmlFor="set-team-logo">
+                    Team Logo (PNG/JPEG, max 1 MB, max 1000 px)
+                  </Label>
+                  <Input
+                    id="set-team-logo"
+                    type="file"
+                    accept="image/png,image/jpeg"
+                    className="h-auto py-1.5"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) logoMutation.mutate(file);
+                    }}
+                  />
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           {isLead && (
-            <section className="card card-accent stack">
-              <div className="section-heading" style={{ marginBottom: 0 }}>
-                <h2>Dictionary Quick-Add</h2>
-                <span className="muted">Dropdown options</span>
-              </div>
-
-              <form
-                className="stack"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (newCategoryName.trim()) createCategoryMutation.mutate();
-                }}
-              >
-                <label className="field">
-                  <span>1. Add Report Category</span>
-                  <div className="password-wrap">
-                    <input
-                      type="text"
+            <Card className="border-t-2 border-t-primary">
+              <CardHeader className="py-3">
+                <CardTitle>Dictionary Quick-Add</CardTitle>
+                <span className="text-xs text-zinc-500">Dropdown options</span>
+              </CardHeader>
+              <CardContent className="grid gap-4 pt-3">
+                <form
+                  className="grid gap-1.5"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (newCategoryName.trim()) createCategoryMutation.mutate();
+                  }}
+                >
+                  <Label htmlFor="quick-cat">1. Add Report Category</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="quick-cat"
                       placeholder="e.g. Support, Communication, Physically Visit"
                       value={newCategoryName}
                       onChange={(e) => setNewCategoryName(e.target.value)}
                       required
                     />
-                    <button
-                      type="submit"
-                      className="btn-primary"
-                      disabled={createCategoryMutation.isPending}
-                    >
-                      <IconPlus size={13} />
+                    <Button type="submit" disabled={createCategoryMutation.isPending}>
+                      <Plus className="h-3.5 w-3.5" />
                       Add
-                    </button>
+                    </Button>
                   </div>
-                </label>
-              </form>
+                </form>
 
-              <form
-                className="stack"
-                style={{ paddingTop: 10, borderTop: '1px solid var(--border-default)' }}
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (newTitleName.trim()) createTitleMutation.mutate();
-                }}
-              >
-                <label className="field">
-                  <span>2. Select Category</span>
-                  <select
-                    value={selectedCategoryId || dictionary[0]?.id || ''}
-                    onChange={(e) => setSelectedCategoryId(e.target.value)}
-                    disabled={dictionary.length === 0}
-                  >
-                    {dictionary.map((cat) => (
-                      <option key={cat.id} value={cat.id}>
-                        {cat.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field">
-                  <span>Title Name</span>
-                  <div className="password-wrap">
-                    <input
-                      type="text"
-                      placeholder="e.g. Daily Calls from User and Desk Support"
-                      value={newTitleName}
-                      onChange={(e) => setNewTitleName(e.target.value)}
-                      required
-                    />
-                    <button
-                      type="submit"
-                      className="btn-primary"
-                      disabled={createTitleMutation.isPending || dictionary.length === 0}
+                <form
+                  className="grid gap-3 border-t border-zinc-100 pt-3"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (newTitleName.trim()) createTitleMutation.mutate();
+                  }}
+                >
+                  <div className="grid gap-1.5">
+                    <Label>2. Select Category</Label>
+                    <Select
+                      value={activeCategoryIdForTitle}
+                      onValueChange={setSelectedCategoryId}
+                      disabled={dictionary.length === 0}
                     >
-                      <IconPlus size={13} />
-                      Add
-                    </button>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {dictionary.map((cat) => (
+                          <SelectItem key={cat.id} value={cat.id}>
+                            {cat.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                </label>
-              </form>
-            </section>
+
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="quick-title">Title Name</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="quick-title"
+                        placeholder="e.g. Daily Calls from User and Desk Support"
+                        value={newTitleName}
+                        onChange={(e) => setNewTitleName(e.target.value)}
+                        required
+                      />
+                      <Button
+                        type="submit"
+                        disabled={createTitleMutation.isPending || dictionary.length === 0}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Add
+                      </Button>
+                    </div>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
           )}
         </div>
 
-        <div className="col-span-7 stack">
-          <section className="card card-accent stack">
-            <div className="section-heading" style={{ marginBottom: 0 }}>
-              <h2>Team Members &amp; Invites</h2>
-              <span className="badge badge-muted">{members.length} members</span>
-            </div>
-
-            <ul className="member-list">
-              {members.map((m) => (
-                <li key={m.id} className="member-row">
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <strong>{m.displayName}</strong>
-                      <span
-                        className={`role-chip ${
-                          m.role === 'lead' ? 'role-chip-lead' : 'role-chip-member'
-                        }`}
-                      >
-                        {m.role}
-                      </span>
-                    </div>
-                    <div className="muted">
-                      {m.email} {!m.isActive && '· Inactive'}
-                    </div>
-                  </div>
-                  {isLead && m.isActive && (
-                    <div className="row-actions">
-                      <button
-                        type="button"
-                        className="btn-secondary btn-xs"
-                        onClick={() =>
-                          roleMutation.mutate({
-                            memberId: m.id,
-                            role: m.role === 'lead' ? 'member' : 'lead',
-                          })
-                        }
-                      >
-                        Make {m.role === 'lead' ? 'Member' : 'Lead'}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-secondary btn-xs"
-                        onClick={() => resetMutation.mutate(m.id)}
-                      >
-                        Reset Link
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-danger btn-xs"
-                        onClick={() => deactivateMutation.mutate(m.id)}
-                      >
-                        Deactivate
-                      </button>
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
-
-            {resetLink && (
-              <div className="banner-info" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-                <strong>Password Reset Link (72h single-use):</strong>
-                <div className="link-copy-box">
-                  <input
-                    readOnly
-                    value={resetLink}
-                    onFocus={(e) => e.currentTarget.select()}
-                  />
-                  <button
-                    type="button"
-                    className="btn-primary btn-sm"
-                    onClick={() => void copyToClipboard(resetLink, 'reset')}
+        {/* Right Column (7 cols) */}
+        <div className="flex flex-col gap-4 lg:col-span-7">
+          <Card className="border-t-2 border-t-primary">
+            <CardHeader className="py-3">
+              <CardTitle>Team Members &amp; Invites</CardTitle>
+              <Badge variant="secondary" size="sm">
+                {members.length} members
+              </Badge>
+            </CardHeader>
+            <CardContent className="grid gap-4 pt-3">
+              <ul className="grid gap-2">
+                {members.map((m) => (
+                  <li
+                    key={m.id}
+                    className="flex flex-wrap items-center justify-between gap-2.5 rounded-md border border-zinc-200 bg-zinc-50/70 px-3 py-2.5"
                   >
-                    <IconCopy size={12} />
-                    {copiedKey === 'reset' ? 'Copied!' : 'Copy'}
-                  </button>
-                </div>
-              </div>
-            )}
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <strong className="text-sm text-zinc-950">{m.displayName}</strong>
+                        <Badge
+                          variant={m.role === 'lead' ? 'default' : 'secondary'}
+                          className="h-5 px-1.5 text-[10px]"
+                        >
+                          {m.role}
+                        </Badge>
+                      </div>
+                      <div className="text-xs text-zinc-500">
+                        {m.email} {!m.isActive && '· Inactive'}
+                      </div>
+                    </div>
+                    {isLead && m.isActive && (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="xs"
+                          onClick={() =>
+                            roleMutation.mutate({
+                              memberId: m.id,
+                              role: m.role === 'lead' ? 'member' : 'lead',
+                            })
+                          }
+                        >
+                          Make {m.role === 'lead' ? 'Member' : 'Lead'}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="xs"
+                          onClick={() => resetMutation.mutate(m.id)}
+                        >
+                          Reset Link
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="xs"
+                          onClick={() => deactivateMutation.mutate(m.id)}
+                        >
+                          Deactivate
+                        </Button>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
 
-            {isLead && (
-              <form
-                className="stack"
-                style={{ paddingTop: 12, borderTop: '1px solid var(--border-default)' }}
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  inviteMutation.mutate();
-                }}
-              >
-                <h3>Invite Team Member</h3>
-                <div className="composer-grid" style={{ alignItems: 'end' }}>
-                  <label className="field">
-                    <span>Email (optional)</span>
-                    <input
-                      type="email"
-                      placeholder="teammate@example.com"
-                      value={inviteEmail}
-                      onChange={(e) => setInviteEmail(e.target.value)}
+              {resetLink && (
+                <Alert className="grid gap-2">
+                  <strong className="text-xs">Password Reset Link (72h single-use):</strong>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      readOnly
+                      value={resetLink}
+                      className="h-8 font-mono text-xs"
+                      onFocus={(e) => e.currentTarget.select()}
                     />
-                  </label>
-                  <label className="field">
-                    <span>Role</span>
-                    <select
-                      value={inviteRole}
-                      onChange={(e) => setInviteRole(e.target.value as 'member' | 'lead')}
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => void copyToClipboard(resetLink, 'reset')}
                     >
-                      <option value="member">Member</option>
-                      <option value="lead">Team Lead</option>
-                    </select>
-                  </label>
-                  <button
-                    type="submit"
-                    className="btn-primary"
-                    disabled={inviteMutation.isPending}
-                  >
-                    {inviteMutation.isPending ? 'Generating...' : 'Generate Invite Link'}
-                  </button>
-                </div>
-
-                {inviteLink && (
-                  <div
-                    className="banner-info"
-                    style={{ flexDirection: 'column', alignItems: 'stretch' }}
-                  >
-                    <strong>Invite Link (72h single-use):</strong>
-                    <div className="link-copy-box">
-                      <input
-                        readOnly
-                        value={inviteLink}
-                        onFocus={(e) => e.currentTarget.select()}
-                      />
-                      <button
-                        type="button"
-                        className="btn-primary btn-sm"
-                        onClick={() => void copyToClipboard(inviteLink, 'invite')}
-                      >
-                        <IconCopy size={12} />
-                        {copiedKey === 'invite' ? 'Copied!' : 'Copy'}
-                      </button>
-                    </div>
+                      <Copy className="h-3.5 w-3.5" />
+                      {copiedKey === 'reset' ? 'Copied!' : 'Copy'}
+                    </Button>
                   </div>
-                )}
-              </form>
-            )}
-          </section>
+                </Alert>
+              )}
+
+              {isLead && (
+                <form
+                  className="grid gap-3 border-t border-zinc-100 pt-3"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    inviteMutation.mutate();
+                  }}
+                >
+                  <h3 className="text-xs font-bold uppercase tracking-wide text-zinc-700">
+                    Invite Team Member
+                  </h3>
+                  <div className="grid grid-cols-1 items-end gap-2.5 sm:grid-cols-[1.5fr_1fr_auto]">
+                    <div className="grid gap-1.5">
+                      <Label htmlFor="invite-email">Email (optional)</Label>
+                      <Input
+                        id="invite-email"
+                        type="email"
+                        placeholder="teammate@example.com"
+                        value={inviteEmail}
+                        onChange={(e) => setInviteEmail(e.target.value)}
+                      />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label>Role</Label>
+                      <Select
+                        value={inviteRole}
+                        onValueChange={(v) => setInviteRole(v as 'member' | 'lead')}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="member">Member</SelectItem>
+                          <SelectItem value="lead">Team Lead</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button type="submit" disabled={inviteMutation.isPending}>
+                      {inviteMutation.isPending ? 'Generating…' : 'Generate Invite Link'}
+                    </Button>
+                  </div>
+
+                  {inviteLink && (
+                    <Alert className="grid gap-2">
+                      <strong className="text-xs">Invite Link (72h single-use):</strong>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          readOnly
+                          value={inviteLink}
+                          className="h-8 font-mono text-xs"
+                          onFocus={(e) => e.currentTarget.select()}
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => void copyToClipboard(inviteLink, 'invite')}
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                          {copiedKey === 'invite' ? 'Copied!' : 'Copy'}
+                        </Button>
+                      </div>
+                    </Alert>
+                  )}
+                </form>
+              )}
+            </CardContent>
+          </Card>
 
           {isLead && (
-            <section className="card card-accent stack">
-              <div className="section-heading" style={{ marginBottom: 0 }}>
+            <Card className="border-t-2 border-t-primary">
+              <CardHeader className="py-3">
                 <div>
-                  <h2>Manage Categories &amp; Titles</h2>
-                  <p className="muted">Click a title pill to rename it, or rename/archive categories.</p>
+                  <CardTitle>Manage Categories &amp; Titles</CardTitle>
+                  <CardDescription className="mt-0.5">
+                    Click a title pill to rename it, or rename/archive categories.
+                  </CardDescription>
                 </div>
-                <span className="badge badge-muted">{dictionary.length} categories</span>
-              </div>
-
-              {dictionary.length === 0 ? (
-                <p className="muted">No categories created yet.</p>
-              ) : (
-                <div className="dictionary-list">
-                  {dictionary.map((cat) => (
-                    <div key={cat.id} className="entry-edit-box">
-                      <div className="group-header">
-                        <strong>{cat.name}</strong>
-                        <div className="group-controls">
-                          <button
-                            type="button"
-                            className="btn-secondary btn-xs"
-                            onClick={() => {
-                              const next = window.prompt('Rename category:', cat.name);
-                              if (next && next.trim() && next.trim() !== cat.name) {
-                                renameCategoryMutation.mutate({ id: cat.id, name: next.trim() });
-                              }
-                            }}
-                          >
-                            Rename
-                          </button>
-                          <button
-                            type="button"
-                            className="btn-secondary btn-xs"
-                            onClick={() =>
-                              renameCategoryMutation.mutate({
-                                id: cat.id,
-                                isActive: !cat.isActive,
-                              })
-                            }
-                          >
-                            {cat.isActive ? 'Archive' : 'Restore'}
-                          </button>
-                        </div>
-                      </div>
-                      {cat.titles.length > 0 && (
-                        <div className="member-pills">
-                          {cat.titles.map((t) => (
-                            <button
-                              key={t.id}
+                <Badge variant="secondary" size="sm">
+                  {dictionary.length} categories
+                </Badge>
+              </CardHeader>
+              <CardContent className="pt-3">
+                {dictionary.length === 0 ? (
+                  <p className="text-sm text-zinc-500">No categories created yet.</p>
+                ) : (
+                  <div className="grid gap-2.5">
+                    {dictionary.map((cat) => (
+                      <div
+                        key={cat.id}
+                        className="grid gap-2.5 rounded-md border border-orange-200 border-l-4 border-l-primary bg-white p-3"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 pb-2">
+                          <strong className="text-sm text-zinc-950">{cat.name}</strong>
+                          <div className="flex items-center gap-1.5">
+                            <Button
                               type="button"
-                              className={t.isActive ? 'pill' : 'pill badge-muted'}
-                              title="Click to rename title"
-                              onClick={() => {
-                                const next = window.prompt('Rename title:', t.name);
-                                if (next && next.trim() && next.trim() !== t.name) {
-                                  renameTitleMutation.mutate({ id: t.id, name: next.trim() });
-                                }
-                              }}
+                              variant="outline"
+                              size="xs"
+                              onClick={() =>
+                                setRenamePrompt({
+                                  type: 'category',
+                                  id: cat.id,
+                                  currentName: cat.name,
+                                })
+                              }
                             >
-                              {t.name}
-                            </button>
-                          ))}
+                              Rename
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="xs"
+                              onClick={() =>
+                                renameCategoryMutation.mutate({
+                                  id: cat.id,
+                                  isActive: !cat.isActive,
+                                })
+                              }
+                            >
+                              {cat.isActive ? 'Archive' : 'Restore'}
+                            </Button>
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
+                        {cat.titles.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {cat.titles.map((t) => (
+                              <Button
+                                key={t.id}
+                                type="button"
+                                size="xs"
+                                variant={t.isActive ? 'outline' : 'secondary'}
+                                className={cn(!t.isActive && 'opacity-60 line-through')}
+                                title="Click to rename title"
+                                onClick={() =>
+                                  setRenamePrompt({
+                                    type: 'title',
+                                    id: t.id,
+                                    currentName: t.name,
+                                  })
+                                }
+                              >
+                                {t.name}
+                              </Button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           )}
         </div>
       </div>
+
+      <PromptDialog
+        open={Boolean(renamePrompt)}
+        onOpenChange={(open) => {
+          if (!open) setRenamePrompt(null);
+        }}
+        title={renamePrompt?.type === 'category' ? 'Rename Category' : 'Rename Title'}
+        description="Update the display name shown in dropdowns and reports."
+        fieldLabel="Name"
+        initialValue={renamePrompt?.currentName ?? ''}
+        confirmLabel="Save Name"
+        pending={renameCategoryMutation.isPending || renameTitleMutation.isPending}
+        onConfirm={(next) => {
+          if (!renamePrompt) return;
+          const trimmed = next.trim();
+          if (!trimmed || trimmed === renamePrompt.currentName) {
+            setRenamePrompt(null);
+            return;
+          }
+          if (renamePrompt.type === 'category') {
+            renameCategoryMutation.mutate({ id: renamePrompt.id, name: trimmed });
+          } else {
+            renameTitleMutation.mutate({ id: renamePrompt.id, name: trimmed });
+          }
+        }}
+      />
     </div>
   );
 }

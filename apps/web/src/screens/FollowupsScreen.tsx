@@ -1,8 +1,24 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AuthSession, FollowupItemDto, FollowupStatus } from '@cghq/contracts';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { ApiError, dictionaryApi, followupsApi, teamsApi } from '../api/client.js';
-import { IconEdit, IconPlus, IconTrash } from '../components/ui/icons.js';
+import { Alert } from '../components/ui/alert.js';
+import { Badge } from '../components/ui/badge.js';
+import { Button } from '../components/ui/button.js';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card.js';
+import { Checkbox } from '../components/ui/checkbox.js';
+import { ConfirmDialog } from '../components/ui/confirm-dialog.js';
+import { Input } from '../components/ui/input.js';
+import { Label } from '../components/ui/label.js';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select.js';
+import { Textarea } from '../components/ui/textarea.js';
 
 interface FollowupsScreenProps {
   session: AuthSession;
@@ -19,6 +35,8 @@ interface EditRowState {
   version: number;
 }
 
+const CUSTOM_LABEL_SENTINEL = '__custom__';
+
 export function FollowupsScreen({ session }: FollowupsScreenProps) {
   const queryClient = useQueryClient();
   const teamId = session.team.id;
@@ -31,6 +49,7 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
   const [completedByMemberId, setCompletedByMemberId] = useState<string>('');
   const [completedByLabel, setCompletedByLabel] = useState('As Previous');
   const [editing, setEditing] = useState<EditRowState | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const followupsQuery = useQuery({
@@ -60,7 +79,6 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
     [dictionaryQuery.data],
   );
 
-  // Default dropdown selections when dictionary loads
   useEffect(() => {
     if (activeCategories.length === 0) return;
     if (!categoryName || !activeCategories.some((c) => c.name === categoryName)) {
@@ -123,6 +141,7 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
   const archiveMutation = useMutation({
     mutationFn: (id: string) => followupsApi.archive(teamId, id),
     onSuccess: () => {
+      setDeleteTargetId(null);
       void queryClient.invalidateQueries({ queryKey: ['followups', teamId] });
       void queryClient.invalidateQueries({ queryKey: ['report', teamId] });
     },
@@ -155,336 +174,430 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
     createMutation.mutate();
   }
 
+  function statusBadgeVariant(status: FollowupStatus) {
+    if (status === 'open') return 'default';
+    if (status === 'in_progress') return 'warning';
+    if (status === 'done') return 'success';
+    return 'secondary';
+  }
+
   return (
-    <div className="report-page">
-      {errorMsg && <div className="alert-error">{errorMsg}</div>}
+    <div className="flex flex-col gap-3.5">
+      {errorMsg && <Alert variant="destructive">{errorMsg}</Alert>}
 
       {showAddForm && (
-        <form className="card card-accent composer-card" onSubmit={handleCreate}>
-          <div className="composer-header">
-            <h2>Add New Follow-up Item</h2>
-            <button
-              type="button"
-              className="btn-secondary btn-xs"
-              onClick={() => setShowAddForm(false)}
-            >
-              Close
-            </button>
-          </div>
-
-          <div className="composer-grid">
-            <label className="field">
-              <span>Report Category</span>
-              <select
-                value={categoryName}
-                onChange={(e) => {
-                  const nextCatName = e.target.value;
-                  setCategoryName(nextCatName);
-                  const nextCat = activeCategories.find((c) => c.name === nextCatName);
-                  setTitleName(nextCat?.titles[0]?.name ?? '');
-                }}
+        <Card className="border-t-2 border-t-primary">
+          <form onSubmit={handleCreate}>
+            <CardHeader className="py-2.5">
+              <CardTitle>Add New Follow-up Item</CardTitle>
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                onClick={() => setShowAddForm(false)}
               >
-                {activeCategories.map((cat) => (
-                  <option key={cat.id} value={cat.name}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+                Close
+              </Button>
+            </CardHeader>
+            <CardContent className="grid gap-3 pt-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-1.5">
+                  <Label>Report Category</Label>
+                  <Select
+                    value={categoryName}
+                    onValueChange={(nextCatName) => {
+                      setCategoryName(nextCatName);
+                      const nextCat = activeCategories.find((c) => c.name === nextCatName);
+                      setTitleName(nextCat?.titles[0]?.name ?? '');
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {activeCategories.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.name}>
+                          {cat.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            <label className="field">
-              <span>Title</span>
-              <select value={titleName} onChange={(e) => setTitleName(e.target.value)}>
-                {titleOptions.map((t) => (
-                  <option key={t.id} value={t.name}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <div className="grid gap-1.5">
+                  <Label>Title</Label>
+                  <Select value={titleName} onValueChange={setTitleName}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select title" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {titleOptions.map((t) => (
+                        <SelectItem key={t.id} value={t.name}>
+                          {t.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            <label className="field">
-              <span>Task Completed By</span>
-              <select
-                value={completedByMemberId}
-                onChange={(e) => setCompletedByMemberId(e.target.value)}
-              >
-                <option value="">As Previous (or custom label)</option>
-                {activeMembers.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.displayName}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <div className="grid gap-1.5">
+                  <Label>Task Completed By</Label>
+                  <Select
+                    value={completedByMemberId || CUSTOM_LABEL_SENTINEL}
+                    onValueChange={(val) =>
+                      setCompletedByMemberId(val === CUSTOM_LABEL_SENTINEL ? '' : val)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={CUSTOM_LABEL_SENTINEL}>
+                        As Previous (or custom label)
+                      </SelectItem>
+                      {activeMembers.map((m) => (
+                        <SelectItem key={m.id} value={m.id}>
+                          {m.displayName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            {!completedByMemberId && (
-              <label className="field">
-                <span>Custom Label</span>
-                <input
-                  type="text"
-                  value={completedByLabel}
-                  onChange={(e) => setCompletedByLabel(e.target.value)}
-                  placeholder="As Previous"
+                {!completedByMemberId && (
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="followup-custom-label">Custom Label</Label>
+                    <Input
+                      id="followup-custom-label"
+                      value={completedByLabel}
+                      onChange={(e) => setCompletedByLabel(e.target.value)}
+                      placeholder="As Previous"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="grid gap-1.5">
+                <Label htmlFor="followup-status">Status</Label>
+                <Textarea
+                  id="followup-status"
+                  rows={2}
+                  value={statusText}
+                  onChange={(e) => setStatusText(e.target.value)}
+                  placeholder="Describe pending follow-up action..."
+                  required
                 />
-              </label>
-            )}
-          </div>
+              </div>
 
-          <label className="field">
-            <span>Status</span>
-            <textarea
-              rows={2}
-              value={statusText}
-              onChange={(e) => setStatusText(e.target.value)}
-              placeholder="Describe pending follow-up action..."
-              required
-            />
-          </label>
-
-          <div className="composer-actions">
-            <button type="submit" className="btn-primary btn-sm" disabled={createMutation.isPending}>
-              <IconPlus size={13} />
-              {createMutation.isPending ? 'Adding...' : 'Add Follow-up'}
-            </button>
-          </div>
-        </form>
+              <div className="flex justify-end">
+                <Button type="submit" size="sm" disabled={createMutation.isPending}>
+                  <Plus className="h-3.5 w-3.5" />
+                  {createMutation.isPending ? 'Adding…' : 'Add Follow-up'}
+                </Button>
+              </div>
+            </CardContent>
+          </form>
+        </Card>
       )}
 
-      <div className="card card-accent">
-        <div className="section-heading">
+      <Card className="border-t-2 border-t-primary">
+        <CardHeader className="py-3">
           <div>
-            <h2>Follow-up Items</h2>
-            <p className="muted" style={{ marginTop: 2 }}>
+            <CardTitle>Follow-up Items</CardTitle>
+            <CardDescription className="mt-0.5">
               Active follow-ups carry forward automatically into daily reports unless edited or
               deleted.
-            </p>
+            </CardDescription>
           </div>
-          <div className="toolbar-actions">
-            <label className="checkbox-inline">
-              <input
-                type="checkbox"
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="inline-flex h-8 cursor-pointer items-center gap-2 text-xs font-medium text-zinc-700 select-none">
+              <Checkbox
                 checked={includeArchived}
-                onChange={(e) => setIncludeArchived(e.target.checked)}
+                onCheckedChange={(checked) => setIncludeArchived(Boolean(checked))}
               />
               <span>Show archived</span>
             </label>
-            <button
-              type="button"
-              className="btn-primary btn-sm"
-              onClick={() => setShowAddForm((v) => !v)}
-            >
-              <IconPlus size={13} />
+            <Button type="button" size="sm" onClick={() => setShowAddForm((v) => !v)}>
+              <Plus className="h-3.5 w-3.5" />
               {showAddForm ? 'Close Form' : 'New Follow-up'}
-            </button>
+            </Button>
           </div>
-        </div>
+        </CardHeader>
 
-        {followupsQuery.isLoading ? (
-          <p className="muted">Loading follow-ups…</p>
-        ) : items.length === 0 ? (
-          <p className="muted">
-            No follow-up items. Finalized reports will display &ldquo;None&rdquo;.
-          </p>
-        ) : (
-          <div className="work-table-wrap">
-            <table className="work-table">
-              <thead>
-                <tr>
-                  <th style={{ width: '5%', textAlign: 'center' }}>Ser</th>
-                  <th style={{ width: '14%' }}>Report Category</th>
-                  <th style={{ width: '19%' }}>Title</th>
-                  <th style={{ width: '34%' }}>Status</th>
-                  <th style={{ width: '14%' }}>Task Completed By</th>
-                  <th style={{ width: '14%', textAlign: 'right' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item, idx) => {
-                  const isEditingThis = editing?.id === item.id;
-                  if (isEditingThis && editing) {
-                    const editCat = activeCategories.find(
-                      (c) => c.name === editing.categoryName,
-                    );
-                    const editTitles = editCat?.titles ?? [];
+        <CardContent className="p-3">
+          {followupsQuery.isLoading ? (
+            <p className="text-sm text-zinc-500">Loading follow-ups…</p>
+          ) : items.length === 0 ? (
+            <p className="text-sm text-zinc-500">
+              No follow-up items. Finalized reports will display &ldquo;None&rdquo;.
+            </p>
+          ) : (
+            <div className="w-full overflow-x-auto rounded-md border border-zinc-200 bg-white">
+              <table className="w-full table-fixed border-collapse text-sm">
+                <thead>
+                  <tr className="bg-zinc-950 text-white border-b-2 border-b-primary">
+                    <th className="w-[5%] border-r border-zinc-800 px-2.5 py-2.5 text-center text-xs font-bold">
+                      Ser
+                    </th>
+                    <th className="w-[14%] border-r border-zinc-800 px-2.5 py-2.5 text-left text-xs font-bold">
+                      Report Category
+                    </th>
+                    <th className="w-[19%] border-r border-zinc-800 px-2.5 py-2.5 text-left text-xs font-bold">
+                      Title
+                    </th>
+                    <th className="w-[34%] border-r border-zinc-800 px-2.5 py-2.5 text-left text-xs font-bold">
+                      Status
+                    </th>
+                    <th className="w-[14%] border-r border-zinc-800 px-2.5 py-2.5 text-left text-xs font-bold">
+                      Task Completed By
+                    </th>
+                    <th className="w-[14%] px-2.5 py-2.5 text-right text-xs font-bold">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item, idx) => {
+                    const isEditingThis = editing?.id === item.id;
+                    if (isEditingThis && editing) {
+                      const editCat = activeCategories.find(
+                        (c) => c.name === editing.categoryName,
+                      );
+                      const editTitles = editCat?.titles ?? [];
+                      return (
+                        <tr key={item.id} className="border-b border-zinc-200 last:border-b-0">
+                          <td colSpan={6} className="bg-zinc-50 p-3">
+                            <div className="grid gap-3 rounded-md border border-orange-300 border-l-4 border-l-primary bg-white p-3.5">
+                              <div className="border-b border-zinc-100 pb-2 text-xs font-bold text-zinc-950">
+                                Editing Follow-up #{idx + 1}
+                              </div>
+                              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                                <div className="grid gap-1.5">
+                                  <Label>Report Category</Label>
+                                  <Select
+                                    value={editing.categoryName}
+                                    onValueChange={(nextCatName) => {
+                                      const nextCat = activeCategories.find(
+                                        (c) => c.name === nextCatName,
+                                      );
+                                      setEditing({
+                                        ...editing,
+                                        categoryName: nextCatName,
+                                        titleName: nextCat?.titles[0]?.name ?? editing.titleName,
+                                      });
+                                    }}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {!activeCategories.some(
+                                        (c) => c.name === editing.categoryName,
+                                      ) && (
+                                        <SelectItem value={editing.categoryName || 'General'}>
+                                          {editing.categoryName || 'General'}
+                                        </SelectItem>
+                                      )}
+                                      {activeCategories.map((c) => (
+                                        <SelectItem key={c.id} value={c.name}>
+                                          {c.name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+
+                                <div className="grid gap-1.5">
+                                  <Label>Title</Label>
+                                  <Select
+                                    value={editing.titleName}
+                                    onValueChange={(val) =>
+                                      setEditing({ ...editing, titleName: val })
+                                    }
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {!editTitles.some((t) => t.name === editing.titleName) && (
+                                        <SelectItem value={editing.titleName}>
+                                          {editing.titleName}
+                                        </SelectItem>
+                                      )}
+                                      {editTitles.map((t) => (
+                                        <SelectItem key={t.id} value={t.name}>
+                                          {t.name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+
+                                <div className="grid gap-1.5">
+                                  <Label>Follow-up State</Label>
+                                  <Select
+                                    value={editing.status}
+                                    onValueChange={(val) =>
+                                      setEditing({ ...editing, status: val as FollowupStatus })
+                                    }
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="open">Open (carry forward)</SelectItem>
+                                      <SelectItem value="in_progress">
+                                        In Progress (carry forward)
+                                      </SelectItem>
+                                      <SelectItem value="done">
+                                        Done (stop carrying forward)
+                                      </SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+
+                                <div className="grid gap-1.5">
+                                  <Label>Task Completed By</Label>
+                                  <Select
+                                    value={editing.completedByMemberId || CUSTOM_LABEL_SENTINEL}
+                                    onValueChange={(val) =>
+                                      setEditing({
+                                        ...editing,
+                                        completedByMemberId:
+                                          val === CUSTOM_LABEL_SENTINEL ? '' : val,
+                                      })
+                                    }
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value={CUSTOM_LABEL_SENTINEL}>
+                                        Label ({editing.completedByLabel})
+                                      </SelectItem>
+                                      {activeMembers.map((m) => (
+                                        <SelectItem key={m.id} value={m.id}>
+                                          {m.displayName}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </div>
+
+                              <div className="grid gap-1.5">
+                                <Label>Status</Label>
+                                <Textarea
+                                  rows={3}
+                                  value={editing.statusText}
+                                  onChange={(e) =>
+                                    setEditing({ ...editing, statusText: e.target.value })
+                                  }
+                                />
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  disabled={updateMutation.isPending}
+                                  onClick={() => updateMutation.mutate(editing)}
+                                >
+                                  {updateMutation.isPending ? 'Saving…' : 'Save Changes'}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setEditing(null)}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    }
+
                     return (
-                      <tr key={item.id}>
-                        <td colSpan={6} className="followup-edit-cell">
-                          <div className="entry-edit-box">
-                            <div className="group-header">
-                              <strong>Editing Follow-up #{idx + 1}</strong>
-                            </div>
-                            <div className="composer-grid">
-                              <label className="field">
-                                <span>Report Category</span>
-                                <select
-                                  value={editing.categoryName}
-                                  onChange={(e) => {
-                                    const nextCatName = e.target.value;
-                                    const nextCat = activeCategories.find(
-                                      (c) => c.name === nextCatName,
-                                    );
-                                    setEditing({
-                                      ...editing,
-                                      categoryName: nextCatName,
-                                      titleName: nextCat?.titles[0]?.name ?? editing.titleName,
-                                    });
-                                  }}
-                                >
-                                  {!activeCategories.some((c) => c.name === editing.categoryName) && (
-                                    <option value={editing.categoryName}>
-                                      {editing.categoryName || 'General'}
-                                    </option>
-                                  )}
-                                  {activeCategories.map((c) => (
-                                    <option key={c.id} value={c.name}>
-                                      {c.name}
-                                    </option>
-                                  ))}
-                                </select>
-                              </label>
-                              <label className="field">
-                                <span>Title</span>
-                                <select
-                                  value={editing.titleName}
-                                  onChange={(e) =>
-                                    setEditing({ ...editing, titleName: e.target.value })
-                                  }
-                                >
-                                  {!editTitles.some((t) => t.name === editing.titleName) && (
-                                    <option value={editing.titleName}>{editing.titleName}</option>
-                                  )}
-                                  {editTitles.map((t) => (
-                                    <option key={t.id} value={t.name}>
-                                      {t.name}
-                                    </option>
-                                  ))}
-                                </select>
-                              </label>
-                              <label className="field">
-                                <span>Follow-up State</span>
-                                <select
-                                  value={editing.status}
-                                  onChange={(e) =>
-                                    setEditing({
-                                      ...editing,
-                                      status: e.target.value as FollowupStatus,
-                                    })
-                                  }
-                                >
-                                  <option value="open">Open (carry forward)</option>
-                                  <option value="in_progress">In Progress (carry forward)</option>
-                                  <option value="done">Done (stop carrying forward)</option>
-                                </select>
-                              </label>
-                              <label className="field">
-                                <span>Task Completed By</span>
-                                <select
-                                  value={editing.completedByMemberId}
-                                  onChange={(e) =>
-                                    setEditing({
-                                      ...editing,
-                                      completedByMemberId: e.target.value,
-                                    })
-                                  }
-                                >
-                                  <option value="">Label ({editing.completedByLabel})</option>
-                                  {activeMembers.map((m) => (
-                                    <option key={m.id} value={m.id}>
-                                      {m.displayName}
-                                    </option>
-                                  ))}
-                                </select>
-                              </label>
-                            </div>
-
-                            <label className="field">
-                              <span>Status</span>
-                              <textarea
-                                rows={3}
-                                value={editing.statusText}
-                                onChange={(e) =>
-                                  setEditing({ ...editing, statusText: e.target.value })
-                                }
-                              />
-                            </label>
-
-                            <div className="entry-edit-actions">
-                              <button
-                                type="button"
-                                className="btn-primary btn-sm"
-                                disabled={updateMutation.isPending}
-                                onClick={() => updateMutation.mutate(editing)}
-                              >
-                                {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
-                              </button>
-                              <button
-                                type="button"
-                                className="btn-secondary btn-sm"
-                                onClick={() => setEditing(null)}
-                              >
-                                Cancel
-                              </button>
-                            </div>
+                      <tr key={item.id} className="border-b border-zinc-200 last:border-b-0">
+                        <td className="border-r border-zinc-200 p-2.5 text-center align-top">
+                          <span className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-orange-300 bg-orange-50 text-xs font-extrabold text-orange-700">
+                            {idx + 1}
+                          </span>
+                        </td>
+                        <td className="border-r border-zinc-200 p-2.5 font-bold text-zinc-950 align-top">
+                          {item.categoryName}
+                        </td>
+                        <td className="border-r border-zinc-200 p-2.5 font-medium text-zinc-700 align-top">
+                          {item.titleName}
+                        </td>
+                        <td className="border-r border-zinc-200 p-2.5 align-top">
+                          <div className="whitespace-pre-wrap text-zinc-950 leading-relaxed">
+                            {item.statusText}
                           </div>
+                          <Badge
+                            variant={statusBadgeVariant(item.status)}
+                            size="sm"
+                            className="mt-2"
+                          >
+                            {item.status}
+                          </Badge>
+                        </td>
+                        <td className="border-r border-zinc-200 p-2.5 align-top">
+                          <Badge variant="secondary" size="sm" className="normal-case">
+                            {item.completedByDisplay}
+                          </Badge>
+                        </td>
+                        <td className="p-2.5 align-top">
+                          {item.status !== 'archived' && (
+                            <div className="flex flex-wrap items-center justify-end gap-1.5">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="xs"
+                                onClick={() => startEdit(item)}
+                              >
+                                <Pencil className="h-3 w-3" />
+                                Edit
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="xs"
+                                onClick={() => setDeleteTargetId(item.id)}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                                Delete
+                              </Button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     );
-                  }
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-                  return (
-                    <tr key={item.id}>
-                      <td className="col-ser">
-                        <span className="ser-badge">{idx + 1}</span>
-                      </td>
-                      <td className="cat-title">{item.categoryName}</td>
-                      <td className="title-sub">{item.titleName}</td>
-                      <td>
-                        <div className="entry-status-text">{item.statusText}</div>
-                        <span
-                          className={`badge badge-followup-${item.status}`}
-                          style={{ marginTop: 6 }}
-                        >
-                          {item.status}
-                        </span>
-                      </td>
-                      <td>
-                        <span className="assignee-chip">{item.completedByDisplay}</span>
-                      </td>
-                      <td className="col-actions">
-                        {item.status !== 'archived' && (
-                          <div className="history-actions">
-                            <button
-                              type="button"
-                              className="btn-secondary btn-xs"
-                              onClick={() => startEdit(item)}
-                            >
-                              <IconEdit size={11} />
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              className="btn-danger btn-xs"
-                              onClick={() => {
-                                if (window.confirm('Delete this follow-up item?')) {
-                                  archiveMutation.mutate(item.id);
-                                }
-                              }}
-                            >
-                              <IconTrash size={11} />
-                              Delete
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <ConfirmDialog
+        open={Boolean(deleteTargetId)}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTargetId(null);
+        }}
+        title="Delete Follow-up Item"
+        description="Archive and remove this follow-up item from future daily reports?"
+        confirmLabel="Delete Follow-up"
+        destructive
+        pending={archiveMutation.isPending}
+        onConfirm={() => {
+          if (deleteTargetId) archiveMutation.mutate(deleteTargetId);
+        }}
+      />
     </div>
   );
 }

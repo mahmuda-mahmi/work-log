@@ -1,7 +1,14 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import { Eye, EyeOff } from 'lucide-react';
 import { Link, useParams } from 'react-router';
 import { authApi } from '../api/client';
+import { Alert } from '../components/ui/alert';
+import { Button, buttonVariants } from '../components/ui/button';
+import { Card, CardContent } from '../components/ui/card';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { cn } from '../lib/utils';
 
 export function ResetPasswordScreen() {
   const { token = '' } = useParams();
@@ -17,65 +24,73 @@ export function ResetPasswordScreen() {
   });
 
   return (
-    <main className="auth-shell">
-      <section className="auth-card">
-        <div className="auth-logo-wrap">
-          <img src="/default-logo.png" alt="Solution Art" className="auth-logo" />
-        </div>
-        <div className="auth-header">
-          <h1>Reset Password</h1>
-          <p className="subtitle">Choose a new password of at least 8 characters.</p>
-        </div>
-
-        {errorMsg && (
-          <div className="alert-error" style={{ marginBottom: 12 }}>
-            {errorMsg}
+    <main className="bg-grid-subtle flex min-h-screen items-center justify-center p-6">
+      <Card className="w-full max-w-[420px] border-t-4 border-t-primary shadow-lg">
+        <CardContent className="p-6">
+          <div className="mb-4 flex justify-center">
+            <img src="/default-logo.png" alt="Solution Art" className="h-11 w-auto object-contain" />
           </div>
-        )}
+          <div className="mb-5 text-center">
+            <h1 className="text-xl font-bold tracking-tight text-zinc-950">Reset Password</h1>
+            <p className="mt-1 text-xs text-zinc-500">
+              Choose a new password of at least 8 characters.
+            </p>
+          </div>
 
-        {done ? (
-          <div className="stack">
-            <div className="alert-success">
-              Password updated. All previous sessions have been revoked.
+          {errorMsg && (
+            <Alert variant="destructive" className="mb-4">
+              {errorMsg}
+            </Alert>
+          )}
+
+          {done ? (
+            <div className="grid gap-3.5">
+              <Alert variant="success">
+                Password updated. All previous sessions have been revoked.
+              </Alert>
+              <Link to="/login" className={cn(buttonVariants(), 'w-full')}>
+                Go to Sign In
+              </Link>
             </div>
-            <Link to="/login" className="btn-primary btn-block">
-              Go to Sign In
-            </Link>
-          </div>
-        ) : (
-          <form
-            className="stack"
-            onSubmit={(e) => {
-              e.preventDefault();
-              setErrorMsg(null);
-              mutation.mutate({ token, newPassword });
-            }}
-          >
-            <label className="field">
-              <span>New Password (min 8 chars)</span>
-              <div className="password-wrap">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  minLength={8}
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  required
-                />
-                <button
-                  type="button"
-                  className="btn-secondary password-toggle-btn"
-                  onClick={() => setShowPassword((v) => !v)}
-                >
-                  {showPassword ? 'Hide' : 'Show'}
-                </button>
+          ) : (
+            <form
+              className="grid gap-3.5"
+              onSubmit={(e) => {
+                e.preventDefault();
+                setErrorMsg(null);
+                mutation.mutate({ token, newPassword });
+              }}
+            >
+              <div className="grid gap-1.5">
+                <Label htmlFor="reset-pw">New Password (min 8 chars)</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="reset-pw"
+                    type={showPassword ? 'text' : 'password'}
+                    minLength={8}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
               </div>
-            </label>
-            <button type="submit" className="btn-primary btn-block" disabled={mutation.isPending}>
-              {mutation.isPending ? 'Updating…' : 'Set New Password'}
-            </button>
-          </form>
-        )}
-      </section>
+              <Button type="submit" className="mt-1 w-full" disabled={mutation.isPending}>
+                {mutation.isPending ? 'Updating…' : 'Set New Password'}
+              </Button>
+            </form>
+          )}
+        </CardContent>
+      </Card>
     </main>
   );
 }
