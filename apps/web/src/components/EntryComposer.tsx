@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import type { DictionaryCategory, MemberSummary } from '@cghq/contracts';
+import type { DailyReportDto, DictionaryCategory, MemberSummary, WorkEntryDto } from '@cghq/contracts';
 import { findUnsupportedLatinChars } from '@cghq/document/date';
 import { Plus } from 'lucide-react';
 import { ApiError, reportsApi } from '../api/client.js';
@@ -198,25 +198,84 @@ export function EntryComposer({
   );
 
   const createMutation = useMutation({
-    mutationFn: () => {
-      const trimmedStatus = statusText.trim();
-      const formattedStatus =
-        isCommunication && communicationType && trimmedStatus
-          ? `${communicationType}: ${trimmedStatus}`
-          : trimmedStatus;
-      return reportsApi.createEntry(teamId, reportDate, {
-        categoryName: categoryName.trim(),
-        titleName: titleName.trim(),
-        statusLines: formattedStatus ? [formattedStatus] : [],
-        completedByMemberIds,
+    mutationFn: (vars: {
+      cat: string;
+      title: string;
+      formattedStatus: string;
+      rawStatus: string;
+      memberIds: string[];
+    }) =>
+      reportsApi.createEntry(teamId, reportDate, {
+        categoryName: vars.cat,
+        titleName: vars.title,
+        statusLines: vars.formattedStatus ? [vars.formattedStatus] : [],
+        completedByMemberIds: vars.memberIds,
+      }),
+    onMutate: async (vars) => {
+      await queryClient.cancelQueries({ queryKey: ['report', teamId] });
+      const previous = queryClient.getQueriesData<{
+        report: DailyReportDto;
+        dictionary: DictionaryCategory[];
+        members: MemberSummary[];
+      }>({ queryKey: ['report', teamId, 'workspace'] });
+
+      const nowIso = new Date().toISOString();
+      const assignees = vars.memberIds.length > 0 ? vars.memberIds : [null];
+      const memberMap = new Map(members.map((m) => [m.id, m.displayName]));
+
+      const optimisticEntries: WorkEntryDto[] = assignees.map((mId, idx) => ({
+        id: `optimistic-${Date.now()}-${idx}`,
+        groupId: 'optimistic-group',
+        statusText: vars.formattedStatus,
+        completedByMemberId: mId,
+        completedByLabel: null,
+        completedByDisplay: mId ? (memberMap.get(mId) ?? '') : '',
+        position: 999_000 + idx,
+        version: 1,
+        createdByUserId: null,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      }));
+
+      queryClient.setQueriesData<{
+        report: DailyReportDto;
+        dictionary: DictionaryCategory[];
+        members: MemberSummary[];
+      }>({ queryKey: ['report', teamId, 'workspace'] }, (old) => {
+        if (!old) return old;
+        const groups = [...old.report.groups];
+        const idx = groups.findIndex(
+          (g) => g.categoryName === vars.cat && g.titleName === vars.title,
+        );
+        if (idx >= 0) {
+          const target = groups[idx]!;
+          groups[idx] = {
+            ...target,
+            entries: [...target.entries, ...optimisticEntries],
+          };
+        } else {
+          groups.push({
+            id: `optimistic-group-${Date.now()}`,
+            categoryId: '',
+            categoryName: vars.cat,
+            titleId: '',
+            titleName: vars.title,
+            position: (groups.length + 1) * 10,
+            numberingMode: vars.cat.toLowerCase() === 'support' ? 'numbered' : 'plain',
+            entries: optimisticEntries,
+          });
+        }
+        return {
+          ...old,
+          report: {
+            ...old.report,
+            groups,
+          },
+        };
       });
-    },
-    onSuccess: () => {
+
       setErrorMsg(null);
-      writeJsonStorage(lastPairKey, {
-        categoryName: categoryName.trim(),
-        titleName: titleName.trim(),
-      });
+      writeJsonStorage(lastPairKey, { categoryName: vars.cat, titleName: vars.title });
       setCommunicationType('');
       setStatusText('');
       setCompletedByMemberIds([]);
@@ -225,11 +284,24 @@ export function EntryComposer({
       } catch {
         // Ignore
       }
+
+      return { previous, vars };
+    },
+    onError: (err, _vars, context) => {
+      if (context?.previous) {
+        for (const [key, data] of context.previous) {
+          queryClient.setQueryData(key, data);
+        }
+      }
+      if (context?.vars) {
+        setStatusText(context.vars.rawStatus);
+        setCompletedByMemberIds(context.vars.memberIds);
+      }
+      setErrorMsg(err instanceof ApiError ? err.message : 'Failed to add entry');
+    },
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ['report', teamId] });
       void queryClient.invalidateQueries({ queryKey: ['dictionary', teamId] });
-    },
-    onError: (err) => {
-      setErrorMsg(err instanceof ApiError ? err.message : 'Failed to add entry');
     },
   });
 
@@ -242,11 +314,22 @@ export function EntryComposer({
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErrorMsg(null);
-    if (!categoryName.trim() || !titleName.trim() || !statusText.trim()) {
+    const cat = categoryName.trim();
+    const title = titleName.trim();
+    const trimmedStatus = statusText.trim();
+    if (!cat || !title || !trimmedStatus) {
       setErrorMsg('Report Category, Title, and Status are required.');
       return;
     }
-    createMutation.mutate();
+    const formattedStatus =
+      isCommunication && communicationType ? `${communicationType}: ${trimmedStatus}` : trimmedStatus;
+    createMutation.mutate({
+      cat,
+      title,
+      formattedStatus,
+      rawStatus: statusText,
+      memberIds: completedByMemberIds,
+    });
   }
 
   return (

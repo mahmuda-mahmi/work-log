@@ -8,10 +8,10 @@ export const TWIPS_PER_PT = 20;
 export const EMU_PER_IN = 914400;
 
 export const PAGE = {
-  widthTwips: 15840, // 11 in (Landscape Letter)
-  heightTwips: 12240, // 8.5 in
-  widthPt: 792,
-  heightPt: 612,
+  widthTwips: 16838, // 297mm (A4 Landscape)
+  heightTwips: 11906, // 210mm
+  widthPt: 841.89,
+  heightPt: 595.28,
   marginsTwips: {
     top: 1440,
     bottom: 1440,

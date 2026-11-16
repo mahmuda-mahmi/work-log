@@ -6,6 +6,7 @@ import {
   ImageRun,
   LevelFormat,
   Packer,
+  PageOrientation,
   Paragraph,
   Table,
   TableCell,
@@ -261,8 +262,9 @@ export async function renderDocx(model: DocumentModel): Promise<Buffer> {
         properties: {
           page: {
             size: {
-              width: PAGE.widthTwips,
-              height: PAGE.heightTwips,
+              width: PAGE.heightTwips,
+              height: PAGE.widthTwips,
+              orientation: PageOrientation.LANDSCAPE,
             },
             margin: {
               top: PAGE.marginsTwips.top,

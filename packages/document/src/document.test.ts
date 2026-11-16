@@ -85,8 +85,8 @@ describe('@cghq/document Phase 1 Format Proof', () => {
     const docXml = zip.readAsText('word/document.xml');
     const hdrXml = zip.readAsText('word/header1.xml');
 
-    assert.ok(docXml.includes('w:w="15840"'), 'DOCX page width should be 15840 twips');
-    assert.ok(docXml.includes('w:h="12240"'), 'DOCX page height should be 12240 twips');
+    assert.ok(docXml.includes('w:w="16838"'), 'DOCX page width should be 16838 twips (A4 Landscape)');
+    assert.ok(docXml.includes('w:h="11906"'), 'DOCX page height should be 11906 twips (A4 Landscape)');
     assert.ok(docXml.includes('05 November 2026'), 'Zero-padded date missing in DOCX');
     assert.ok(docXml.includes('Times New Roman'), 'Times New Roman font missing in DOCX');
     assert.ok(docXml.includes('w:vMerge'), 'Vertical merge missing in DOCX');
@@ -97,8 +97,8 @@ describe('@cghq/document Phase 1 Format Proof', () => {
     const pdf = await PDFDocument.load(pdfBuf);
     assert.equal(pdf.getPageCount(), 1);
     const size = pdf.getPage(0).getSize();
-    assert.equal(size.width, 792);
-    assert.equal(size.height, 612);
+    assert.ok(Math.abs(size.width - 841.89) < 0.1, 'PDF width should be 841.89pt (A4 Landscape)');
+    assert.ok(Math.abs(size.height - 595.28) < 0.1, 'PDF height should be 595.28pt (A4 Landscape)');
   });
 
   it('renders a multi-page report with long merged group spanning page breaks (Q5)', async () => {

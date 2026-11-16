@@ -317,15 +317,17 @@ export class ReportsController {
         }
       }
 
-      await bumpDailyReportVersion(conn, report.id);
-      await appendAuditEvent(conn, {
-        teamId,
-        actorUserId: auth.userId,
-        action: 'entry.created',
-        entityType: 'work_entry',
-        entityId: createdIds[0] ?? null,
-        metadata: { reportDate, count: createdIds.length },
-      });
+      await Promise.all([
+        bumpDailyReportVersion(conn, report.id),
+        appendAuditEvent(conn, {
+          teamId,
+          actorUserId: auth.userId,
+          action: 'entry.created',
+          entityType: 'work_entry',
+          entityId: createdIds[0] ?? null,
+          metadata: { reportDate, count: createdIds.length },
+        }),
+      ]);
     });
 
     return { ok: true, createdIds };
