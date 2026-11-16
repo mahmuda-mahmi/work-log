@@ -34,13 +34,9 @@ function computeRowSpans(rows: DocumentRow[]): number[] {
 export function ReportPreview({
   report,
   documentTitle,
-  hasLogo,
   filterMemberId,
   filterUserId,
 }: ReportPreviewProps) {
-  const [logoSrc, setLogoSrc] = useState(
-    hasLogo ? `/api/teams/${report.teamId}/logo` : '/default-logo.png',
-  );
   const [logoVisible, setLogoVisible] = useState(true);
 
   const model = useMemo(() => {
@@ -85,16 +81,10 @@ export function ReportPreview({
       <div className="preview-header">
         {logoVisible && (
           <img
-            src={logoSrc}
-            alt="Team logo"
+            src="/default-logo.png"
+            alt="Solution Art"
             className="preview-logo"
-            onError={() => {
-              if (logoSrc !== '/default-logo.png') {
-                setLogoSrc('/default-logo.png');
-              } else {
-                setLogoVisible(false);
-              }
-            }}
+            onError={() => setLogoVisible(false)}
           />
         )}
         <div className="preview-title-block">

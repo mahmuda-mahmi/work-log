@@ -81,7 +81,7 @@ import {
   updateWorkGroupNumbering,
   updateWorkGroupPosition,
 } from '../../db/repositories/reports.repo.js';
-import { findTeamLogo, findTeamSettings, listTeamMembers } from '../../db/repositories/teams.repo.js';
+import { findTeamSettings, listTeamMembers } from '../../db/repositories/teams.repo.js';
 import {
   ensureDefaultDictionary,
   ensureDefaultFollowups,
@@ -852,7 +852,6 @@ export class ReportsController {
 
     if (!fileBytes) {
       const dto = await assembleDailyReportDto(pool, report, todayDate);
-      const logo = await findTeamLogo(pool, teamId);
       const entries: ReportEntryInput[] = dto.groups
         .filter((g) => g.entries.length > 0)
         .flatMap((g) =>
@@ -868,7 +867,7 @@ export class ReportsController {
         documentTitle: settings?.documentTitle,
         reportDate,
         preparedBy: dto.preparedByName,
-        logoBytes: logo?.bytes ?? getDefaultLogoBytes(),
+        logoBytes: getDefaultLogoBytes(),
         entries,
         followups: dto.followups.map((f) => ({
           categoryName: f.categoryName,
