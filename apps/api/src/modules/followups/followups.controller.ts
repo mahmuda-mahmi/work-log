@@ -35,6 +35,7 @@ import { appendAuditEvent } from '../../db/repositories/audit.repo.js';
 import { findOrCreateCategoryAndTitle } from '../../db/repositories/dictionary.repo.js';
 import {
   archiveFollowupItem,
+  findExistingActiveFollowup,
   findFollowupById,
   getNextFollowupPosition,
   insertFollowupItem,
@@ -86,6 +87,17 @@ export class FollowupsController {
         catName,
         body.titleName,
       );
+      const resolvedCategoryId = body.categoryName?.trim() ? categoryId : null;
+      const existingDup = await findExistingActiveFollowup(conn, {
+        teamId,
+        categoryId: resolvedCategoryId,
+        titleId,
+        statusText: body.statusText,
+      });
+      if (existingDup) {
+        return existingDup;
+      }
+
       const position = await getNextFollowupPosition(conn, teamId);
       const completedByMemberId = body.completedByMemberId ?? null;
       const completedByLabel = completedByMemberId

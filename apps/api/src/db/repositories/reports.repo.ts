@@ -189,7 +189,7 @@ export async function assembleDailyReportDto(
     entries: entriesByGroup.get(g.id) ?? [],
   }));
 
-  const followups: ReportFollowupDto[] =
+  const rawFollowups: ReportFollowupDto[] =
     report.status === 'finalized'
       ? (followupRows as FrozenFollowupRow[]).map((f) => ({
           id: f.id,
@@ -206,6 +206,16 @@ export async function assembleDailyReportDto(
           completedByDisplay: f.completed_by_display,
           status: f.status,
         }));
+
+  const seenFollowupKeys = new Set<string>();
+  const followups: ReportFollowupDto[] = [];
+  for (const f of rawFollowups) {
+    const key = `${f.categoryName.trim().toLowerCase()}\u0000${f.titleName.trim().toLowerCase()}\u0000${f.statusText.trim().toLowerCase()}`;
+    if (!seenFollowupKeys.has(key)) {
+      seenFollowupKeys.add(key);
+      followups.push(f);
+    }
+  }
 
   const etag = `"${sha256Hex(
     JSON.stringify({

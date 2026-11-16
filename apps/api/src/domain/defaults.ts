@@ -7,6 +7,7 @@ import {
 } from '../db/repositories/dictionary.repo.js';
 import {
   countTeamFollowups,
+  deduplicateTeamFollowups,
   insertFollowupItem,
 } from '../db/repositories/followups.repo.js';
 import {
@@ -124,6 +125,7 @@ export async function ensureDefaultFollowups(
   teamId: string,
   actorUserId: string,
 ): Promise<void> {
+  await deduplicateTeamFollowups(pool, teamId);
   if (seededFollowupsTeams.has(teamId)) return;
 
   const count = await countTeamFollowups(pool, teamId);

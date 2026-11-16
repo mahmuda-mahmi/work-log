@@ -55,11 +55,98 @@ function mapFollowupRow(r: FollowupRow): FollowupItemDto {
   };
 }
 
+const dedupedFollowupTeams = new Set<string>();
+
+export async function deduplicateTeamFollowups(conn: Conn, teamId: string): Promise<void> {
+  if (dedupedFollowupTeams.has(teamId)) return;
+
+  const [rows] = await conn.execute<
+    Array<
+      RowDataPacket & {
+        id: string;
+        category_id: string | null;
+        title_id: string | null;
+        status_text: string;
+      }
+    >
+  >(
+    `
+    SELECT id, category_id, title_id, status_text
+    FROM followup_items
+    WHERE team_id = ? AND status <> 'archived'
+    ORDER BY position ASC, created_at ASC
+    `,
+    [teamId],
+  );
+
+  const seen = new Set<string>();
+  const duplicateIds: string[] = [];
+
+  for (const r of rows) {
+    const key = `${r.category_id ?? ''}\u0000${r.title_id ?? ''}\u0000${r.status_text.trim().toLowerCase()}`;
+    if (seen.has(key)) {
+      duplicateIds.push(r.id);
+    } else {
+      seen.add(key);
+    }
+  }
+
+  for (const dupId of duplicateIds) {
+    await conn.execute(`DELETE FROM followup_items WHERE id = ? AND team_id = ?`, [dupId, teamId]);
+  }
+
+  dedupedFollowupTeams.add(teamId);
+}
+
+export async function findExistingActiveFollowup(
+  conn: Conn,
+  params: {
+    teamId: string;
+    categoryId: string | null;
+    titleId: string;
+    statusText: string;
+  },
+): Promise<FollowupItemDto | null> {
+  const [rows] = await conn.execute<FollowupRow[]>(
+    `
+    SELECT
+      fi.id,
+      fi.category_id,
+      COALESCE(c.name, '') AS category_name,
+      fi.title_id,
+      COALESCE(t.name, '') AS title_name,
+      fi.status,
+      fi.status_text,
+      fi.completed_by_member_id,
+      fi.completed_by_label,
+      tm.display_name AS member_display_name,
+      DATE_FORMAT(fi.completed_on, '%Y-%m-%d') AS completed_on,
+      fi.position,
+      fi.version,
+      fi.created_at,
+      fi.updated_at
+    FROM followup_items fi
+    LEFT JOIN categories c ON c.id = fi.category_id
+    LEFT JOIN titles t ON t.id = fi.title_id
+    LEFT JOIN team_members tm ON tm.id = fi.completed_by_member_id
+    WHERE fi.team_id = ?
+      AND fi.status <> 'archived'
+      AND COALESCE(fi.category_id, '') = COALESCE(?, '')
+      AND fi.title_id = ?
+      AND LOWER(TRIM(fi.status_text)) = LOWER(TRIM(?))
+    LIMIT 1
+    `,
+    [params.teamId, params.categoryId, params.titleId, params.statusText],
+  );
+  return rows[0] ? mapFollowupRow(rows[0]) : null;
+}
+
 export async function listTeamFollowups(
   conn: Conn,
   teamId: string,
   includeArchived = false,
 ): Promise<FollowupItemDto[]> {
+  await deduplicateTeamFollowups(conn, teamId);
   const [rows] = await conn.execute<FollowupRow[]>(SELECT_FOLLOWUPS_BY_TEAM, [
     teamId,
     includeArchived ? 1 : 0,
