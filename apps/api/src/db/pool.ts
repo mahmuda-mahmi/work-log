@@ -18,8 +18,8 @@ export function getPool(): Pool | null {
 
     pool = mysql.createPool({
       uri: parsed.toString(),
-      connectionLimit: 2,
-      maxIdle: 1,
+      connectionLimit: 5,
+      maxIdle: 3,
       idleTimeout: 60_000,
       enableKeepAlive: true,
       timezone: '+00:00',

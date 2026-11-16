@@ -1,46 +1,95 @@
+import { lazy, Suspense, useEffect } from 'react';
+import type { AuthSession } from '@cghq/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { LogOut } from 'lucide-react';
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router';
 import { authApi } from './api/client';
+import { PageCardSkeleton, WorkspaceShellSkeleton } from './components/WorkspaceSkeleton';
 import { Badge } from './components/ui/badge';
 import { Button } from './components/ui/button';
 import { cn } from './lib/utils';
-import { FollowupsScreen } from './screens/FollowupsScreen';
-import { HistoryScreen } from './screens/HistoryScreen';
-import { InviteAcceptScreen } from './screens/InviteAcceptScreen';
-import { LoginScreen } from './screens/LoginScreen';
 import { ReportScreen } from './screens/ReportScreen';
-import { ResetPasswordScreen } from './screens/ResetPasswordScreen';
-import { SettingsScreen } from './screens/SettingsScreen';
+
+const FollowupsScreen = lazy(() =>
+  import('./screens/FollowupsScreen').then((m) => ({ default: m.FollowupsScreen })),
+);
+const HistoryScreen = lazy(() =>
+  import('./screens/HistoryScreen').then((m) => ({ default: m.HistoryScreen })),
+);
+const InviteAcceptScreen = lazy(() =>
+  import('./screens/InviteAcceptScreen').then((m) => ({ default: m.InviteAcceptScreen })),
+);
+const LoginScreen = lazy(() =>
+  import('./screens/LoginScreen').then((m) => ({ default: m.LoginScreen })),
+);
+const ResetPasswordScreen = lazy(() =>
+  import('./screens/ResetPasswordScreen').then((m) => ({ default: m.ResetPasswordScreen })),
+);
+const SettingsScreen = lazy(() =>
+  import('./screens/SettingsScreen').then((m) => ({ default: m.SettingsScreen })),
+);
+
+const SESSION_CACHE_KEY = 'cghq:session';
+
+function readCachedSession(): AuthSession | undefined {
+  try {
+    const raw = window.localStorage.getItem(SESSION_CACHE_KEY);
+    return raw ? (JSON.parse(raw) as AuthSession) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeCachedSession(session: AuthSession | null): void {
+  try {
+    if (session) {
+      window.localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(session));
+    } else {
+      window.localStorage.removeItem(SESSION_CACHE_KEY);
+    }
+  } catch {
+    // Ignore storage errors
+  }
+}
 
 function AuthenticatedShell() {
   const queryClient = useQueryClient();
   const location = useLocation();
-  const { data: session, isLoading } = useQuery({
+  const cachedSession = readCachedSession();
+
+  const {
+    data: session,
+    isLoading,
+    isError,
+  } = useQuery({
     queryKey: ['me'],
     queryFn: authApi.me,
     retry: false,
+    placeholderData: cachedSession,
   });
+
+  useEffect(() => {
+    if (isError) {
+      writeCachedSession(null);
+    } else if (session) {
+      writeCachedSession(session);
+    }
+  }, [session, isError]);
 
   const logoutMutation = useMutation({
     mutationFn: authApi.logout,
     onSuccess: async () => {
+      writeCachedSession(null);
       queryClient.clear();
       await queryClient.invalidateQueries({ queryKey: ['me'] });
     },
   });
 
-  if (isLoading) {
-    return (
-      <div className="bg-grid-subtle flex min-h-screen items-center justify-center p-6">
-        <div className="rounded-lg border border-zinc-200 bg-white px-6 py-4 text-sm text-zinc-500 shadow-xs">
-          Loading workspace session…
-        </div>
-      </div>
-    );
+  if (isLoading && !session) {
+    return <WorkspaceShellSkeleton />;
   }
 
-  if (!session) {
+  if (isError || !session) {
     return <Navigate to="/login" replace />;
   }
 
@@ -117,14 +166,16 @@ function AuthenticatedShell() {
       </header>
 
       <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-4 sm:px-6 sm:py-5">
-        <Routes>
-          <Route path="/" element={<ReportScreen session={session} />} />
-          <Route path="/reports/:date" element={<ReportScreen session={session} />} />
-          <Route path="/followups" element={<FollowupsScreen session={session} />} />
-          <Route path="/history" element={<HistoryScreen session={session} />} />
-          <Route path="/settings" element={<SettingsScreen session={session} />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <Suspense fallback={<PageCardSkeleton rows={5} />}>
+          <Routes>
+            <Route path="/" element={<ReportScreen session={session} />} />
+            <Route path="/reports/:date" element={<ReportScreen session={session} />} />
+            <Route path="/followups" element={<FollowupsScreen session={session} />} />
+            <Route path="/history" element={<HistoryScreen session={session} />} />
+            <Route path="/settings" element={<SettingsScreen session={session} />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
       </main>
     </div>
   );
@@ -132,11 +183,13 @@ function AuthenticatedShell() {
 
 export function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<LoginScreen />} />
-      <Route path="/invite/:token" element={<InviteAcceptScreen />} />
-      <Route path="/reset-password/:token" element={<ResetPasswordScreen />} />
-      <Route path="/*" element={<AuthenticatedShell />} />
-    </Routes>
+    <Suspense fallback={<WorkspaceShellSkeleton />}>
+      <Routes>
+        <Route path="/login" element={<LoginScreen />} />
+        <Route path="/invite/:token" element={<InviteAcceptScreen />} />
+        <Route path="/reset-password/:token" element={<ResetPasswordScreen />} />
+        <Route path="/*" element={<AuthenticatedShell />} />
+      </Routes>
+    </Suspense>
   );
 }

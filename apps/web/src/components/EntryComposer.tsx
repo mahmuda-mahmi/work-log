@@ -80,7 +80,7 @@ export function EntryComposer({
   const [categoryName, setCategoryName] = useState('');
   const [titleName, setTitleName] = useState('');
   const [statusText, setStatusText] = useState('');
-  const [completedByMemberIds, setCompletedByMemberIds] = useState<string[]>([currentMemberId]);
+  const [completedByMemberIds, setCompletedByMemberIds] = useState<string[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -89,11 +89,7 @@ export function EntryComposer({
       setCategoryName(savedDraft.categoryName ?? '');
       setTitleName(savedDraft.titleName ?? '');
       setStatusText(savedDraft.statusText ?? '');
-      setCompletedByMemberIds(
-        savedDraft.completedByMemberIds?.length
-          ? savedDraft.completedByMemberIds
-          : [currentMemberId],
-      );
+      setCompletedByMemberIds(savedDraft.completedByMemberIds ?? []);
       return;
     }
 
@@ -101,8 +97,8 @@ export function EntryComposer({
     setCategoryName(lastPair?.categoryName ?? '');
     setTitleName(lastPair?.titleName ?? '');
     setStatusText('');
-    setCompletedByMemberIds([currentMemberId]);
-  }, [draftKey, lastPairKey, currentMemberId]);
+    setCompletedByMemberIds([]);
+  }, [draftKey, lastPairKey]);
 
   useEffect(() => {
     if (activeCategories.length === 0) return;
@@ -150,17 +146,12 @@ export function EntryComposer({
 
   const createMutation = useMutation({
     mutationFn: () => {
-      const statusLines = statusText
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter(Boolean);
+      const trimmedStatus = statusText.trim();
       return reportsApi.createEntry(teamId, reportDate, {
         categoryName: categoryName.trim(),
         titleName: titleName.trim(),
-        statusLines,
-        completedByMemberIds: completedByMemberIds.length
-          ? completedByMemberIds
-          : [currentMemberId],
+        statusLines: trimmedStatus ? [trimmedStatus] : [],
+        completedByMemberIds,
       });
     },
     onSuccess: () => {
@@ -170,6 +161,7 @@ export function EntryComposer({
         titleName: titleName.trim(),
       });
       setStatusText('');
+      setCompletedByMemberIds([]);
       try {
         window.localStorage.removeItem(draftKey);
       } catch {
@@ -184,12 +176,9 @@ export function EntryComposer({
   });
 
   function toggleMember(memberId: string) {
-    setCompletedByMemberIds((prev) => {
-      if (prev.includes(memberId)) {
-        return prev.length > 1 ? prev.filter((id) => id !== memberId) : prev;
-      }
-      return [...prev, memberId];
-    });
+    setCompletedByMemberIds((prev) =>
+      prev.includes(memberId) ? prev.filter((id) => id !== memberId) : [...prev, memberId],
+    );
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -288,7 +277,7 @@ export function EntryComposer({
             </div>
 
             <div className="grid gap-1.5 md:col-span-2 lg:col-span-1">
-              <Label htmlFor="composer-status">Status (one line per item)</Label>
+              <Label htmlFor="composer-status">Status</Label>
               <Textarea
                 id="composer-status"
                 rows={1}

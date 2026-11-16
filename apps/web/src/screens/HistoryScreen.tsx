@@ -9,6 +9,7 @@ import { Badge } from '../components/ui/badge.js';
 import { Button, buttonVariants } from '../components/ui/button.js';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.js';
 import { ConfirmDialog } from '../components/ui/confirm-dialog.js';
+import { Skeleton } from '../components/ui/skeleton.js';
 
 interface HistoryScreenProps {
   session: AuthSession;
@@ -58,7 +59,11 @@ export function HistoryScreen({ session }: HistoryScreenProps) {
           )}
 
           {historyQuery.isLoading ? (
-            <p className="text-sm text-zinc-500">Loading report history…</p>
+            <div className="grid gap-2.5 py-1">
+              {[0, 1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-11 w-full" />
+              ))}
+            </div>
           ) : rows.length === 0 ? (
             <p className="text-sm text-zinc-500">No daily reports created yet.</p>
           ) : (

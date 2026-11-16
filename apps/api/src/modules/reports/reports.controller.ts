@@ -33,14 +33,7 @@ import {
   type UpdateGroupInput,
   type UpdateGroupNumberingInput,
 } from '@cghq/contracts';
-import {
-  buildDocumentModel,
-  buildExportFileName,
-  getDefaultLogoBytes,
-  renderDocx,
-  renderPdf,
-  type ReportEntryInput,
-} from '@cghq/document';
+import type { ReportEntryInput } from '@cghq/document';
 import { get as blobGet, put as blobPut } from '@vercel/blob';
 import type { Response } from 'express';
 import {
@@ -139,8 +132,11 @@ export class ReportsController {
     const auth = req.auth!;
     const todayDate = getTeamTodayDate(auth.teamTimezone);
 
-    await ensureDefaultFollowups(pool, teamId, auth.userId);
-    let report = await findReportByDate(pool, teamId, reportDate);
+    const [, existingReport] = await Promise.all([
+      ensureDefaultFollowups(pool, teamId, auth.userId),
+      findReportByDate(pool, teamId, reportDate),
+    ]);
+    let report = existingReport;
     if (!report) {
       assertDateAllowedForCreate(reportDate, todayDate, auth.role);
       const settings = await findTeamSettings(pool, teamId);
@@ -770,6 +766,13 @@ export class ReportsController {
       });
     }
 
+    const {
+      buildDocumentModel,
+      buildExportFileName,
+      getDefaultLogoBytes,
+      renderDocx,
+      renderPdf,
+    } = await import('@cghq/document');
     const settings = await findTeamSettings(pool, teamId);
     const fileName = buildExportFileName({
       filePrefix: settings?.filePrefix,

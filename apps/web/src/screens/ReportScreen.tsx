@@ -30,6 +30,10 @@ import {
 } from '../api/client.js';
 import { EntryComposer } from '../components/EntryComposer.js';
 import { ReportPreview } from '../components/ReportPreview.js';
+import {
+  ReportPageSkeleton,
+  ReportTableSkeleton,
+} from '../components/WorkspaceSkeleton.js';
 import { Alert } from '../components/ui/alert.js';
 import { Badge } from '../components/ui/badge.js';
 import { Button, buttonVariants } from '../components/ui/button.js';
@@ -195,17 +199,12 @@ export function ReportScreen({ session }: ReportScreenProps) {
 
   const quickAddMutation = useMutation({
     mutationFn: (payload: QuickAddState) => {
-      const statusLines = payload.statusText
-        .split(/\r?\n/)
-        .map((l) => l.trim())
-        .filter(Boolean);
+      const trimmedStatus = payload.statusText.trim();
       return reportsApi.createEntry(teamId, activeDate, {
         categoryName: payload.categoryName,
         titleName: payload.titleName,
-        statusLines,
-        completedByMemberIds: payload.completedByMemberIds.length
-          ? payload.completedByMemberIds
-          : [session.member.id],
+        statusLines: trimmedStatus ? [trimmedStatus] : [],
+        completedByMemberIds: payload.completedByMemberIds,
       });
     },
     onSuccess: () => {
@@ -368,12 +367,24 @@ export function ReportScreen({ session }: ReportScreenProps) {
     return session.member.role === 'lead' || entry.createdByUserId === session.user.id;
   }
 
-  if (reportQuery.isLoading) {
-    return (
-      <Card>
-        <CardContent className="p-6 text-sm text-zinc-500">Loading daily report…</CardContent>
-      </Card>
-    );
+  if (reportQuery.isLoading && !report) {
+    if (dictionaryQuery.data && membersQuery.data) {
+      const fallbackDate = routeDate ?? new Date().toISOString().slice(0, 10);
+      return (
+        <div className="grid gap-4">
+          <EntryComposer
+            teamId={teamId}
+            reportDate={fallbackDate}
+            dictionary={dictionaryQuery.data}
+            members={membersQuery.data}
+            currentMemberId={session.member.id}
+            disabled={false}
+          />
+          <ReportTableSkeleton showSlowHint />
+        </div>
+      );
+    }
+    return <ReportPageSkeleton showSlowHint />;
   }
 
   if (reportQuery.isError || !report) {
@@ -726,7 +737,7 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                       categoryName: group.categoryName,
                                       titleName: group.titleName,
                                       statusText: '',
-                                      completedByMemberIds: [session.member.id],
+                                      completedByMemberIds: [],
                                     })
                                   }
                                 >
@@ -1007,7 +1018,7 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                             categoryName: group.categoryName,
                                             titleName: group.titleName,
                                             statusText: '',
-                                            completedByMemberIds: [session.member.id],
+                                            completedByMemberIds: [],
                                           })
                                         }
                                       >
@@ -1153,11 +1164,9 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                             m.id,
                                           );
                                           const next = exists
-                                            ? quickAdd.completedByMemberIds.length > 1
-                                              ? quickAdd.completedByMemberIds.filter(
-                                                  (id) => id !== m.id,
-                                                )
-                                              : quickAdd.completedByMemberIds
+                                            ? quickAdd.completedByMemberIds.filter(
+                                                (id) => id !== m.id,
+                                              )
                                             : [...quickAdd.completedByMemberIds, m.id];
                                           setQuickAdd({
                                             ...quickAdd,

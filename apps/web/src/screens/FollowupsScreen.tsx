@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select.js';
+import { Skeleton } from '../components/ui/skeleton.js';
 import { Textarea } from '../components/ui/textarea.js';
 
 interface FollowupsScreenProps {
@@ -326,7 +327,11 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
 
         <CardContent className="p-3">
           {followupsQuery.isLoading ? (
-            <p className="text-sm text-zinc-500">Loading follow-ups…</p>
+            <div className="grid gap-2.5 py-1">
+              {[0, 1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
           ) : items.length === 0 ? (
             <p className="text-sm text-zinc-500">
               No follow-up items. Finalized reports will display &ldquo;None&rdquo;.

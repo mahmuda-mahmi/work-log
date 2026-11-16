@@ -157,8 +157,19 @@ export async function assembleDailyReportDto(
   report: ReportRow,
   todayDate: string,
 ): Promise<DailyReportDto> {
-  const [groupRows] = await conn.execute<GroupRow[]>(SELECT_WORK_GROUPS_BY_REPORT, [report.id]);
-  const [entryRows] = await conn.execute<EntryRow[]>(SELECT_WORK_ENTRIES_BY_REPORT, [report.id]);
+  const followupPromise =
+    report.status === 'finalized'
+      ? conn.execute<FrozenFollowupRow[]>(SELECT_FROZEN_FOLLOWUPS_FOR_REPORT, [report.id])
+      : conn.execute<LiveFollowupRow[]>(SELECT_LIVE_FOLLOWUPS_FOR_DATE, [
+          report.team_id,
+          report.report_date,
+        ]);
+
+  const [[groupRows], [entryRows], [followupRows]] = await Promise.all([
+    conn.execute<GroupRow[]>(SELECT_WORK_GROUPS_BY_REPORT, [report.id]),
+    conn.execute<EntryRow[]>(SELECT_WORK_ENTRIES_BY_REPORT, [report.id]),
+    followupPromise,
+  ]);
 
   const entriesByGroup = new Map<string, WorkEntryDto[]>();
   for (const e of entryRows) {
@@ -178,32 +189,23 @@ export async function assembleDailyReportDto(
     entries: entriesByGroup.get(g.id) ?? [],
   }));
 
-  let followups: ReportFollowupDto[] = [];
-  if (report.status === 'finalized') {
-    const [frozen] = await conn.execute<FrozenFollowupRow[]>(SELECT_FROZEN_FOLLOWUPS_FOR_REPORT, [
-      report.id,
-    ]);
-    followups = frozen.map((f) => ({
-      id: f.id,
-      categoryName: f.category_name,
-      titleName: f.title_name,
-      statusText: f.status_text,
-      completedByDisplay: f.completed_by_display,
-    }));
-  } else {
-    const [live] = await conn.execute<LiveFollowupRow[]>(SELECT_LIVE_FOLLOWUPS_FOR_DATE, [
-      report.team_id,
-      report.report_date,
-    ]);
-    followups = live.map((f) => ({
-      id: f.id,
-      categoryName: f.category_name,
-      titleName: f.title_name,
-      statusText: f.status_text,
-      completedByDisplay: f.completed_by_display,
-      status: f.status,
-    }));
-  }
+  const followups: ReportFollowupDto[] =
+    report.status === 'finalized'
+      ? (followupRows as FrozenFollowupRow[]).map((f) => ({
+          id: f.id,
+          categoryName: f.category_name,
+          titleName: f.title_name,
+          statusText: f.status_text,
+          completedByDisplay: f.completed_by_display,
+        }))
+      : (followupRows as LiveFollowupRow[]).map((f) => ({
+          id: f.id,
+          categoryName: f.category_name,
+          titleName: f.title_name,
+          statusText: f.status_text,
+          completedByDisplay: f.completed_by_display,
+          status: f.status,
+        }));
 
   const etag = `"${sha256Hex(
     JSON.stringify({
