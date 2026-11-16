@@ -1170,12 +1170,13 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                   {quickAdd.categoryName.trim().toLowerCase() ===
                                     'communication' && (
                                     <Select
+                                      className="w-[125px] shrink-0"
                                       value={quickAdd.communicationType}
                                       onValueChange={(val) =>
                                         setQuickAdd({ ...quickAdd, communicationType: val })
                                       }
                                     >
-                                      <SelectTrigger className="w-[130px] shrink-0">
+                                      <SelectTrigger>
                                         <SelectValue placeholder="Sailor / Officer" />
                                       </SelectTrigger>
                                       <SelectContent>
@@ -1186,7 +1187,7 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                   )}
                                   <Textarea
                                     rows={2}
-                                    className="flex-1"
+                                    className="min-w-0 flex-1"
                                     value={quickAdd.statusText}
                                     onChange={(e) =>
                                       setQuickAdd({ ...quickAdd, statusText: e.target.value })

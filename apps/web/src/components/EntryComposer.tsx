@@ -293,11 +293,12 @@ export function EntryComposer({
               <div className={isCommunication ? 'flex items-start gap-2' : 'grid'}>
                 {isCommunication && (
                   <Select
+                    className="w-[125px] shrink-0"
                     value={communicationType}
                     onValueChange={setCommunicationType}
                     disabled={disabled || createMutation.isPending}
                   >
-                    <SelectTrigger className="w-[125px] shrink-0">
+                    <SelectTrigger>
                       <SelectValue placeholder="Sailor / Officer" />
                     </SelectTrigger>
                     <SelectContent>
@@ -309,7 +310,7 @@ export function EntryComposer({
                 <Textarea
                   id="composer-status"
                   rows={1}
-                  className="h-9 min-h-[36px] flex-1 resize-y py-1.5"
+                  className="h-9 min-h-[36px] min-w-0 flex-1 resize-y py-1.5"
                   value={statusText}
                   onChange={(e) => setStatusText(e.target.value)}
                   placeholder={

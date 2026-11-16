@@ -18,10 +18,11 @@ export interface SelectProps {
   value?: string;
   onValueChange?: (value: string) => void;
   disabled?: boolean;
+  className?: string;
   children: React.ReactNode;
 }
 
-export function Select({ value = '', onValueChange, disabled, children }: SelectProps) {
+export function Select({ value = '', onValueChange, disabled, className, children }: SelectProps) {
   const [open, setOpen] = React.useState(false);
   const labelsRef = React.useRef(new Map<string, React.ReactNode>());
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -64,7 +65,7 @@ export function Select({ value = '', onValueChange, disabled, children }: Select
         registerLabel,
       }}
     >
-      <div ref={containerRef} className="relative w-full">
+      <div ref={containerRef} className={cn('relative', className ?? 'w-full')}>
         {children}
       </div>
     </SelectContext.Provider>
