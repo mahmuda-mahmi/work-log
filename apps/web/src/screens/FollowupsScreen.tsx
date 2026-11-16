@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { AuthSession, FollowupItemDto, FollowupStatus } from '@cghq/contracts';
+import type { ActiveAuthSession, FollowupItemDto, FollowupStatus } from '@cghq/contracts';
 import { ArrowUpRight, Pencil, Plus, Trash2 } from 'lucide-react';
 import { ApiError, dictionaryApi, followupsApi, teamsApi } from '../api/client.js';
 import { Alert } from '../components/ui/alert.js';
@@ -22,7 +22,7 @@ import { Skeleton } from '../components/ui/skeleton.js';
 import { Textarea } from '../components/ui/textarea.js';
 
 interface FollowupsScreenProps {
-  session: AuthSession;
+  session: ActiveAuthSession;
 }
 
 interface EditRowState {

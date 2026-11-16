@@ -101,19 +101,21 @@ export class SessionGuard implements CanActivate {
       userId: session.userId,
       userName: session.userName,
       userEmail: session.userEmail,
-      teamId: session.teamId,
-      teamName: session.teamName,
-      teamSlug: session.teamSlug,
-      teamTimezone: session.teamTimezone,
-      memberId: session.memberId,
-      role: session.role,
-      displayName: session.displayName,
+      teamId: session.teamId ?? '',
+      teamName: session.teamName ?? '',
+      teamSlug: session.teamSlug ?? '',
+      teamTimezone: session.teamTimezone ?? 'Asia/Dhaka',
+      memberId: session.memberId ?? '',
+      role: session.role ?? 'member',
+      displayName: session.displayName ?? session.userName,
     };
 
-    sessionCache.set(tokenHash, {
-      auth,
-      expiresAtMs: nowMs + SESSION_CACHE_TTL_MS,
-    });
+    if (session.teamId) {
+      sessionCache.set(tokenHash, {
+        auth,
+        expiresAtMs: nowMs + SESSION_CACHE_TTL_MS,
+      });
+    }
     req.auth = auth;
 
     return true;

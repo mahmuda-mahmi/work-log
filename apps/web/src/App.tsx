@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react';
-import type { AuthSession } from '@cghq/contracts';
+import type { ActiveAuthSession, AuthSession } from '@cghq/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { LogOut } from 'lucide-react';
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router';
@@ -9,6 +9,7 @@ import { Badge } from './components/ui/badge';
 import { Button } from './components/ui/button';
 import { cn } from './lib/utils';
 import { LandingScreen } from './screens/LandingScreen';
+import { OnboardingScreen } from './screens/OnboardingScreen';
 import { ReportScreen } from './screens/ReportScreen';
 
 const FollowupsScreen = lazy(() =>
@@ -97,6 +98,22 @@ function AuthenticatedShell() {
     return <Navigate to="/login" replace />;
   }
 
+  if (!session.team || !session.member) {
+    return (
+      <OnboardingScreen
+        session={session}
+        onLogout={() => logoutMutation.mutate()}
+        logoutPending={logoutMutation.isPending}
+      />
+    );
+  }
+
+  const activeSession: ActiveAuthSession = {
+    ...session,
+    team: session.team,
+    member: session.member,
+  };
+
   const path = location.pathname;
   const navItems = [
     { to: '/today', label: 'Today', active: path === '/today' || path.startsWith('/reports/') },
@@ -124,21 +141,23 @@ function AuthenticatedShell() {
             <div className="flex flex-col min-w-0">
               <div className="flex items-center gap-2">
                 <span className="truncate text-sm font-bold tracking-tight text-white">
-                  {session.team.name}
+                  {activeSession.team.name}
                 </span>
                 <Badge
-                  variant={session.member.role === 'lead' ? 'default' : 'secondary'}
+                  variant={activeSession.member.role === 'lead' ? 'default' : 'secondary'}
                   className={cn(
                     'h-5 px-1.5 text-[10px]',
-                    session.member.role === 'lead'
+                    activeSession.member.role === 'lead'
                       ? 'border-primary/40 bg-primary/20 text-primary'
                       : 'border-zinc-700 bg-zinc-800 text-zinc-200',
                   )}
                 >
-                  {session.member.role}
+                  {activeSession.member.role}
                 </Badge>
               </div>
-              <span className="truncate text-xs text-zinc-400">{session.member.displayName}</span>
+              <span className="truncate text-xs text-zinc-400">
+                {activeSession.member.displayName}
+              </span>
             </div>
           </div>
 
@@ -176,11 +195,11 @@ function AuthenticatedShell() {
       <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-4 sm:px-6 sm:py-5">
         <Suspense fallback={<PageCardSkeleton rows={5} />}>
           <Routes>
-            <Route path="/today" element={<ReportScreen session={session} />} />
-            <Route path="/reports/:date" element={<ReportScreen session={session} />} />
-            <Route path="/followups" element={<FollowupsScreen session={session} />} />
-            <Route path="/history" element={<HistoryScreen session={session} />} />
-            <Route path="/settings" element={<SettingsScreen session={session} />} />
+            <Route path="/today" element={<ReportScreen session={activeSession} />} />
+            <Route path="/reports/:date" element={<ReportScreen session={activeSession} />} />
+            <Route path="/followups" element={<FollowupsScreen session={activeSession} />} />
+            <Route path="/history" element={<HistoryScreen session={activeSession} />} />
+            <Route path="/settings" element={<SettingsScreen session={activeSession} />} />
             <Route path="*" element={<Navigate to="/today" replace />} />
           </Routes>
         </Suspense>

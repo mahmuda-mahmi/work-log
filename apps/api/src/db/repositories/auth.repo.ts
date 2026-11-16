@@ -36,17 +36,18 @@ type ActiveSessionRow = {
   user_id: string;
   user_name: string;
   user_email: string;
-  team_id: string;
-  team_name: string;
-  team_slug: string;
-  team_timezone: string;
-  document_title: string;
-  file_prefix: string;
+  team_id: string | null;
+  team_name: string | null;
+  team_slug: string | null;
+  team_timezone: string | null;
+  document_title: string | null;
+  file_prefix: string | null;
   prepared_by_default: string | null;
   logo_asset_id: string | null;
-  member_id: string;
-  role: MemberRole;
-  display_name: string;
+  member_id: string | null;
+  role: MemberRole | null;
+  display_name: string | null;
+  pending_join_team_name: string | null;
 };
 type RateLimitRow = {
   bucket_key: string;
@@ -149,6 +150,7 @@ export async function findActiveSessionByTokenHash(conn: DbClient, tokenHash: st
     memberId: r.member_id,
     role: r.role,
     displayName: r.display_name,
+    pendingJoinTeamName: r.pending_join_team_name,
   };
 }
 

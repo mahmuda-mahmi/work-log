@@ -99,7 +99,9 @@ export function LandingScreen() {
               <span className="text-sm font-bold tracking-tight text-white">CGHQ Work Log</span>
               <span className="text-[11px] text-zinc-400">
                 {isSignedIn && session
-                  ? `${session.team.name} · ${session.member.displayName}`
+                  ? session.team && session.member
+                    ? `${session.team.name} · ${session.member.displayName}`
+                    : session.user.name || session.user.email
                   : 'Daily Team Reporting'}
               </span>
             </div>

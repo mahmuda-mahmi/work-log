@@ -2,7 +2,7 @@ import { Fragment, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
-  AuthSession,
+  ActiveAuthSession,
   DailyReportDto,
   DictionaryCategory,
   MemberSummary,
@@ -48,7 +48,7 @@ import { Textarea } from '../components/ui/textarea.js';
 import { cn } from '../lib/utils.js';
 
 interface ReportScreenProps {
-  session: AuthSession;
+  session: ActiveAuthSession;
 }
 
 interface EditingEntryState {

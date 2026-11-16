@@ -61,23 +61,59 @@ export const AuthSessionSchema = z.object({
     name: z.string(),
     email: z.string().email(),
   }),
-  team: z.object({
-    id: z.string().uuid(),
-    name: z.string(),
-    slug: z.string(),
-    timezone: z.string(),
-    documentTitle: z.string(),
-    filePrefix: z.string(),
-    preparedByDefault: z.string().nullable(),
-    hasLogo: z.boolean(),
-  }),
-  member: z.object({
-    id: z.string().uuid(),
-    role: MemberRoleSchema,
-    displayName: z.string(),
-  }),
+  team: z
+    .object({
+      id: z.string().uuid(),
+      name: z.string(),
+      slug: z.string(),
+      timezone: z.string(),
+      documentTitle: z.string(),
+      filePrefix: z.string(),
+      preparedByDefault: z.string().nullable(),
+      hasLogo: z.boolean(),
+    })
+    .nullable(),
+  member: z
+    .object({
+      id: z.string().uuid(),
+      role: MemberRoleSchema,
+      displayName: z.string(),
+    })
+    .nullable(),
+  pendingJoinTeamName: z.string().nullable().optional(),
 });
 export type AuthSession = z.infer<typeof AuthSessionSchema>;
+
+export type ActiveAuthSession = AuthSession & {
+  team: NonNullable<AuthSession['team']>;
+  member: NonNullable<AuthSession['member']>;
+};
+
+export const RegisterSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required').max(120),
+  email: EmailSchema,
+  password: PasswordSchema,
+});
+export type RegisterInput = z.infer<typeof RegisterSchema>;
+
+export const CreateTeamSchema = z.object({
+  teamName: z.string().trim().min(1, 'Team name is required').max(120),
+  teamSlug: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Slug must be lowercase alphanumeric with hyphens')
+    .min(2)
+    .max(80)
+    .optional(),
+  timezone: z.string().trim().min(1).max(64).default('Asia/Dhaka'),
+});
+export type CreateTeamInput = z.infer<typeof CreateTeamSchema>;
+
+export const JoinByCodeSchema = z.object({
+  codeOrLink: z.string().trim().min(2, 'Enter a team code or join link').max(512),
+});
+export type JoinByCodeInput = z.infer<typeof JoinByCodeSchema>;
 
 export const SubmitJoinRequestSchema = z.object({
   token: z.string().trim().min(16).max(256),

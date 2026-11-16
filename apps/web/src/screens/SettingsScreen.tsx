@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { AuthSession } from '@cghq/contracts';
+import type { ActiveAuthSession } from '@cghq/contracts';
 import { Check, Copy, Plus } from 'lucide-react';
 import { dictionaryApi, teamsApi } from '../api/client';
 import { Alert } from '../components/ui/alert';
@@ -24,7 +24,7 @@ type RenamePromptState =
   | { type: 'title'; id: string; currentName: string }
   | null;
 
-export function SettingsScreen({ session }: { session: AuthSession }) {
+export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
   const queryClient = useQueryClient();
   const isLead = session.member.role === 'lead';
   const teamId = session.team.id;
@@ -455,7 +455,35 @@ export function SettingsScreen({ session }: { session: AuthSession }) {
 
               {isLead && (
                 <div className="grid gap-4 border-t border-zinc-100 pt-3">
-                  <div className="grid gap-2.5">
+                  <div className="grid gap-2">
+                    <div>
+                      <h3 className="text-xs font-bold uppercase tracking-wide text-zinc-700">
+                        Team Code
+                      </h3>
+                      <p className="text-xs text-zinc-500">
+                        Teammates can enter this Team Code after signing in to request access to{' '}
+                        <strong>{session.team.name}</strong>.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        readOnly
+                        value={session.team.slug}
+                        className="h-8 max-w-xs font-mono text-xs"
+                        onFocus={(e) => e.currentTarget.select()}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => void copyToClipboard(session.team.slug, 'team-code')}
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                        {copiedKey === 'team-code' ? 'Copied!' : 'Copy Code'}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-2.5 border-t border-zinc-100 pt-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <h3 className="text-xs font-bold uppercase tracking-wide text-zinc-700">

@@ -50,16 +50,24 @@ export const SELECT_ACTIVE_SESSION = `
     t.logo_asset_id,
     tm.id AS member_id,
     tm.role,
-    tm.display_name
+    tm.display_name,
+    (
+      SELECT t2.name
+      FROM team_join_requests jr
+      INNER JOIN teams t2 ON t2.id = jr.team_id
+      WHERE jr.user_id = u.id AND jr.status = 'pending'
+      ORDER BY jr.created_at DESC
+      LIMIT 1
+    ) AS pending_join_team_name
   FROM sessions s
   INNER JOIN users u ON u.id = s.user_id
-  INNER JOIN team_members tm ON tm.user_id = u.id AND tm.is_active = TRUE
-  INNER JOIN teams t ON t.id = tm.team_id
+  LEFT JOIN team_members tm ON tm.user_id = u.id AND tm.is_active = TRUE
+  LEFT JOIN teams t ON t.id = tm.team_id
   WHERE s.token_hash = $1
     AND s.expires_at > NOW()
     AND s.session_version = u.session_version
     AND u.is_active = TRUE
-  ORDER BY tm.sort_order ASC, tm.created_at ASC
+  ORDER BY tm.sort_order ASC NULLS LAST, tm.created_at ASC NULLS LAST
   LIMIT 1
 `;
 

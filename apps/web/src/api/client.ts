@@ -6,13 +6,16 @@ import type {
   CreateEntryInput,
   CreateFollowupInput,
   CreateInviteInput,
+  CreateTeamInput,
   DailyReportDto,
   DictionaryCategory,
   ExportFormat,
   FinalizeReportInput,
   FollowupItemDto,
+  JoinByCodeInput,
   LoginInput,
   MemberSummary,
+  RegisterInput,
   ReorderIdsInput,
   ReportExportInfo,
   ReportHistoryItem,
@@ -74,6 +77,21 @@ export const authApi = {
     }),
   login: (body: LoginInput) =>
     apiFetch<{ ok: boolean }>('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  register: (body: RegisterInput) =>
+    apiFetch<{ ok: boolean }>('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  createTeam: (body: CreateTeamInput) =>
+    apiFetch<{ ok: boolean; teamId: string }>('/api/auth/teams', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  joinByCode: (body: JoinByCodeInput) =>
+    apiFetch<{ ok: boolean; teamName: string }>('/api/auth/join-by-code', {
       method: 'POST',
       body: JSON.stringify(body),
     }),

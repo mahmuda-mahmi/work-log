@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { AuthSession } from '@cghq/contracts';
+import type { ActiveAuthSession } from '@cghq/contracts';
 import { Download, Trash2 } from 'lucide-react';
 import { ApiError, reportsApi } from '../api/client.js';
 import { Alert } from '../components/ui/alert.js';
@@ -12,7 +12,7 @@ import { ConfirmDialog } from '../components/ui/confirm-dialog.js';
 import { Skeleton } from '../components/ui/skeleton.js';
 
 interface HistoryScreenProps {
-  session: AuthSession;
+  session: ActiveAuthSession;
 }
 
 export function HistoryScreen({ session }: HistoryScreenProps) {

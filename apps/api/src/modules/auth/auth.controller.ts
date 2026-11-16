@@ -20,14 +20,20 @@ import {
   BootstrapLeadSchema,
   ChangePasswordSchema,
   CompletePasswordResetSchema,
+  CreateTeamSchema,
+  JoinByCodeSchema,
   LoginSchema,
+  RegisterSchema,
   SubmitJoinRequestSchema,
   type AcceptInviteInput,
   type AuthSession,
   type BootstrapLeadInput,
   type ChangePasswordInput,
   type CompletePasswordResetInput,
+  type CreateTeamInput,
+  type JoinByCodeInput,
   type LoginInput,
+  type RegisterInput,
   type SubmitJoinRequestInput,
 } from '@cghq/contracts';
 import type { Request, Response } from 'express';
@@ -248,10 +254,59 @@ export class AuthController {
     const session = await findActiveSessionByTokenHash(pool, tokenHash);
     if (!session) {
       throw new UnauthorizedException({
-        code: 'NO_ACTIVE_TEAM',
-        message: 'Your account is not active on any team',
+        code: 'SESSION_INVALID',
+        message: 'Could not establish session',
       });
     }
+
+    setSessionCookie(res, rawToken);
+    return { ok: true };
+  }
+
+  @Post('register')
+  @HttpCode(200)
+  async register(
+    @Body(new ZodValidationPipe(RegisterSchema)) body: RegisterInput,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const pool = getPool();
+    if (!pool) {
+      throw new ServiceUnavailableException({
+        code: 'DB_UNAVAILABLE',
+        message: 'Database is not configured',
+      });
+    }
+
+    const email = body.email.trim().toLowerCase();
+    const existing = await findUserForLogin(pool, email);
+    if (existing) {
+      throw new ConflictException({
+        code: 'EMAIL_EXISTS',
+        message: 'An account with this email already exists. Please sign in instead.',
+      });
+    }
+
+    const userId = uuidv7();
+    const passwordHash = await hashPassword(body.password);
+    const rawToken = generateOpaqueToken();
+    const tokenHash = sha256Hex(rawToken);
+    const sessionId = uuidv7();
+
+    await withTransaction(pool, async (conn) => {
+      await insertUser(conn, {
+        id: userId,
+        name: body.name.trim(),
+        email,
+        passwordHash,
+      });
+      await insertSession(conn, {
+        id: sessionId,
+        userId,
+        tokenHash,
+        sessionVersion: 0,
+        ttlDays: SESSION_TTL_DAYS,
+      });
+    });
 
     setSessionCookie(res, rawToken);
     return { ok: true };
@@ -288,22 +343,157 @@ export class AuthController {
         name: session.userName,
         email: session.userEmail,
       },
-      team: {
-        id: session.teamId,
-        name: session.teamName,
-        slug: session.teamSlug,
-        timezone: session.teamTimezone,
-        documentTitle: session.documentTitle,
-        filePrefix: session.filePrefix,
-        preparedByDefault: session.preparedByDefault,
-        hasLogo: session.hasLogo,
-      },
-      member: {
-        id: session.memberId,
-        role: session.role,
-        displayName: session.displayName,
-      },
+      team: session.teamId
+        ? {
+            id: session.teamId,
+            name: session.teamName!,
+            slug: session.teamSlug!,
+            timezone: session.teamTimezone!,
+            documentTitle: session.documentTitle!,
+            filePrefix: session.filePrefix!,
+            preparedByDefault: session.preparedByDefault,
+            hasLogo: session.hasLogo,
+          }
+        : null,
+      member: session.memberId
+        ? {
+            id: session.memberId,
+            role: session.role!,
+            displayName: session.displayName!,
+          }
+        : null,
+      pendingJoinTeamName: session.pendingJoinTeamName ?? null,
     };
+  }
+
+  @Post('teams')
+  @UseGuards(SessionGuard)
+  async createTeamForUser(
+    @Req() req: AuthenticatedRequest,
+    @Body(new ZodValidationPipe(CreateTeamSchema)) body: CreateTeamInput,
+  ) {
+    const pool = getPool()!;
+    const auth = req.auth!;
+    const rawSlugBase =
+      body.teamSlug?.trim() ||
+      body.teamName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '')
+        .slice(0, 60) ||
+      'team';
+    const teamId = uuidv7();
+    const memberId = uuidv7();
+
+    await withTransaction(pool, async (conn) => {
+      const existingSlug = await conn.query<{ id: string }>(
+        `SELECT id FROM teams WHERE LOWER(slug) = LOWER($1) LIMIT 1`,
+        [rawSlugBase],
+      );
+      const finalSlug = existingSlug.rows[0]
+        ? `${rawSlugBase}-${Math.random().toString(36).slice(2, 6)}`
+        : rawSlugBase;
+
+      await insertTeam(conn, {
+        id: teamId,
+        name: body.teamName.trim(),
+        slug: finalSlug,
+        timezone: body.timezone,
+        preparedByDefault: auth.userName,
+        createdByUserId: auth.userId,
+      });
+      await insertTeamMember(conn, {
+        id: memberId,
+        teamId,
+        userId: auth.userId,
+        role: 'lead',
+        displayName: auth.userName,
+        sortOrder: 100,
+      });
+      await appendAuditEvent(conn, {
+        teamId,
+        actorUserId: auth.userId,
+        action: 'team.created',
+        entityType: 'team',
+        entityId: teamId,
+      });
+    });
+
+    const rawToken = req.cookies?.[SESSION_COOKIE_NAME] as string | undefined;
+    if (rawToken) {
+      invalidateSessionCache(sha256Hex(rawToken));
+    }
+
+    return { ok: true, teamId };
+  }
+
+  @Post('join-by-code')
+  @HttpCode(200)
+  @UseGuards(SessionGuard)
+  async joinByCode(
+    @Req() req: AuthenticatedRequest,
+    @Body(new ZodValidationPipe(JoinByCodeSchema)) body: JoinByCodeInput,
+  ) {
+    const pool = getPool()!;
+    const auth = req.auth!;
+    const rawInput = body.codeOrLink.trim();
+
+    let extractedToken: string | null = null;
+    const urlMatch = rawInput.match(/\/join\/([A-Za-z0-9_-]+)/);
+    if (urlMatch?.[1]) {
+      extractedToken = urlMatch[1];
+    } else if (/^[A-Za-z0-9_-]{24,}$/.test(rawInput)) {
+      extractedToken = rawInput;
+    }
+
+    let targetTeamId: string | null = null;
+    let targetTeamName: string | null = null;
+
+    if (extractedToken) {
+      const invite = await findInviteByHash(pool, sha256Hex(extractedToken));
+      if (invite && new Date(invite.expiresAt).getTime() > Date.now()) {
+        targetTeamId = invite.teamId;
+        targetTeamName = await findTeamNameById(pool, invite.teamId);
+      }
+    }
+
+    if (!targetTeamId) {
+      const slugLookup = await pool.query<{ id: string; name: string }>(
+        `SELECT id, name FROM teams WHERE LOWER(slug) = LOWER($1) LIMIT 1`,
+        [rawInput],
+      );
+      if (slugLookup.rows[0]) {
+        targetTeamId = slugLookup.rows[0].id;
+        targetTeamName = slugLookup.rows[0].name;
+      }
+    }
+
+    if (!targetTeamId) {
+      throw new BadRequestException({
+        code: 'TEAM_NOT_FOUND',
+        message: 'No team matched that code or join link. Check with your Team Lead.',
+      });
+    }
+
+    await withTransaction(pool, async (conn) => {
+      await upsertPendingJoinRequest(conn, {
+        id: uuidv7(),
+        teamId: targetTeamId,
+        userId: auth.userId,
+        displayName: auth.userName,
+        email: auth.userEmail,
+      });
+      await appendAuditEvent(conn, {
+        teamId: targetTeamId,
+        actorUserId: auth.userId,
+        action: 'team.join_requested',
+        entityType: 'join_request',
+        entityId: auth.userId,
+        metadata: { via: 'code', email: auth.userEmail },
+      });
+    });
+
+    return { ok: true, teamName: targetTeamName ?? 'Team' };
   }
 
   @Post('invites/accept')
@@ -682,11 +872,6 @@ export class AuthController {
       });
       await updateUserLoginTimestamp(conn, user.id);
     });
-
-    const session = await findActiveSessionByTokenHash(pool, tokenHash);
-    if (!session) {
-      return res.redirect('/login?error=no_active_team');
-    }
 
     setSessionCookie(res, rawToken);
     return res.redirect(parsedState.next || '/today');
