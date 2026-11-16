@@ -1,8 +1,35 @@
-import { ArrowRight, CheckCircle2, FileDown, Layers, ListChecks } from 'lucide-react';
+import { useEffect } from 'react';
+import type { AuthSession } from '@cghq/contracts';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowRight, CheckCircle2, FileDown, Layers, ListChecks, LogOut } from 'lucide-react';
 import { Link } from 'react-router';
+import { authApi } from '../api/client';
 import { Badge } from '../components/ui/badge';
-import { buttonVariants } from '../components/ui/button';
+import { Button, buttonVariants } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
+
+const SESSION_CACHE_KEY = 'cghq:session';
+
+function readCachedSession(): AuthSession | undefined {
+  try {
+    const raw = window.localStorage.getItem(SESSION_CACHE_KEY);
+    return raw ? (JSON.parse(raw) as AuthSession) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeCachedSession(session: AuthSession | null): void {
+  try {
+    if (session) {
+      window.localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(session));
+    } else {
+      window.localStorage.removeItem(SESSION_CACHE_KEY);
+    }
+  } catch {
+    // Ignore storage errors
+  }
+}
 
 const FEATURES = [
   {
@@ -26,6 +53,35 @@ const FEATURES = [
 ];
 
 export function LandingScreen() {
+  const queryClient = useQueryClient();
+  const cachedSession = readCachedSession();
+
+  const { data: session, isError } = useQuery({
+    queryKey: ['me'],
+    queryFn: authApi.me,
+    retry: false,
+    placeholderData: cachedSession,
+  });
+
+  useEffect(() => {
+    if (isError) {
+      writeCachedSession(null);
+    } else if (session) {
+      writeCachedSession(session);
+    }
+  }, [session, isError]);
+
+  const logoutMutation = useMutation({
+    mutationFn: authApi.logout,
+    onSuccess: async () => {
+      writeCachedSession(null);
+      queryClient.clear();
+      await queryClient.invalidateQueries({ queryKey: ['me'] });
+    },
+  });
+
+  const isSignedIn = Boolean(session && !isError);
+
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50 text-zinc-950">
       {/* Top Navbar */}
@@ -41,22 +97,39 @@ export function LandingScreen() {
             </div>
             <div className="flex flex-col">
               <span className="text-sm font-bold tracking-tight text-white">CGHQ Work Log</span>
-              <span className="text-[11px] text-zinc-400">Daily Team Reporting</span>
+              <span className="text-[11px] text-zinc-400">
+                {isSignedIn && session
+                  ? `${session.team.name} · ${session.member.displayName}`
+                  : 'Daily Team Reporting'}
+              </span>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <Link
-              to="/login"
-              className={buttonVariants({
-                variant: 'outline',
-                size: 'sm',
-                className:
-                  'border-zinc-700 bg-zinc-900 text-zinc-100 hover:border-zinc-600 hover:bg-zinc-800 hover:text-white',
-              })}
-            >
-              Sign In
-            </Link>
+            {isSignedIn ? (
+              <Button
+                type="button"
+                variant="dark"
+                size="sm"
+                className="border-zinc-700 bg-zinc-900 text-white hover:bg-zinc-800"
+                disabled={logoutMutation.isPending}
+                onClick={() => logoutMutation.mutate()}
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                {logoutMutation.isPending ? 'Signing out…' : 'Sign Out'}
+              </Button>
+            ) : (
+              <Link
+                to="/login"
+                className={buttonVariants({
+                  variant: 'dark',
+                  size: 'sm',
+                  className: 'border-zinc-700 bg-zinc-900 text-white hover:bg-zinc-800',
+                })}
+              >
+                Sign In
+              </Link>
+            )}
             <Link to="/today" className={buttonVariants({ variant: 'default', size: 'sm' })}>
               Open Work Log
               <ArrowRight className="h-3.5 w-3.5" />
@@ -98,12 +171,25 @@ export function LandingScreen() {
                     Go to Work Log
                     <ArrowRight className="h-4 w-4" />
                   </Link>
-                  <Link
-                    to="/login"
-                    className={buttonVariants({ variant: 'dark', size: 'default' })}
-                  >
-                    Team Sign In
-                  </Link>
+                  {isSignedIn ? (
+                    <Button
+                      type="button"
+                      variant="dark"
+                      size="default"
+                      disabled={logoutMutation.isPending}
+                      onClick={() => logoutMutation.mutate()}
+                    >
+                      <LogOut className="h-4 w-4" />
+                      {logoutMutation.isPending ? 'Signing out…' : 'Sign Out'}
+                    </Button>
+                  ) : (
+                    <Link
+                      to="/login"
+                      className={buttonVariants({ variant: 'dark', size: 'default' })}
+                    >
+                      Team Sign In
+                    </Link>
+                  )}
                 </div>
               </div>
 

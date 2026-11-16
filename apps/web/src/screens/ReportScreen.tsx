@@ -598,6 +598,11 @@ export function ReportScreen({ session }: ReportScreenProps) {
         dictionary={dictionary}
         members={members}
         currentMemberId={session.member.id}
+        sections={report.groups.map((g, idx) => ({
+          serial: idx + 1,
+          categoryName: g.categoryName,
+          titleName: g.titleName,
+        }))}
         disabled={isFinalized}
       />
 
@@ -690,25 +695,25 @@ export function ReportScreen({ session }: ReportScreenProps) {
                         <td className="border-r border-zinc-200 p-2.5 align-top">
                           <div className="font-bold text-zinc-950">{group.categoryName}</div>
                           {!isFinalized && (
-                            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                            <div className="mt-2 flex flex-wrap items-center gap-1">
                               <Button
                                 type="button"
                                 variant="outline"
-                                size="xs"
+                                size="icon-xs"
+                                title="Edit category & title"
                                 onClick={() => startEditGroup(group)}
                               >
                                 <Pencil className="h-3 w-3" />
-                                Edit
                               </Button>
                               <Button
                                 type="button"
                                 variant="destructive"
-                                size="xs"
+                                size="icon-xs"
+                                title="Delete table row"
                                 disabled={deleteGroupMutation.isPending}
                                 onClick={() => setConfirmAction({ type: 'delete-group', group })}
                               >
                                 <Trash2 className="h-3 w-3" />
-                                Delete
                               </Button>
                             </div>
                           )}
@@ -971,16 +976,17 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                                 <Button
                                                   type="button"
                                                   variant="outline"
-                                                  size="xs"
+                                                  size="icon-xs"
+                                                  title="Edit status"
                                                   onClick={() => startEditEntry(entry)}
                                                 >
                                                   <Pencil className="h-3 w-3" />
-                                                  Edit
                                                 </Button>
                                                 <Button
                                                   type="button"
                                                   variant="outline"
-                                                  size="xs"
+                                                  size="icon-xs"
+                                                  title="Promote to follow-up"
                                                   onClick={() =>
                                                     promoteFollowupMutation.mutate({
                                                       categoryName: group.categoryName,
@@ -993,12 +999,12 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                                   }
                                                 >
                                                   <Forward className="h-3 w-3" />
-                                                  Follow-up
                                                 </Button>
                                                 <Button
                                                   type="button"
                                                   variant="destructive"
-                                                  size="xs"
+                                                  size="icon-xs"
+                                                  title="Delete status"
                                                   onClick={() =>
                                                     setConfirmAction({
                                                       type: 'delete-entry',
@@ -1007,7 +1013,6 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                                   }
                                                 >
                                                   <Trash2 className="h-3 w-3" />
-                                                  Delete
                                                 </Button>
                                               </>
                                             )}
@@ -1015,9 +1020,11 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                         )}
                                       </td>
                                       <td className="border-l border-zinc-200 p-2.5 align-top">
-                                        <Badge variant="secondary" size="sm" className="normal-case">
-                                          {entry.completedByDisplay}
-                                        </Badge>
+                                        {entry.completedByDisplay ? (
+                                          <Badge variant="secondary" size="sm" className="normal-case">
+                                            {entry.completedByDisplay}
+                                          </Badge>
+                                        ) : null}
                                       </td>
                                     </tr>
                                   );
@@ -1032,6 +1039,7 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                         type="button"
                                         variant="outline"
                                         size="xs"
+                                        title={`Add status to Ser ${gIdx + 1}`}
                                         onClick={() =>
                                           setQuickAdd({
                                             groupId: group.id,
@@ -1044,7 +1052,7 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                         }
                                       >
                                         <Plus className="h-3 w-3" />
-                                        Add Status to Ser {gIdx + 1}
+                                        Add
                                       </Button>
                                     </td>
                                   </tr>

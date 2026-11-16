@@ -157,9 +157,9 @@ function AuthenticatedShell() {
             <span className="mx-1.5 hidden h-5 w-px bg-zinc-800 sm:inline-block" aria-hidden />
             <Button
               type="button"
-              variant="outline"
+              variant="dark"
               size="sm"
-              className="border-zinc-700 bg-zinc-900 text-zinc-100 hover:border-zinc-600 hover:bg-zinc-800 hover:text-white"
+              className="border-zinc-700 bg-zinc-900 text-white hover:border-zinc-600 hover:bg-zinc-800 hover:text-white"
               disabled={logoutMutation.isPending}
               onClick={() => logoutMutation.mutate()}
             >

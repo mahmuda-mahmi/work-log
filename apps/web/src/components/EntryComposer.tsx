@@ -18,12 +18,19 @@ import {
 } from './ui/select.js';
 import { Textarea } from './ui/textarea.js';
 
+interface ComposerSectionShortcut {
+  serial: number;
+  categoryName: string;
+  titleName: string;
+}
+
 interface EntryComposerProps {
   teamId: string;
   reportDate: string;
   dictionary: DictionaryCategory[];
   members: MemberSummary[];
   currentMemberId: string;
+  sections?: ComposerSectionShortcut[];
   disabled?: boolean;
 }
 
@@ -56,6 +63,7 @@ export function EntryComposer({
   reportDate,
   dictionary,
   members,
+  sections = [],
   disabled = false,
 }: EntryComposerProps) {
   const queryClient = useQueryClient();
@@ -104,18 +112,28 @@ export function EntryComposer({
 
   useEffect(() => {
     if (activeCategories.length === 0) return;
-    const matchedCat =
-      activeCategories.find((c) => c.name === categoryName) ?? activeCategories[0]!;
-    if (matchedCat.name !== categoryName) {
-      setCategoryName(matchedCat.name);
-      setTitleName(matchedCat.titles[0]?.name ?? '');
+    const defaultCategory =
+      (sections[0]
+        ? activeCategories.find((c) => c.name === sections[0]!.categoryName)
+        : undefined) ??
+      activeCategories.find((c) => c.name.trim().toLowerCase() === 'support') ??
+      activeCategories[0]!;
+
+    const matchedCat = activeCategories.find((c) => c.name === categoryName);
+    if (!matchedCat) {
+      setCategoryName(defaultCategory.name);
+      const preferredTitle =
+        sections[0] && sections[0].categoryName === defaultCategory.name
+          ? defaultCategory.titles.find((t) => t.name === sections[0]!.titleName)
+          : undefined;
+      setTitleName((preferredTitle ?? defaultCategory.titles[0])?.name ?? '');
       return;
     }
     const matchedTitle = matchedCat.titles.find((t) => t.name === titleName);
     if (!matchedTitle) {
       setTitleName(matchedCat.titles[0]?.name ?? '');
     }
-  }, [activeCategories, categoryName, titleName]);
+  }, [activeCategories, categoryName, titleName, sections]);
 
   useEffect(() => {
     if (!statusText) {
@@ -232,6 +250,34 @@ export function EntryComposer({
         </CardHeader>
 
         <CardContent className="grid gap-3 pt-3">
+          {sections.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs font-semibold text-zinc-500">Quick Section:</span>
+              {sections.map((sec) => {
+                const isActive =
+                  sec.categoryName === categoryName && sec.titleName === titleName;
+                return (
+                  <Button
+                    key={`${sec.serial}-${sec.categoryName}-${sec.titleName}`}
+                    type="button"
+                    size="xs"
+                    variant={isActive ? 'dark' : 'outline'}
+                    disabled={disabled || createMutation.isPending}
+                    onClick={() => {
+                      setCategoryName(sec.categoryName);
+                      setTitleName(sec.titleName);
+                      if (sec.categoryName.trim().toLowerCase() !== 'communication') {
+                        setCommunicationType('');
+                      }
+                    }}
+                  >
+                    {sec.serial}. {sec.categoryName} — {sec.titleName}
+                  </Button>
+                );
+              })}
+            </div>
+          )}
+
           {errorMsg && <Alert variant="destructive">{errorMsg}</Alert>}
           {unsupportedChars.length > 0 && (
             <Alert variant="warning">
