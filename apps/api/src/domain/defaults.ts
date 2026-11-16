@@ -91,18 +91,28 @@ export const DEFAULT_FOLLOWUPS: ReadonlyArray<{
   },
 ];
 
+const seededDictionaryTeams = new Set<string>();
+const seededFollowupsTeams = new Set<string>();
+const seededReportGroups = new Set<string>();
+
 /**
  * Ensures default categories & titles from the reference CGHQ report exist for a team.
  */
 export async function ensureDefaultDictionary(pool: Pool, teamId: string): Promise<void> {
+  if (seededDictionaryTeams.has(teamId)) return;
+
   const alreadySeeded = await hasCategoryByLowerName(pool, teamId, 'Physically Visit');
-  if (alreadySeeded) return;
+  if (alreadySeeded) {
+    seededDictionaryTeams.add(teamId);
+    return;
+  }
 
   await withTransaction(pool, async (conn) => {
     for (const pair of DEFAULT_DICTIONARY_PAIRS) {
       await findOrCreateCategoryAndTitle(conn, teamId, pair.categoryName, pair.titleName);
     }
   });
+  seededDictionaryTeams.add(teamId);
 }
 
 /**
@@ -114,8 +124,13 @@ export async function ensureDefaultFollowups(
   teamId: string,
   actorUserId: string,
 ): Promise<void> {
+  if (seededFollowupsTeams.has(teamId)) return;
+
   const count = await countTeamFollowups(pool, teamId);
-  if (count > 0) return;
+  if (count > 0) {
+    seededFollowupsTeams.add(teamId);
+    return;
+  }
 
   await withTransaction(pool, async (conn) => {
     const innerCount = await countTeamFollowups(conn, teamId);
@@ -142,6 +157,7 @@ export async function ensureDefaultFollowups(
       });
     }
   });
+  seededFollowupsTeams.add(teamId);
 }
 
 /**
@@ -154,8 +170,13 @@ export async function ensureDefaultReportGroups(
   reportId: string,
   actorUserId: string,
 ): Promise<void> {
+  if (seededReportGroups.has(reportId)) return;
+
   const count = await countWorkGroupsByReport(pool, reportId);
-  if (count > 0) return;
+  if (count > 0) {
+    seededReportGroups.add(reportId);
+    return;
+  }
 
   await withTransaction(pool, async (conn) => {
     for (let i = 0; i < DEFAULT_REPORT_GROUPS.length; i += 1) {
@@ -177,4 +198,5 @@ export async function ensureDefaultReportGroups(
       });
     }
   });
+  seededReportGroups.add(reportId);
 }

@@ -156,6 +156,16 @@ export const dictionaryApi = {
 };
 
 export const reportsApi = {
+  getWorkspace: (teamId: string, date: string) =>
+    apiFetch<{
+      report: DailyReportDto;
+      dictionary: DictionaryCategory[];
+      members: MemberSummary[];
+    }>(
+      date === 'today'
+        ? `/api/teams/${teamId}/reports/workspace`
+        : `/api/teams/${teamId}/reports/workspace/${date}`,
+    ),
   getToday: (teamId: string) => apiFetch<DailyReportDto>(`/api/teams/${teamId}/reports/today`),
   getByDate: (teamId: string, date: string) =>
     apiFetch<DailyReportDto>(`/api/teams/${teamId}/reports/${date}`),

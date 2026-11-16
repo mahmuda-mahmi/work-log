@@ -4,6 +4,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   AuthSession,
   DailyReportDto,
+  DictionaryCategory,
+  MemberSummary,
   WorkEntryDto,
   WorkGroupDto,
 } from '@cghq/contracts';
@@ -23,17 +25,12 @@ import {
 } from 'lucide-react';
 import {
   ApiError,
-  dictionaryApi,
   followupsApi,
   reportsApi,
-  teamsApi,
 } from '../api/client.js';
 import { EntryComposer } from '../components/EntryComposer.js';
 import { ReportPreview } from '../components/ReportPreview.js';
-import {
-  ReportPageSkeleton,
-  ReportTableSkeleton,
-} from '../components/WorkspaceSkeleton.js';
+import { ReportPageSkeleton } from '../components/WorkspaceSkeleton.js';
 import { Alert } from '../components/ui/alert.js';
 import { Badge } from '../components/ui/badge.js';
 import { Button, buttonVariants } from '../components/ui/button.js';
@@ -93,11 +90,36 @@ function moveItem<T>(items: T[], index: number, direction: -1 | 1): T[] {
   return copy;
 }
 
+interface WorkspaceBundle {
+  report: DailyReportDto;
+  dictionary: DictionaryCategory[];
+  members: MemberSummary[];
+}
+
+function readCachedWorkspace(key: string): WorkspaceBundle | undefined {
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as WorkspaceBundle) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeCachedWorkspace(key: string, value: WorkspaceBundle): void {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
 export function ReportScreen({ session }: ReportScreenProps) {
   const { date: routeDate } = useParams<{ date?: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const teamId = session.team.id;
+  const dateKey = routeDate ?? 'today';
+  const workspaceCacheKey = `cghq:workspace:${teamId}:${dateKey}`;
 
   const [actionError, setActionError] = useState<string | null>(null);
   const [editingEntry, setEditingEntry] = useState<EditingEntryState | null>(null);
@@ -106,48 +128,53 @@ export function ReportScreen({ session }: ReportScreenProps) {
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
   const [finalizePromptOpen, setFinalizePromptOpen] = useState(false);
 
-  const reportQuery = useQuery({
-    queryKey: ['report', teamId, routeDate ?? 'today'],
-    queryFn: () =>
-      routeDate ? reportsApi.getByDate(teamId, routeDate) : reportsApi.getToday(teamId),
+  const workspaceQuery = useQuery({
+    queryKey: ['report', teamId, 'workspace', dateKey],
+    queryFn: async () => {
+      const data = await reportsApi.getWorkspace(teamId, dateKey);
+      writeCachedWorkspace(workspaceCacheKey, data);
+      queryClient.setQueryData(['dictionary', teamId], data.dictionary);
+      queryClient.setQueryData(['members', teamId], data.members);
+      return data;
+    },
+    placeholderData: () => readCachedWorkspace(workspaceCacheKey),
     refetchInterval: 15_000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
   });
 
-  const dictionaryQuery = useQuery({
-    queryKey: ['dictionary', teamId],
-    queryFn: () => dictionaryApi.list(teamId),
-  });
-
-  const membersQuery = useQuery({
-    queryKey: ['members', teamId],
-    queryFn: () => teamsApi.listMembers(teamId),
-  });
+  const dictionary = workspaceQuery.data?.dictionary ?? [];
+  const members = workspaceQuery.data?.members ?? [];
 
   const activeCategories = useMemo(
     () =>
-      (dictionaryQuery.data ?? [])
+      dictionary
         .filter((c) => c.isActive)
         .map((c) => ({
           ...c,
           titles: c.titles.filter((t) => t.isActive),
         }))
         .filter((c) => c.titles.length > 0),
-    [dictionaryQuery.data],
+    [dictionary],
   );
 
-  const report = reportQuery.data;
+  const report = workspaceQuery.data?.report;
   const activeDate = routeDate ?? report?.reportDate ?? '';
   const isFinalized = report?.status === 'finalized';
   const showNewDayBanner = Boolean(report && report.todayDate !== report.reportDate);
 
   function syncReportCache(updated?: DailyReportDto) {
     if (updated) {
-      queryClient.setQueryData(['report', teamId, updated.reportDate], updated);
+      queryClient.setQueryData<WorkspaceBundle | undefined>(
+        ['report', teamId, 'workspace', updated.reportDate],
+        (prev) => (prev ? { ...prev, report: updated } : undefined),
+      );
       if (!routeDate) {
-        queryClient.setQueryData(['report', teamId, 'today'], updated);
+        queryClient.setQueryData<WorkspaceBundle | undefined>(
+          ['report', teamId, 'workspace', 'today'],
+          (prev) => (prev ? { ...prev, report: updated } : undefined),
+        );
       }
     }
     void queryClient.invalidateQueries({ queryKey: ['report', teamId] });
@@ -367,28 +394,12 @@ export function ReportScreen({ session }: ReportScreenProps) {
     return session.member.role === 'lead' || entry.createdByUserId === session.user.id;
   }
 
-  if (reportQuery.isLoading && !report) {
-    if (dictionaryQuery.data && membersQuery.data) {
-      const fallbackDate = routeDate ?? new Date().toISOString().slice(0, 10);
-      return (
-        <div className="grid gap-4">
-          <EntryComposer
-            teamId={teamId}
-            reportDate={fallbackDate}
-            dictionary={dictionaryQuery.data}
-            members={membersQuery.data}
-            currentMemberId={session.member.id}
-            disabled={false}
-          />
-          <ReportTableSkeleton showSlowHint />
-        </div>
-      );
-    }
+  if (workspaceQuery.isLoading && !report) {
     return <ReportPageSkeleton showSlowHint />;
   }
 
-  if (reportQuery.isError || !report) {
-    const err = reportQuery.error;
+  if (workspaceQuery.isError || !report) {
+    const err = workspaceQuery.error;
     return (
       <Card>
         <CardContent className="grid gap-3 p-6">
@@ -406,7 +417,7 @@ export function ReportScreen({ session }: ReportScreenProps) {
     );
   }
 
-  const activeMembers = (membersQuery.data ?? []).filter((m) => m.isActive);
+  const activeMembers = members.filter((m) => m.isActive);
   const statusBadgeVariant =
     report.status === 'finalized'
       ? 'dark'
@@ -578,8 +589,8 @@ export function ReportScreen({ session }: ReportScreenProps) {
       <EntryComposer
         teamId={teamId}
         reportDate={report.reportDate}
-        dictionary={dictionaryQuery.data ?? []}
-        members={membersQuery.data ?? []}
+        dictionary={dictionary}
+        members={members}
         currentMemberId={session.member.id}
         disabled={isFinalized}
       />

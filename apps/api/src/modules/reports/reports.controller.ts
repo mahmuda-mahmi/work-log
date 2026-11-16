@@ -47,7 +47,7 @@ import { uuidv7 } from '../../common/uuid.js';
 import { ZodValidationPipe } from '../../common/zod-validation.pipe.js';
 import { getPool, withTransaction } from '../../db/pool.js';
 import { appendAuditEvent } from '../../db/repositories/audit.repo.js';
-import { findOrCreateCategoryAndTitle } from '../../db/repositories/dictionary.repo.js';
+import { findOrCreateCategoryAndTitle, listDictionary } from '../../db/repositories/dictionary.repo.js';
 import {
   deleteFrozenFollowups,
   finalizeDailyReportRow,
@@ -81,8 +81,9 @@ import {
   updateWorkGroupNumbering,
   updateWorkGroupPosition,
 } from '../../db/repositories/reports.repo.js';
-import { findTeamLogo, findTeamSettings } from '../../db/repositories/teams.repo.js';
+import { findTeamLogo, findTeamSettings, listTeamMembers } from '../../db/repositories/teams.repo.js';
 import {
+  ensureDefaultDictionary,
   ensureDefaultFollowups,
   ensureDefaultReportGroups,
 } from '../../domain/defaults.js';
@@ -105,6 +106,28 @@ export class ReportsController {
     return this.serveReportByDate(teamId, todayDate, req, res);
   }
 
+  @Get('workspace')
+  async getTodayWorkspace(
+    @Param('teamId') teamId: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const todayDate = getTeamTodayDate(req.auth!.teamTimezone);
+    return this.loadWorkspaceBundle(teamId, todayDate, req);
+  }
+
+  @Get('workspace/:date')
+  async getWorkspaceByDate(
+    @Param('teamId') teamId: string,
+    @Param('date') dateParam: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const reportDate =
+      dateParam === 'today'
+        ? getTeamTodayDate(req.auth!.teamTimezone)
+        : assertValidIsoDate(dateParam);
+    return this.loadWorkspaceBundle(teamId, reportDate, req);
+  }
+
   @Get('history')
   async getHistory(@Param('teamId') teamId: string) {
     const pool = getPool()!;
@@ -122,13 +145,26 @@ export class ReportsController {
     return this.serveReportByDate(teamId, reportDate, req, res);
   }
 
-  private async serveReportByDate(
+  private async loadWorkspaceBundle(
     teamId: string,
     reportDate: string,
     req: AuthenticatedRequest,
-    res: Response,
   ) {
     const pool = getPool()!;
+    const [report, dictionary, members] = await Promise.all([
+      this.loadReportDto(pool, teamId, reportDate, req),
+      ensureDefaultDictionary(pool, teamId).then(() => listDictionary(pool, teamId)),
+      listTeamMembers(pool, teamId),
+    ]);
+    return { report, dictionary, members };
+  }
+
+  private async loadReportDto(
+    pool: NonNullable<ReturnType<typeof getPool>>,
+    teamId: string,
+    reportDate: string,
+    req: AuthenticatedRequest,
+  ) {
     const auth = req.auth!;
     const todayDate = getTeamTodayDate(auth.teamTimezone);
 
@@ -171,7 +207,17 @@ export class ReportsController {
       throw new NotFoundException({ code: 'REPORT_NOT_FOUND', message: 'Report not found' });
     }
 
-    const dto = await assembleDailyReportDto(pool, report, todayDate);
+    return assembleDailyReportDto(pool, report, todayDate);
+  }
+
+  private async serveReportByDate(
+    teamId: string,
+    reportDate: string,
+    req: AuthenticatedRequest,
+    res: Response,
+  ) {
+    const pool = getPool()!;
+    const dto = await this.loadReportDto(pool, teamId, reportDate, req);
     const ifNoneMatch = req.headers['if-none-match'];
     res.setHeader('ETag', dto.etag);
     res.setHeader('Cache-Control', 'no-cache');

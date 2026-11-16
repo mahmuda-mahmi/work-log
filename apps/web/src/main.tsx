@@ -8,8 +8,8 @@ import './styles.css';
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 15_000,
-      retry: 1,
+      staleTime: 30_000,
+      retry: 0,
     },
   },
 });
