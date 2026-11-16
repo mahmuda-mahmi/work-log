@@ -598,6 +598,10 @@ export function ReportScreen({ session }: ReportScreenProps) {
         dictionary={dictionary}
         members={members}
         currentMemberId={session.member.id}
+        tableSections={report.groups.map((g) => ({
+          categoryName: g.categoryName,
+          titleName: g.titleName,
+        }))}
         disabled={isFinalized}
       />
 

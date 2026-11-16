@@ -18,12 +18,18 @@ import {
 } from './ui/select.js';
 import { Textarea } from './ui/textarea.js';
 
+interface TableSectionOption {
+  categoryName: string;
+  titleName: string;
+}
+
 interface EntryComposerProps {
   teamId: string;
   reportDate: string;
   dictionary: DictionaryCategory[];
   members: MemberSummary[];
   currentMemberId: string;
+  tableSections?: TableSectionOption[];
   disabled?: boolean;
 }
 
@@ -56,6 +62,7 @@ export function EntryComposer({
   reportDate,
   dictionary,
   members,
+  tableSections = [],
   disabled = false,
 }: EntryComposerProps) {
   const queryClient = useQueryClient();
@@ -64,17 +71,58 @@ export function EntryComposer({
 
   const activeMembers = useMemo(() => members.filter((m) => m.isActive), [members]);
 
-  const activeCategories = useMemo(
-    () =>
-      dictionary
-        .filter((c) => c.isActive)
-        .map((c) => ({
-          ...c,
-          titles: c.titles.filter((t) => t.isActive),
-        }))
-        .filter((c) => c.titles.length > 0),
-    [dictionary],
-  );
+  const activeCategories = useMemo(() => {
+    const merged = dictionary
+      .filter((c) => c.isActive)
+      .map((c) => ({
+        ...c,
+        titles: c.titles.filter((t) => t.isActive),
+      }))
+      .filter((c) => c.titles.length > 0);
+
+    for (const sec of tableSections) {
+      const catName = sec.categoryName.trim();
+      const titleName = sec.titleName.trim();
+      if (!catName || !titleName) continue;
+
+      let existingCat = merged.find((c) => c.name === catName);
+      if (!existingCat) {
+        existingCat = {
+          id: `section:${catName}`,
+          name: catName,
+          position: 0,
+          isActive: true,
+          titles: [],
+        };
+        merged.push(existingCat);
+      }
+      if (!existingCat.titles.some((t) => t.name === titleName)) {
+        existingCat.titles.push({
+          id: `section-title:${catName}:${titleName}`,
+          categoryId: existingCat.id,
+          name: titleName,
+          position: 0,
+          isActive: true,
+        });
+      }
+    }
+
+    const sectionOrder = new Map<string, number>();
+    tableSections.forEach((sec, idx) => {
+      if (!sectionOrder.has(sec.categoryName.trim())) {
+        sectionOrder.set(sec.categoryName.trim(), idx);
+      }
+    });
+
+    return merged.sort((a, b) => {
+      const aOrd = sectionOrder.get(a.name);
+      const bOrd = sectionOrder.get(b.name);
+      if (aOrd !== undefined && bOrd !== undefined) return aOrd - bOrd;
+      if (aOrd !== undefined) return -1;
+      if (bOrd !== undefined) return 1;
+      return 0;
+    });
+  }, [dictionary, tableSections]);
 
   const [categoryName, setCategoryName] = useState('');
   const [titleName, setTitleName] = useState('');
