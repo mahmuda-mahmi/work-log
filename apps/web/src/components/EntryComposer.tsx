@@ -56,7 +56,6 @@ export function EntryComposer({
   reportDate,
   dictionary,
   members,
-  currentMemberId,
   disabled = false,
 }: EntryComposerProps) {
   const queryClient = useQueryClient();
@@ -79,9 +78,12 @@ export function EntryComposer({
 
   const [categoryName, setCategoryName] = useState('');
   const [titleName, setTitleName] = useState('');
+  const [communicationType, setCommunicationType] = useState<string>('');
   const [statusText, setStatusText] = useState('');
   const [completedByMemberIds, setCompletedByMemberIds] = useState<string[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const isCommunication = categoryName.trim().toLowerCase() === 'communication';
 
   useEffect(() => {
     const savedDraft = readJsonStorage<StoredDraft>(draftKey);
@@ -147,10 +149,14 @@ export function EntryComposer({
   const createMutation = useMutation({
     mutationFn: () => {
       const trimmedStatus = statusText.trim();
+      const formattedStatus =
+        isCommunication && communicationType && trimmedStatus
+          ? `${communicationType}: ${trimmedStatus}`
+          : trimmedStatus;
       return reportsApi.createEntry(teamId, reportDate, {
         categoryName: categoryName.trim(),
         titleName: titleName.trim(),
-        statusLines: trimmedStatus ? [trimmedStatus] : [],
+        statusLines: formattedStatus ? [formattedStatus] : [],
         completedByMemberIds,
       });
     },
@@ -160,6 +166,7 @@ export function EntryComposer({
         categoryName: categoryName.trim(),
         titleName: titleName.trim(),
       });
+      setCommunicationType('');
       setStatusText('');
       setCompletedByMemberIds([]);
       try {
@@ -201,7 +208,9 @@ export function EntryComposer({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold text-zinc-500">Task Completed By:</span>
+            <span className="text-xs font-semibold text-zinc-500">
+              Task Completed By (optional):
+            </span>
             <div className="flex flex-wrap items-center gap-1.5">
               {activeMembers.map((m) => {
                 const selected = completedByMemberIds.includes(m.id);
@@ -238,6 +247,9 @@ export function EntryComposer({
                 value={categoryName}
                 onValueChange={(nextCatName) => {
                   setCategoryName(nextCatName);
+                  if (nextCatName.trim().toLowerCase() !== 'communication') {
+                    setCommunicationType('');
+                  }
                   const nextCat = activeCategories.find((c) => c.name === nextCatName);
                   setTitleName(nextCat?.titles[0]?.name ?? '');
                 }}
@@ -278,16 +290,37 @@ export function EntryComposer({
 
             <div className="grid gap-1.5 md:col-span-2 lg:col-span-1">
               <Label htmlFor="composer-status">Status</Label>
-              <Textarea
-                id="composer-status"
-                rows={1}
-                className="h-9 min-h-[36px] resize-y py-1.5"
-                value={statusText}
-                onChange={(e) => setStatusText(e.target.value)}
-                placeholder="Describe completed work or current status..."
-                disabled={disabled || createMutation.isPending}
-                required
-              />
+              <div className={isCommunication ? 'flex items-start gap-2' : 'grid'}>
+                {isCommunication && (
+                  <Select
+                    value={communicationType}
+                    onValueChange={setCommunicationType}
+                    disabled={disabled || createMutation.isPending}
+                  >
+                    <SelectTrigger className="w-[125px] shrink-0">
+                      <SelectValue placeholder="Sailor / Officer" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Sailor">Sailor</SelectItem>
+                      <SelectItem value="Officer">Officer</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+                <Textarea
+                  id="composer-status"
+                  rows={1}
+                  className="h-9 min-h-[36px] flex-1 resize-y py-1.5"
+                  value={statusText}
+                  onChange={(e) => setStatusText(e.target.value)}
+                  placeholder={
+                    isCommunication
+                      ? 'Write details beside Sailor / Officer...'
+                      : 'Describe completed work or current status...'
+                  }
+                  disabled={disabled || createMutation.isPending}
+                  required
+                />
+              </div>
             </div>
 
             <Button

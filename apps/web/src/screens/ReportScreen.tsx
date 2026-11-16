@@ -71,6 +71,7 @@ interface QuickAddState {
   groupId: string;
   categoryName: string;
   titleName: string;
+  communicationType: string;
   statusText: string;
   completedByMemberIds: string[];
 }
@@ -227,10 +228,15 @@ export function ReportScreen({ session }: ReportScreenProps) {
   const quickAddMutation = useMutation({
     mutationFn: (payload: QuickAddState) => {
       const trimmedStatus = payload.statusText.trim();
+      const isComm = payload.categoryName.trim().toLowerCase() === 'communication';
+      const formattedStatus =
+        isComm && payload.communicationType && trimmedStatus
+          ? `${payload.communicationType}: ${trimmedStatus}`
+          : trimmedStatus;
       return reportsApi.createEntry(teamId, activeDate, {
         categoryName: payload.categoryName,
         titleName: payload.titleName,
-        statusLines: trimmedStatus ? [trimmedStatus] : [],
+        statusLines: formattedStatus ? [formattedStatus] : [],
         completedByMemberIds: payload.completedByMemberIds,
       });
     },
@@ -747,6 +753,7 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                       groupId: group.id,
                                       categoryName: group.categoryName,
                                       titleName: group.titleName,
+                                      communicationType: '',
                                       statusText: '',
                                       completedByMemberIds: [],
                                     })
@@ -857,7 +864,9 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                                       onClick={() =>
                                                         setEditingEntry({
                                                           ...editingEntry,
-                                                          completedByMemberId: m.id,
+                                                          completedByMemberId: selected
+                                                            ? null
+                                                            : m.id,
                                                           completedByLabel: null,
                                                         })
                                                       }
@@ -1028,6 +1037,7 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                             groupId: group.id,
                                             categoryName: group.categoryName,
                                             titleName: group.titleName,
+                                            communicationType: '',
                                             statusText: '',
                                             completedByMemberIds: [],
                                           })
@@ -1150,17 +1160,48 @@ export function ReportScreen({ session }: ReportScreenProps) {
                               </div>
                               <div className="grid gap-1.5">
                                 <Label>Status</Label>
-                                <Textarea
-                                  rows={2}
-                                  value={quickAdd.statusText}
-                                  onChange={(e) =>
-                                    setQuickAdd({ ...quickAdd, statusText: e.target.value })
+                                <div
+                                  className={
+                                    quickAdd.categoryName.trim().toLowerCase() === 'communication'
+                                      ? 'flex items-start gap-2'
+                                      : 'grid'
                                   }
-                                  placeholder="Enter status..."
-                                />
+                                >
+                                  {quickAdd.categoryName.trim().toLowerCase() ===
+                                    'communication' && (
+                                    <Select
+                                      value={quickAdd.communicationType}
+                                      onValueChange={(val) =>
+                                        setQuickAdd({ ...quickAdd, communicationType: val })
+                                      }
+                                    >
+                                      <SelectTrigger className="w-[130px] shrink-0">
+                                        <SelectValue placeholder="Sailor / Officer" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="Sailor">Sailor</SelectItem>
+                                        <SelectItem value="Officer">Officer</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  )}
+                                  <Textarea
+                                    rows={2}
+                                    className="flex-1"
+                                    value={quickAdd.statusText}
+                                    onChange={(e) =>
+                                      setQuickAdd({ ...quickAdd, statusText: e.target.value })
+                                    }
+                                    placeholder={
+                                      quickAdd.categoryName.trim().toLowerCase() ===
+                                      'communication'
+                                        ? 'Write details beside Sailor / Officer...'
+                                        : 'Enter status...'
+                                    }
+                                  />
+                                </div>
                               </div>
                               <div className="grid gap-1.5">
-                                <Label>Task Completed By</Label>
+                                <Label>Task Completed By (optional)</Label>
                                 <div className="flex flex-wrap gap-1.5">
                                   {activeMembers.map((m) => {
                                     const selected = quickAdd.completedByMemberIds.includes(m.id);
