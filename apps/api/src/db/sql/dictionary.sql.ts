@@ -1,74 +1,74 @@
 export const SELECT_CATEGORIES_BY_TEAM = `
   SELECT id, name, position, is_active
   FROM categories
-  WHERE team_id = ?
+  WHERE team_id = $1
   ORDER BY is_active DESC, position ASC, name ASC
 `;
 
 export const SELECT_TITLES_BY_TEAM = `
   SELECT id, category_id, name, position, is_active
   FROM titles
-  WHERE team_id = ?
+  WHERE team_id = $1
   ORDER BY is_active DESC, position ASC, name ASC
 `;
 
 export const SELECT_CATEGORY_BY_NAME = `
   SELECT id, name, is_active
   FROM categories
-  WHERE team_id = ? AND name = ?
+  WHERE team_id = $1 AND LOWER(name) = LOWER($2)
   LIMIT 1
 `;
 
 export const INSERT_CATEGORY = `
   INSERT INTO categories (id, team_id, name, position, is_active)
-  VALUES (?, ?, ?, ?, 1)
+  VALUES ($1, $2, $3, $4, TRUE)
 `;
 
 export const SELECT_NEXT_CATEGORY_POSITION = `
   SELECT COALESCE(MAX(position), 0) + 10 AS next_pos
   FROM categories
-  WHERE team_id = ?
+  WHERE team_id = $1
 `;
 
 export const SELECT_TITLE_BY_NAME = `
   SELECT id, category_id, name, is_active
   FROM titles
-  WHERE team_id = ? AND category_id = ? AND name = ?
+  WHERE team_id = $1 AND category_id = $2 AND LOWER(name) = LOWER($3)
   LIMIT 1
 `;
 
 export const INSERT_TITLE = `
   INSERT INTO titles (id, team_id, category_id, name, position, is_active)
-  VALUES (?, ?, ?, ?, ?, 1)
+  VALUES ($1, $2, $3, $4, $5, TRUE)
 `;
 
 export const SELECT_NEXT_TITLE_POSITION = `
   SELECT COALESCE(MAX(position), 0) + 10 AS next_pos
   FROM titles
-  WHERE team_id = ? AND category_id = ?
+  WHERE team_id = $1 AND category_id = $2
 `;
 
 export const UPDATE_CATEGORY = `
   UPDATE categories
-  SET name = COALESCE(?, name), is_active = COALESCE(?, is_active)
-  WHERE id = ? AND team_id = ?
+  SET name = COALESCE($1, name), is_active = COALESCE($2, is_active)
+  WHERE id = $3 AND team_id = $4
 `;
 
 export const UPDATE_TITLE = `
   UPDATE titles
-  SET name = COALESCE(?, name), is_active = COALESCE(?, is_active)
-  WHERE id = ? AND team_id = ?
+  SET name = COALESCE($1, name), is_active = COALESCE($2, is_active)
+  WHERE id = $3 AND team_id = $4
 `;
 
 export const COUNT_CATEGORY_BY_LOWER_NAME = `
-  SELECT COUNT(*) AS cnt
+  SELECT COUNT(*)::int AS cnt
   FROM categories
-  WHERE team_id = ? AND LOWER(name) = LOWER(?)
+  WHERE team_id = $1 AND LOWER(name) = LOWER($2)
 `;
 
 export const SELECT_CATEGORY_BY_ID = `
   SELECT id, name, is_active
   FROM categories
-  WHERE id = ? AND team_id = ?
+  WHERE id = $1 AND team_id = $2
   LIMIT 1
 `;

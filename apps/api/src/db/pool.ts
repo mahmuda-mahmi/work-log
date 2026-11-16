@@ -1,61 +1,66 @@
-import mysql, { type Pool, type PoolConnection } from 'mysql2/promise';
+import { Pool, type PoolClient, type QueryResult, type QueryResultRow } from 'pg';
+
+export type DbClient = Pool | PoolClient;
 
 let pool: Pool | null = null;
 
 /**
- * Returns the module-level mysql2 pool configured for serverless functions.
+ * Returns the module-level PostgreSQL pool configured for serverless functions.
  */
 export function getPool(): Pool | null {
-  const uri = process.env.DATABASE_URL;
-  if (!uri) {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
     return null;
   }
   if (!pool) {
-    const parsed = new URL(uri);
-    const useSsl = parsed.searchParams.has('ssl-mode') || parsed.searchParams.has('ssl');
-    parsed.searchParams.delete('ssl-mode');
-    parsed.searchParams.delete('ssl');
-
-    pool = mysql.createPool({
-      uri: parsed.toString(),
-      connectionLimit: 5,
-      maxIdle: 3,
-      idleTimeout: 60_000,
-      enableKeepAlive: true,
-      timezone: '+00:00',
-      ...(useSsl ? { ssl: { rejectUnauthorized: false } } : {}),
+    const isLocal =
+      connectionString.includes('localhost') || connectionString.includes('127.0.0.1');
+    pool = new Pool({
+      connectionString,
+      max: 5,
+      idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: 5_000,
+      ...(isLocal ? {} : { ssl: { rejectUnauthorized: false } }),
     });
   }
   return pool;
 }
 
-const RETRYABLE_ERRNOS = new Set([1213, 1205]);
+export function dbQuery<T extends QueryResultRow = QueryResultRow>(
+  conn: DbClient,
+  text: string,
+  params: unknown[] = [],
+): Promise<QueryResult<T>> {
+  return conn.query<T>(text, params);
+}
+
+const RETRYABLE_PG_CODES = new Set(['40001', '40P01']);
 
 /**
- * Runs a callback inside a MySQL transaction with deadlock/lock-timeout retry.
+ * Runs a callback inside a PostgreSQL transaction with serialization/deadlock retry.
  */
 export async function withTransaction<T>(
   p: Pool,
-  fn: (conn: PoolConnection) => Promise<T>,
+  fn: (client: PoolClient) => Promise<T>,
   maxAttempts = 3,
 ): Promise<T> {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const conn = await p.getConnection();
+    const client = await p.connect();
     try {
-      await conn.beginTransaction();
-      const result = await fn(conn);
-      await conn.commit();
+      await client.query('BEGIN');
+      const result = await fn(client);
+      await client.query('COMMIT');
       return result;
     } catch (err) {
-      await conn.rollback().catch(() => undefined);
-      const errno = (err as { errno?: number } | null)?.errno;
-      if (errno !== undefined && RETRYABLE_ERRNOS.has(errno) && attempt < maxAttempts) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      const code = (err as { code?: string } | null)?.code;
+      if (code !== undefined && RETRYABLE_PG_CODES.has(code) && attempt < maxAttempts) {
         await new Promise((r) => setTimeout(r, 25 * attempt + Math.floor(Math.random() * 25)));
         continue;
       }
       throw err;
     } finally {
-      conn.release();
+      client.release();
     }
   }
   throw new Error('Transaction retry exhausted');

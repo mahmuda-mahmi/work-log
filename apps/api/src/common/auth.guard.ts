@@ -34,6 +34,17 @@ export type AuthenticatedRequest = Request & { auth?: AuthContext };
 export const SESSION_COOKIE_NAME = 'sid';
 const IDLE_TIMEOUT_MS = 7 * 24 * 60 * 60 * 1000;
 const TOUCH_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const SESSION_CACHE_TTL_MS = 30_000;
+
+const sessionCache = new Map<string, { auth: AuthContext; expiresAtMs: number }>();
+
+export function invalidateSessionCache(tokenHash?: string): void {
+  if (tokenHash) {
+    sessionCache.delete(tokenHash);
+  } else {
+    sessionCache.clear();
+  }
+}
 
 @Injectable()
 export class SessionGuard implements CanActivate {
@@ -47,6 +58,13 @@ export class SessionGuard implements CanActivate {
       });
     }
 
+    const tokenHash = sha256Hex(rawToken);
+    const cached = sessionCache.get(tokenHash);
+    if (cached && cached.expiresAtMs > Date.now()) {
+      req.auth = cached.auth;
+      return true;
+    }
+
     const pool = getPool();
     if (!pool) {
       throw new ServiceUnavailableException({
@@ -55,9 +73,9 @@ export class SessionGuard implements CanActivate {
       });
     }
 
-    const tokenHash = sha256Hex(rawToken);
     const session = await findActiveSessionByTokenHash(pool, tokenHash);
     if (!session) {
+      sessionCache.delete(tokenHash);
       throw new UnauthorizedException({
         code: 'SESSION_INVALID',
         message: 'Session is invalid or expired',
@@ -67,6 +85,7 @@ export class SessionGuard implements CanActivate {
     const nowMs = Date.now();
     const idleMs = nowMs - new Date(session.lastActiveAt).getTime();
     if (idleMs > IDLE_TIMEOUT_MS) {
+      sessionCache.delete(tokenHash);
       throw new UnauthorizedException({
         code: 'SESSION_IDLE_EXPIRED',
         message: 'Session expired due to inactivity',
@@ -77,7 +96,7 @@ export class SessionGuard implements CanActivate {
       await touchSessionActivity(pool, session.sessionId).catch(() => undefined);
     }
 
-    req.auth = {
+    const auth: AuthContext = {
       sessionId: session.sessionId,
       userId: session.userId,
       userName: session.userName,
@@ -90,6 +109,12 @@ export class SessionGuard implements CanActivate {
       role: session.role,
       displayName: session.displayName,
     };
+
+    sessionCache.set(tokenHash, {
+      auth,
+      expiresAtMs: nowMs + SESSION_CACHE_TTL_MS,
+    });
+    req.auth = auth;
 
     return true;
   }

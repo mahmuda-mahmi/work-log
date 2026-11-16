@@ -33,6 +33,7 @@ import {
 import type { Request, Response } from 'express';
 import {
   type AuthenticatedRequest,
+  invalidateSessionCache,
   SESSION_COOKIE_NAME,
   SessionGuard,
 } from '../../common/auth.guard.js';
@@ -260,6 +261,10 @@ export class AuthController {
   @HttpCode(200)
   @UseGuards(SessionGuard)
   async logout(@Req() req: AuthenticatedRequest, @Res({ passthrough: true }) res: Response) {
+    const rawToken = req.cookies?.[SESSION_COOKIE_NAME] as string | undefined;
+    if (rawToken) {
+      invalidateSessionCache(sha256Hex(rawToken));
+    }
     const pool = getPool();
     if (pool && req.auth) {
       await deleteSessionById(pool, req.auth.sessionId);

@@ -1,5 +1,5 @@
-import type { Pool, PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 import type { MemberRole, MemberSummary, TeamSettings } from '@cghq/contracts';
+import type { DbClient } from '../pool.js';
 import {
   COUNT_ACTIVE_LEADS,
   DEACTIVATE_TEAM_MEMBER,
@@ -18,9 +18,7 @@ import {
   UPDATE_TEAM_SETTINGS,
 } from '../sql/teams.sql.js';
 
-type Conn = Pool | PoolConnection;
-
-type TeamSettingsRow = RowDataPacket & {
+type TeamSettingsRow = {
   id: string;
   name: string;
   slug: string;
@@ -28,12 +26,12 @@ type TeamSettingsRow = RowDataPacket & {
   file_prefix: string;
   timezone: string;
   prepared_by_default: string | null;
-  members_can_add_dictionary: number;
-  followups_enabled: number;
+  members_can_add_dictionary: boolean;
+  followups_enabled: boolean;
   logo_asset_id: string | null;
 };
 
-type MemberRow = RowDataPacket & {
+type MemberRow = {
   id: string;
   user_id: string;
   name: string;
@@ -41,24 +39,24 @@ type MemberRow = RowDataPacket & {
   display_name: string;
   role: MemberRole;
   sort_order: number;
-  is_active: number;
+  is_active: boolean;
 };
 
-type SingleMemberRow = RowDataPacket & {
+type SingleMemberRow = {
   id: string;
   team_id: string;
   user_id: string;
   role: MemberRole;
   display_name: string;
-  is_active: number;
+  is_active: boolean;
 };
 
-type CountRow = RowDataPacket & { total: number };
-type AssetIdRow = RowDataPacket & { id: string };
-type LogoRow = RowDataPacket & { mime_type: string; bytes: Buffer; sha256: string };
+type CountRow = { total: number };
+type AssetIdRow = { id: string };
+type LogoRow = { mime_type: string; bytes: Buffer; sha256: string };
 
 export async function insertTeam(
-  conn: Conn,
+  conn: DbClient,
   params: {
     id: string;
     name: string;
@@ -68,7 +66,7 @@ export async function insertTeam(
     createdByUserId: string;
   },
 ): Promise<void> {
-  await conn.execute(INSERT_TEAM, [
+  await conn.query(INSERT_TEAM, [
     params.id,
     params.name,
     params.slug,
@@ -79,7 +77,7 @@ export async function insertTeam(
 }
 
 export async function insertTeamMember(
-  conn: Conn,
+  conn: DbClient,
   params: {
     id: string;
     teamId: string;
@@ -89,7 +87,7 @@ export async function insertTeamMember(
     sortOrder?: number;
   },
 ): Promise<void> {
-  await conn.execute(INSERT_TEAM_MEMBER, [
+  await conn.query(INSERT_TEAM_MEMBER, [
     params.id,
     params.teamId,
     params.userId,
@@ -99,9 +97,9 @@ export async function insertTeamMember(
   ]);
 }
 
-export async function findTeamSettings(conn: Conn, teamId: string): Promise<TeamSettings | null> {
-  const [rows] = await conn.execute<TeamSettingsRow[]>(SELECT_TEAM_SETTINGS, [teamId]);
-  const r = rows[0];
+export async function findTeamSettings(conn: DbClient, teamId: string): Promise<TeamSettings | null> {
+  const res = await conn.query<TeamSettingsRow>(SELECT_TEAM_SETTINGS, [teamId]);
+  const r = res.rows[0];
   if (!r) return null;
   return {
     id: r.id,
@@ -111,32 +109,32 @@ export async function findTeamSettings(conn: Conn, teamId: string): Promise<Team
     filePrefix: r.file_prefix,
     timezone: r.timezone,
     preparedByDefault: r.prepared_by_default,
-    membersCanAddDictionary: r.members_can_add_dictionary === 1,
-    followupsEnabled: r.followups_enabled === 1,
+    membersCanAddDictionary: Boolean(r.members_can_add_dictionary),
+    followupsEnabled: Boolean(r.followups_enabled),
     hasLogo: r.logo_asset_id !== null,
   };
 }
 
 export async function updateTeamSettings(
-  conn: Conn,
+  conn: DbClient,
   teamId: string,
   settings: Omit<TeamSettings, 'id' | 'slug' | 'hasLogo'>,
 ): Promise<void> {
-  await conn.execute(UPDATE_TEAM_SETTINGS, [
+  await conn.query(UPDATE_TEAM_SETTINGS, [
     settings.name,
     settings.documentTitle,
     settings.filePrefix,
     settings.timezone,
     settings.preparedByDefault,
-    settings.membersCanAddDictionary ? 1 : 0,
-    settings.followupsEnabled ? 1 : 0,
+    settings.membersCanAddDictionary,
+    settings.followupsEnabled,
     teamId,
   ]);
 }
 
-export async function listTeamMembers(conn: Conn, teamId: string): Promise<MemberSummary[]> {
-  const [rows] = await conn.execute<MemberRow[]>(SELECT_TEAM_MEMBERS, [teamId]);
-  return rows.map((r) => ({
+export async function listTeamMembers(conn: DbClient, teamId: string): Promise<MemberSummary[]> {
+  const res = await conn.query<MemberRow>(SELECT_TEAM_MEMBERS, [teamId]);
+  return res.rows.map((r) => ({
     id: r.id,
     userId: r.user_id,
     name: r.name,
@@ -144,13 +142,13 @@ export async function listTeamMembers(conn: Conn, teamId: string): Promise<Membe
     displayName: r.display_name,
     role: r.role,
     sortOrder: r.sort_order,
-    isActive: r.is_active === 1,
+    isActive: Boolean(r.is_active),
   }));
 }
 
-export async function findTeamMemberById(conn: Conn, teamId: string, memberId: string) {
-  const [rows] = await conn.execute<SingleMemberRow[]>(SELECT_TEAM_MEMBER_BY_ID, [memberId, teamId]);
-  const r = rows[0];
+export async function findTeamMemberById(conn: DbClient, teamId: string, memberId: string) {
+  const res = await conn.query<SingleMemberRow>(SELECT_TEAM_MEMBER_BY_ID, [memberId, teamId]);
+  const r = res.rows[0];
   if (!r) return null;
   return {
     id: r.id,
@@ -158,36 +156,36 @@ export async function findTeamMemberById(conn: Conn, teamId: string, memberId: s
     userId: r.user_id,
     role: r.role,
     displayName: r.display_name,
-    isActive: r.is_active === 1,
+    isActive: Boolean(r.is_active),
   };
 }
 
-export async function countActiveLeads(conn: Conn, teamId: string): Promise<number> {
-  const [rows] = await conn.execute<CountRow[]>(COUNT_ACTIVE_LEADS, [teamId]);
-  return Number(rows[0]?.total ?? 0);
+export async function countActiveLeads(conn: DbClient, teamId: string): Promise<number> {
+  const res = await conn.query<CountRow>(COUNT_ACTIVE_LEADS, [teamId]);
+  return Number(res.rows[0]?.total ?? 0);
 }
 
 export async function updateMemberRole(
-  conn: Conn,
+  conn: DbClient,
   teamId: string,
   memberId: string,
   role: MemberRole,
 ): Promise<boolean> {
-  const [res] = await conn.execute<ResultSetHeader>(UPDATE_MEMBER_ROLE, [role, memberId, teamId]);
-  return res.affectedRows === 1;
+  const res = await conn.query(UPDATE_MEMBER_ROLE, [role, memberId, teamId]);
+  return (res.rowCount ?? 0) === 1;
 }
 
 export async function deactivateTeamMember(
-  conn: Conn,
+  conn: DbClient,
   teamId: string,
   memberId: string,
 ): Promise<boolean> {
-  const [res] = await conn.execute<ResultSetHeader>(DEACTIVATE_TEAM_MEMBER, [memberId, teamId]);
-  return res.affectedRows === 1;
+  const res = await conn.query(DEACTIVATE_TEAM_MEMBER, [memberId, teamId]);
+  return (res.rowCount ?? 0) === 1;
 }
 
 export async function insertInvite(
-  conn: Conn,
+  conn: DbClient,
   params: {
     id: string;
     teamId: string;
@@ -197,7 +195,7 @@ export async function insertInvite(
     createdByUserId: string;
   },
 ): Promise<void> {
-  await conn.execute(INSERT_INVITE, [
+  await conn.query(INSERT_INVITE, [
     params.id,
     params.teamId,
     params.email,
@@ -208,7 +206,7 @@ export async function insertInvite(
 }
 
 export async function insertPasswordReset(
-  conn: Conn,
+  conn: DbClient,
   params: {
     id: string;
     userId: string;
@@ -216,7 +214,7 @@ export async function insertPasswordReset(
     createdByUserId: string;
   },
 ): Promise<void> {
-  await conn.execute(INSERT_PASSWORD_RESET, [
+  await conn.query(INSERT_PASSWORD_RESET, [
     params.id,
     params.userId,
     params.tokenHash,
@@ -225,7 +223,7 @@ export async function insertPasswordReset(
 }
 
 export async function upsertTeamLogo(
-  conn: Conn,
+  conn: DbClient,
   params: {
     assetId: string;
     teamId: string;
@@ -238,13 +236,13 @@ export async function upsertTeamLogo(
     createdByUserId: string;
   },
 ): Promise<string> {
-  const [existing] = await conn.execute<AssetIdRow[]>(SELECT_TEAM_ASSET_BY_HASH, [
+  const existing = await conn.query<AssetIdRow>(SELECT_TEAM_ASSET_BY_HASH, [
     params.teamId,
     params.sha256,
   ]);
-  const assetId = existing[0]?.id ?? params.assetId;
-  if (!existing[0]) {
-    await conn.execute(INSERT_TEAM_ASSET, [
+  const assetId = existing.rows[0]?.id ?? params.assetId;
+  if (!existing.rows[0]) {
+    await conn.query(INSERT_TEAM_ASSET, [
       assetId,
       params.teamId,
       params.fileName,
@@ -257,17 +255,17 @@ export async function upsertTeamLogo(
       params.createdByUserId,
     ]);
   }
-  await conn.execute(UPDATE_TEAM_LOGO, [assetId, params.teamId]);
+  await conn.query(UPDATE_TEAM_LOGO, [assetId, params.teamId]);
   return assetId;
 }
 
-export async function findTeamLogo(conn: Conn, teamId: string) {
-  const [rows] = await conn.execute<LogoRow[]>(SELECT_TEAM_LOGO, [teamId]);
-  const r = rows[0];
+export async function findTeamLogo(conn: DbClient, teamId: string) {
+  const res = await conn.query<LogoRow>(SELECT_TEAM_LOGO, [teamId]);
+  const r = res.rows[0];
   if (!r) return null;
   return {
     mimeType: r.mime_type,
-    bytes: r.bytes,
+    bytes: Buffer.isBuffer(r.bytes) ? r.bytes : Buffer.from(r.bytes),
     sha256: r.sha256,
   };
 }

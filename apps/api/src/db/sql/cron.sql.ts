@@ -1,19 +1,19 @@
 export const DELETE_EXPIRED_SESSIONS = `
   DELETE FROM sessions
-  WHERE expires_at < NOW(3)
+  WHERE expires_at < NOW()
 `;
 
 export const DELETE_STALE_INVITES = `
   DELETE FROM invites
-  WHERE expires_at < DATE_SUB(NOW(3), INTERVAL 7 DAY)
+  WHERE expires_at < NOW() - INTERVAL '7 days'
 `;
 
 export const DELETE_STALE_PASSWORD_RESETS = `
   DELETE FROM password_resets
-  WHERE expires_at < DATE_SUB(NOW(3), INTERVAL 7 DAY)
+  WHERE expires_at < NOW() - INTERVAL '7 days'
 `;
 
 export const DELETE_STALE_RATE_LIMITS = `
   DELETE FROM rate_limits
-  WHERE window_start < DATE_SUB(NOW(3), INTERVAL 1 DAY)
+  WHERE window_start < NOW() - INTERVAL '1 day'
 `;

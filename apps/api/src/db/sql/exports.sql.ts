@@ -2,12 +2,12 @@ export const FINALIZE_DAILY_REPORT = `
   UPDATE daily_reports
   SET
     status = 'finalized',
-    prepared_by_name = ?,
+    prepared_by_name = $1,
     revision = revision + 1,
     version = version + 1,
-    finalized_at = NOW(3),
-    finalized_by_user_id = ?
-  WHERE id = ? AND status IN ('draft', 'reopened')
+    finalized_at = NOW(),
+    finalized_by_user_id = $2
+  WHERE id = $3 AND status IN ('draft', 'reopened')
 `;
 
 export const REOPEN_DAILY_REPORT = `
@@ -15,12 +15,12 @@ export const REOPEN_DAILY_REPORT = `
   SET
     status = 'reopened',
     version = version + 1
-  WHERE id = ? AND status = 'finalized'
+  WHERE id = $1 AND status = 'finalized'
 `;
 
 export const DELETE_FROZEN_FOLLOWUPS_FOR_REPORT = `
   DELETE FROM report_followups
-  WHERE report_id = ?
+  WHERE report_id = $1
 `;
 
 export const INSERT_FROZEN_REPORT_FOLLOWUP = `
@@ -35,7 +35,7 @@ export const INSERT_FROZEN_REPORT_FOLLOWUP = `
     position,
     is_included
   )
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE)
 `;
 
 export const INSERT_REPORT_SNAPSHOT = `
@@ -49,7 +49,7 @@ export const INSERT_REPORT_SNAPSHOT = `
     content_hash,
     created_by_user_id
   )
-  VALUES (?, ?, ?, 1, '1.0.0', ?, ?, ?)
+  VALUES ($1, $2, $3, 1, '1.0.0', $4::jsonb, $5, $6)
 `;
 
 export const SELECT_LATEST_SNAPSHOT_FOR_REPORT = `
@@ -61,7 +61,7 @@ export const SELECT_LATEST_SNAPSHOT_FOR_REPORT = `
     content_hash,
     created_at
   FROM report_snapshots
-  WHERE report_id = ?
+  WHERE report_id = $1
   ORDER BY revision DESC
   LIMIT 1
 `;
@@ -69,25 +69,25 @@ export const SELECT_LATEST_SNAPSHOT_FOR_REPORT = `
 export const SELECT_REPORT_HISTORY = `
   SELECT
     dr.id,
-    DATE_FORMAT(dr.report_date, '%Y-%m-%d') AS report_date,
+    TO_CHAR(dr.report_date, 'YYYY-MM-DD') AS report_date,
     dr.status,
     dr.revision,
     dr.prepared_by_name,
     dr.finalized_at,
     dr.updated_at,
     (
-      SELECT COUNT(*)
+      SELECT COUNT(*)::int
       FROM work_entries we
       INNER JOIN work_groups wg ON wg.id = we.group_id
       WHERE wg.report_id = dr.id AND we.deleted_at IS NULL
     ) AS entry_count,
     (
-      SELECT COUNT(*)
+      SELECT COUNT(*)::int
       FROM report_exports re
       WHERE re.report_id = dr.id
     ) AS export_count
   FROM daily_reports dr
-  WHERE dr.team_id = ?
+  WHERE dr.team_id = $1
   ORDER BY dr.report_date DESC
   LIMIT 90
 `;
@@ -105,7 +105,7 @@ export const SELECT_EXPORT_BY_SNAPSHOT_FORMAT = `
     download_count,
     created_at
   FROM report_exports
-  WHERE snapshot_id = ? AND format = ?
+  WHERE snapshot_id = $1 AND format = $2
   LIMIT 1
 `;
 
@@ -119,7 +119,7 @@ export const SELECT_EXPORTS_FOR_REPORT = `
     re.created_at
   FROM report_exports re
   INNER JOIN report_snapshots rs ON rs.id = re.snapshot_id
-  WHERE re.report_id = ?
+  WHERE re.report_id = $1
     AND rs.revision = (
       SELECT MAX(rs2.revision) FROM report_snapshots rs2 WHERE rs2.report_id = re.report_id
     )
@@ -139,11 +139,11 @@ export const INSERT_REPORT_EXPORT = `
     download_count,
     created_by_user_id
   )
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1, $9)
 `;
 
 export const INCREMENT_EXPORT_DOWNLOAD_COUNT = `
   UPDATE report_exports
   SET download_count = download_count + 1
-  WHERE id = ?
+  WHERE id = $1
 `;

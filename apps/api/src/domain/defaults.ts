@@ -1,4 +1,4 @@
-import type { Pool } from 'mysql2/promise';
+import type { Pool } from 'pg';
 import { uuidv7 } from '../common/uuid.js';
 import { withTransaction } from '../db/pool.js';
 import {

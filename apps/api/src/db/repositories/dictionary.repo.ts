@@ -1,6 +1,7 @@
-import type { Pool, PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 import type { DictionaryCategory, DictionaryTitle } from '@cghq/contracts';
+import type { PoolClient } from 'pg';
 import { uuidv7 } from '../../common/uuid.js';
+import type { DbClient } from '../pool.js';
 import {
   COUNT_CATEGORY_BY_LOWER_NAME,
   INSERT_CATEGORY,
@@ -16,54 +17,54 @@ import {
   UPDATE_TITLE,
 } from '../sql/dictionary.sql.js';
 
-type Conn = Pool | PoolConnection;
-
-type CategoryRow = RowDataPacket & {
+type CategoryRow = {
   id: string;
   name: string;
   position: number;
-  is_active: number;
+  is_active: boolean;
 };
 
-type TitleRow = RowDataPacket & {
+type TitleRow = {
   id: string;
   category_id: string;
   name: string;
   position: number;
-  is_active: number;
+  is_active: boolean;
 };
 
-type NextPosRow = RowDataPacket & { next_pos: number };
-type FoundRow = RowDataPacket & { id: string; name: string; is_active: number };
+type NextPosRow = { next_pos: number };
+type FoundRow = { id: string; name: string; is_active: boolean };
 
-export async function listDictionary(conn: Conn, teamId: string): Promise<DictionaryCategory[]> {
-  const [catRows] = await conn.execute<CategoryRow[]>(SELECT_CATEGORIES_BY_TEAM, [teamId]);
-  const [titleRows] = await conn.execute<TitleRow[]>(SELECT_TITLES_BY_TEAM, [teamId]);
+export async function listDictionary(conn: DbClient, teamId: string): Promise<DictionaryCategory[]> {
+  const [catRes, titleRes] = await Promise.all([
+    conn.query<CategoryRow>(SELECT_CATEGORIES_BY_TEAM, [teamId]),
+    conn.query<TitleRow>(SELECT_TITLES_BY_TEAM, [teamId]),
+  ]);
 
   const titlesByCat = new Map<string, DictionaryTitle[]>();
-  for (const t of titleRows) {
+  for (const t of titleRes.rows) {
     const list = titlesByCat.get(t.category_id) ?? [];
     list.push({
       id: t.id,
       categoryId: t.category_id,
       name: t.name,
       position: t.position,
-      isActive: t.is_active === 1,
+      isActive: Boolean(t.is_active),
     });
     titlesByCat.set(t.category_id, list);
   }
 
-  return catRows.map((c) => ({
+  return catRes.rows.map((c) => ({
     id: c.id,
     name: c.name,
     position: c.position,
-    isActive: c.is_active === 1,
+    isActive: Boolean(c.is_active),
     titles: titlesByCat.get(c.id) ?? [],
   }));
 }
 
 export async function findOrCreateCategoryAndTitle(
-  conn: PoolConnection,
+  conn: PoolClient,
   teamId: string,
   categoryName: string,
   titleName: string,
@@ -71,119 +72,103 @@ export async function findOrCreateCategoryAndTitle(
   const trimmedCat = categoryName.trim();
   const trimmedTitle = titleName.trim();
 
-  const [existingCats] = await conn.execute<FoundRow[]>(SELECT_CATEGORY_BY_NAME, [
-    teamId,
-    trimmedCat,
-  ]);
-  let categoryId = existingCats[0]?.id;
+  const existingCats = await conn.query<FoundRow>(SELECT_CATEGORY_BY_NAME, [teamId, trimmedCat]);
+  let categoryId = existingCats.rows[0]?.id;
   if (!categoryId) {
     categoryId = uuidv7();
-    const [posRows] = await conn.execute<NextPosRow[]>(SELECT_NEXT_CATEGORY_POSITION, [teamId]);
-    const nextPos = Number(posRows[0]?.next_pos ?? 10);
-    await conn.execute(INSERT_CATEGORY, [categoryId, teamId, trimmedCat, nextPos]);
+    const posRes = await conn.query<NextPosRow>(SELECT_NEXT_CATEGORY_POSITION, [teamId]);
+    const nextPos = Number(posRes.rows[0]?.next_pos ?? 10);
+    await conn.query(INSERT_CATEGORY, [categoryId, teamId, trimmedCat, nextPos]);
   }
 
-  const [existingTitles] = await conn.execute<FoundRow[]>(SELECT_TITLE_BY_NAME, [
+  const existingTitles = await conn.query<FoundRow>(SELECT_TITLE_BY_NAME, [
     teamId,
     categoryId,
     trimmedTitle,
   ]);
-  let titleId = existingTitles[0]?.id;
+  let titleId = existingTitles.rows[0]?.id;
   if (!titleId) {
     titleId = uuidv7();
-    const [posRows] = await conn.execute<NextPosRow[]>(SELECT_NEXT_TITLE_POSITION, [
-      teamId,
-      categoryId,
-    ]);
-    const nextPos = Number(posRows[0]?.next_pos ?? 10);
-    await conn.execute(INSERT_TITLE, [titleId, teamId, categoryId, trimmedTitle, nextPos]);
+    const posRes = await conn.query<NextPosRow>(SELECT_NEXT_TITLE_POSITION, [teamId, categoryId]);
+    const nextPos = Number(posRes.rows[0]?.next_pos ?? 10);
+    await conn.query(INSERT_TITLE, [titleId, teamId, categoryId, trimmedTitle, nextPos]);
   }
 
   return { categoryId, titleId };
 }
 
 export async function hasCategoryByLowerName(
-  conn: Conn,
+  conn: DbClient,
   teamId: string,
   name: string,
 ): Promise<boolean> {
-  const [rows] = await conn.execute<(RowDataPacket & { cnt: number })[]>(
-    COUNT_CATEGORY_BY_LOWER_NAME,
-    [teamId, name.trim()],
-  );
-  return Number(rows[0]?.cnt ?? 0) > 0;
+  const res = await conn.query<{ cnt: number }>(COUNT_CATEGORY_BY_LOWER_NAME, [teamId, name.trim()]);
+  return Number(res.rows[0]?.cnt ?? 0) > 0;
 }
 
 export async function createCategoryOnly(
-  conn: Conn,
+  conn: DbClient,
   teamId: string,
   name: string,
 ): Promise<{ id: string; name: string }> {
   const trimmed = name.trim();
-  const [existing] = await conn.execute<FoundRow[]>(SELECT_CATEGORY_BY_NAME, [teamId, trimmed]);
-  if (existing[0]) {
-    return { id: existing[0].id, name: trimmed };
+  const existing = await conn.query<FoundRow>(SELECT_CATEGORY_BY_NAME, [teamId, trimmed]);
+  if (existing.rows[0]) {
+    return { id: existing.rows[0].id, name: trimmed };
   }
   const id = uuidv7();
-  const [posRows] = await conn.execute<NextPosRow[]>(SELECT_NEXT_CATEGORY_POSITION, [teamId]);
-  const nextPos = Number(posRows[0]?.next_pos ?? 10);
-  await conn.execute(INSERT_CATEGORY, [id, teamId, trimmed, nextPos]);
+  const posRes = await conn.query<NextPosRow>(SELECT_NEXT_CATEGORY_POSITION, [teamId]);
+  const nextPos = Number(posRes.rows[0]?.next_pos ?? 10);
+  await conn.query(INSERT_CATEGORY, [id, teamId, trimmed, nextPos]);
   return { id, name: trimmed };
 }
 
 export async function createTitleUnderCategory(
-  conn: Conn,
+  conn: DbClient,
   teamId: string,
   categoryId: string,
   name: string,
 ): Promise<{ id: string; name: string } | null> {
-  const [cats] = await conn.execute<FoundRow[]>(SELECT_CATEGORY_BY_ID, [categoryId, teamId]);
-  if (!cats[0]) return null;
+  const cats = await conn.query<FoundRow>(SELECT_CATEGORY_BY_ID, [categoryId, teamId]);
+  if (!cats.rows[0]) return null;
   const trimmed = name.trim();
-  const [existing] = await conn.execute<FoundRow[]>(SELECT_TITLE_BY_NAME, [
-    teamId,
-    categoryId,
-    trimmed,
-  ]);
-  if (existing[0]) {
-    return { id: existing[0].id, name: trimmed };
+  const existing = await conn.query<FoundRow>(SELECT_TITLE_BY_NAME, [teamId, categoryId, trimmed]);
+  if (existing.rows[0]) {
+    return { id: existing.rows[0].id, name: trimmed };
   }
   const id = uuidv7();
-  const [posRows] = await conn.execute<NextPosRow[]>(SELECT_NEXT_TITLE_POSITION, [
-    teamId,
-    categoryId,
-  ]);
-  const nextPos = Number(posRows[0]?.next_pos ?? 10);
-  await conn.execute(INSERT_TITLE, [id, teamId, categoryId, trimmed, nextPos]);
+  const posRes = await conn.query<NextPosRow>(SELECT_NEXT_TITLE_POSITION, [teamId, categoryId]);
+  const nextPos = Number(posRes.rows[0]?.next_pos ?? 10);
+  await conn.query(INSERT_TITLE, [id, teamId, categoryId, trimmed, nextPos]);
   return { id, name: trimmed };
 }
 
 export async function updateCategory(
-  conn: Conn,
+  conn: DbClient,
   teamId: string,
   categoryId: string,
   patch: { name?: string; isActive?: boolean },
 ): Promise<boolean> {
-  const [res] = await conn.execute<ResultSetHeader>(UPDATE_CATEGORY, [
+  const res = await conn.query(UPDATE_CATEGORY, [
     patch.name?.trim() ?? null,
-    patch.isActive === undefined ? null : patch.isActive ? 1 : 0,
+    patch.isActive ?? null,
     categoryId,
     teamId,
   ]);
-  return res.affectedRows === 1;
+  return (res.rowCount ?? 0) === 1;
 }
 
 export async function updateTitle(
-  conn: Conn,
+  conn: DbClient,
   teamId: string,
   titleId: string,
   patch: { name?: string; isActive?: boolean },
 ): Promise<boolean> {
-  const [res] = await conn.execute<ResultSetHeader>(UPDATE_TITLE, [
+  const res = await conn.query(UPDATE_TITLE, [
     patch.name?.trim() ?? null,
-    patch.isActive === undefined ? null : patch.isActive ? 1 : 0,
+    patch.isActive ?? null,
     titleId,
     teamId,
   ]);
-  return res.affectedRows === 1;
+  return (res.rowCount ?? 0) === 1;
 }

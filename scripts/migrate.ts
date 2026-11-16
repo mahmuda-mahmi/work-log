@@ -1,18 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import mysql from 'mysql2/promise';
+import { Client } from 'pg';
 
-const LOCK_NAME = 'cghq:migrate';
 const MIGRATIONS_DIR = path.resolve(process.cwd(), 'db/migrations');
 
-type AppliedRow = mysql.RowDataPacket & {
+type AppliedRow = {
   version: string;
   checksum: string;
-};
-
-type LockRow = mysql.RowDataPacket & {
-  acquired: number | null;
 };
 
 function sha256(content: string): string {
@@ -25,41 +20,31 @@ async function main() {
     throw new Error('DATABASE_URL environment variable is required');
   }
 
-  const parsed = new URL(databaseUrl);
-  const useSsl = parsed.searchParams.has('ssl-mode') || parsed.searchParams.has('ssl');
-  parsed.searchParams.delete('ssl-mode');
-  parsed.searchParams.delete('ssl');
-
-  const conn = await mysql.createConnection({
-    uri: parsed.toString(),
-    multipleStatements: true,
-    timezone: '+00:00',
-    ...(useSsl ? { ssl: { rejectUnauthorized: false } } : {}),
+  const isLocal = databaseUrl.includes('localhost') || databaseUrl.includes('127.0.0.1');
+  const client = new Client({
+    connectionString: databaseUrl,
+    ...(isLocal ? {} : { ssl: { rejectUnauthorized: false } }),
   });
 
-  try {
-    const [lockRows] = await conn.query<LockRow[]>('SELECT GET_LOCK(?, 30) AS acquired', [LOCK_NAME]);
-    if (lockRows[0]?.acquired !== 1) {
-      throw new Error(`Could not acquire migration lock "${LOCK_NAME}"`);
-    }
+  await client.connect();
 
-    await conn.execute(`
+  try {
+    await client.query(`
       CREATE TABLE IF NOT EXISTS schema_migrations (
-        version    VARCHAR(64) NOT NULL,
+        version    VARCHAR(64) PRIMARY KEY,
         checksum   CHAR(64) NOT NULL,
-        applied_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-        PRIMARY KEY (version)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+        applied_at TIMESTAMPTZ(3) NOT NULL DEFAULT NOW()
+      )
     `);
 
-    const [appliedRows] = await conn.execute<AppliedRow[]>(
+    const appliedRes = await client.query<AppliedRow>(
       'SELECT version, checksum FROM schema_migrations ORDER BY version ASC',
     );
-    const appliedMap = new Map(appliedRows.map((r) => [r.version, r.checksum]));
+    const appliedMap = new Map(appliedRes.rows.map((r) => [r.version, r.checksum]));
 
     const files = fs
       .readdirSync(MIGRATIONS_DIR)
-      .filter((f) => f.endsWith('.sql'))
+      .filter((f) => f.endsWith('_pg.sql'))
       .sort();
 
     for (const file of files) {
@@ -80,20 +65,26 @@ async function main() {
       }
 
       console.log(`→ Applying ${version}...`);
-      await conn.query(sql);
-      await conn.execute('INSERT INTO schema_migrations (version, checksum) VALUES (?, ?)', [
-        version,
-        checksum,
-      ]);
-      console.log(`✓ Applied ${version}`);
+      await client.query('BEGIN');
+      try {
+        await client.query(sql);
+        await client.query('INSERT INTO schema_migrations (version, checksum) VALUES ($1, $2)', [
+          version,
+          checksum,
+        ]);
+        await client.query('COMMIT');
+        console.log(`✓ ${version} applied`);
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      }
     }
   } finally {
-    await conn.query('SELECT RELEASE_LOCK(?)', [LOCK_NAME]).catch(() => undefined);
-    await conn.end();
+    await client.end();
   }
 }
 
 main().catch((err) => {
-  console.error('Migration failed:', err);
+  console.error(err);
   process.exit(1);
 });

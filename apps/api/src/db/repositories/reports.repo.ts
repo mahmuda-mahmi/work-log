@@ -1,4 +1,3 @@
-import type { Pool, PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 import type {
   DailyReportDto,
   FollowupStatus,
@@ -8,7 +7,9 @@ import type {
   WorkEntryDto,
   WorkGroupDto,
 } from '@cghq/contracts';
+import type { PoolClient } from 'pg';
 import { sha256Hex } from '../../common/crypto.js';
+import type { DbClient } from '../pool.js';
 import {
   BUMP_DAILY_REPORT_VERSION,
   COUNT_WORK_GROUPS_BY_REPORT,
@@ -35,11 +36,9 @@ import {
   UPDATE_WORK_GROUP_POSITION,
 } from '../sql/reports.sql.js';
 
-type Conn = Pool | PoolConnection;
+type GroupIdRow = { id: string };
 
-type GroupIdRow = RowDataPacket & { id: string };
-
-type ReportRow = RowDataPacket & {
+type ReportRow = {
   id: string;
   team_id: string;
   report_date: string;
@@ -49,7 +48,7 @@ type ReportRow = RowDataPacket & {
   version: number;
 };
 
-type GroupRow = RowDataPacket & {
+type GroupRow = {
   id: string;
   category_id: string;
   category_name: string;
@@ -59,7 +58,7 @@ type GroupRow = RowDataPacket & {
   numbering_mode: NumberingMode;
 };
 
-type EntryRow = RowDataPacket & {
+type EntryRow = {
   id: string;
   group_id: string;
   status_text: string;
@@ -79,7 +78,7 @@ type EntryForEditRow = EntryRow & {
   report_status: ReportStatus;
 };
 
-type LiveFollowupRow = RowDataPacket & {
+type LiveFollowupRow = {
   id: string;
   category_name: string;
   title_name: string;
@@ -88,7 +87,7 @@ type LiveFollowupRow = RowDataPacket & {
   status: FollowupStatus;
 };
 
-type FrozenFollowupRow = RowDataPacket & {
+type FrozenFollowupRow = {
   id: string;
   category_name: string;
   title_name: string;
@@ -96,8 +95,8 @@ type FrozenFollowupRow = RowDataPacket & {
   completed_by_display: string;
 };
 
-type IdPosRow = RowDataPacket & { id: string; position: number };
-type NextPosRow = RowDataPacket & { next_pos: number };
+type IdPosRow = { id: string; position: number };
+type NextPosRow = { next_pos: number };
 
 function mapEntryRow(r: EntryRow): WorkEntryDto {
   return {
@@ -115,21 +114,22 @@ function mapEntryRow(r: EntryRow): WorkEntryDto {
   };
 }
 
-export async function findReportByDate(conn: Conn, teamId: string, reportDate: string) {
-  const [rows] = await conn.execute<ReportRow[]>(SELECT_DAILY_REPORT_BY_DATE, [teamId, reportDate]);
-  return rows[0] ?? null;
+export async function findReportByDate(conn: DbClient, teamId: string, reportDate: string) {
+  const res = await conn.query<ReportRow>(SELECT_DAILY_REPORT_BY_DATE, [teamId, reportDate]);
+  return res.rows[0] ?? null;
 }
 
-export async function findReportForUpdate(conn: PoolConnection, teamId: string, reportDate: string) {
-  const [rows] = await conn.execute<ReportRow[]>(SELECT_DAILY_REPORT_FOR_UPDATE, [
-    teamId,
-    reportDate,
-  ]);
-  return rows[0] ?? null;
+export async function findReportForUpdate(
+  conn: PoolClient,
+  teamId: string,
+  reportDate: string,
+) {
+  const res = await conn.query<ReportRow>(SELECT_DAILY_REPORT_FOR_UPDATE, [teamId, reportDate]);
+  return res.rows[0] ?? null;
 }
 
 export async function insertIgnoreDailyReport(
-  conn: Conn,
+  conn: DbClient,
   params: {
     id: string;
     teamId: string;
@@ -138,47 +138,47 @@ export async function insertIgnoreDailyReport(
     preparedByUserId: string;
   },
 ): Promise<boolean> {
-  const [res] = await conn.execute<ResultSetHeader>(INSERT_IGNORE_DAILY_REPORT, [
+  const res = await conn.query(INSERT_IGNORE_DAILY_REPORT, [
     params.id,
     params.teamId,
     params.reportDate,
     params.preparedByName,
     params.preparedByUserId,
   ]);
-  return res.affectedRows === 1;
+  return (res.rowCount ?? 0) === 1;
 }
 
-export async function bumpDailyReportVersion(conn: Conn, reportId: string): Promise<void> {
-  await conn.execute(BUMP_DAILY_REPORT_VERSION, [reportId]);
+export async function bumpDailyReportVersion(conn: DbClient, reportId: string): Promise<void> {
+  await conn.query(BUMP_DAILY_REPORT_VERSION, [reportId]);
 }
 
 export async function assembleDailyReportDto(
-  conn: Conn,
+  conn: DbClient,
   report: ReportRow,
   todayDate: string,
 ): Promise<DailyReportDto> {
   const followupPromise =
     report.status === 'finalized'
-      ? conn.execute<FrozenFollowupRow[]>(SELECT_FROZEN_FOLLOWUPS_FOR_REPORT, [report.id])
-      : conn.execute<LiveFollowupRow[]>(SELECT_LIVE_FOLLOWUPS_FOR_DATE, [
+      ? conn.query<FrozenFollowupRow>(SELECT_FROZEN_FOLLOWUPS_FOR_REPORT, [report.id])
+      : conn.query<LiveFollowupRow>(SELECT_LIVE_FOLLOWUPS_FOR_DATE, [
           report.team_id,
           report.report_date,
         ]);
 
-  const [[groupRows], [entryRows], [followupRows]] = await Promise.all([
-    conn.execute<GroupRow[]>(SELECT_WORK_GROUPS_BY_REPORT, [report.id]),
-    conn.execute<EntryRow[]>(SELECT_WORK_ENTRIES_BY_REPORT, [report.id]),
+  const [groupRes, entryRes, followupRes] = await Promise.all([
+    conn.query<GroupRow>(SELECT_WORK_GROUPS_BY_REPORT, [report.id]),
+    conn.query<EntryRow>(SELECT_WORK_ENTRIES_BY_REPORT, [report.id]),
     followupPromise,
   ]);
 
   const entriesByGroup = new Map<string, WorkEntryDto[]>();
-  for (const e of entryRows) {
+  for (const e of entryRes.rows) {
     const list = entriesByGroup.get(e.group_id) ?? [];
     list.push(mapEntryRow(e));
     entriesByGroup.set(e.group_id, list);
   }
 
-  const groups: WorkGroupDto[] = groupRows.map((g) => ({
+  const groups: WorkGroupDto[] = groupRes.rows.map((g) => ({
     id: g.id,
     categoryId: g.category_id,
     categoryName: g.category_name,
@@ -191,14 +191,14 @@ export async function assembleDailyReportDto(
 
   const rawFollowups: ReportFollowupDto[] =
     report.status === 'finalized'
-      ? (followupRows as FrozenFollowupRow[]).map((f) => ({
+      ? (followupRes.rows as FrozenFollowupRow[]).map((f) => ({
           id: f.id,
           categoryName: f.category_name,
           titleName: f.title_name,
           statusText: f.status_text,
           completedByDisplay: f.completed_by_display,
         }))
-      : (followupRows as LiveFollowupRow[]).map((f) => ({
+      : (followupRes.rows as LiveFollowupRow[]).map((f) => ({
           id: f.id,
           categoryName: f.category_name,
           titleName: f.title_name,
@@ -245,7 +245,7 @@ export async function assembleDailyReportDto(
 }
 
 export async function findOrCreateWorkGroup(
-  conn: PoolConnection,
+  conn: PoolClient,
   params: {
     groupId: string;
     reportId: string;
@@ -255,18 +255,18 @@ export async function findOrCreateWorkGroup(
     createdByUserId: string;
   },
 ): Promise<string> {
-  const [existing] = await conn.execute<IdPosRow[]>(SELECT_GROUP_BY_REPORT_CAT_TITLE, [
+  const existing = await conn.query<IdPosRow>(SELECT_GROUP_BY_REPORT_CAT_TITLE, [
     params.reportId,
     params.categoryId,
     params.titleId,
   ]);
-  if (existing[0]) {
-    return existing[0].id;
+  if (existing.rows[0]) {
+    return existing.rows[0].id;
   }
 
-  const [posRows] = await conn.execute<NextPosRow[]>(SELECT_NEXT_GROUP_POSITION, [params.reportId]);
-  const nextPos = Number(posRows[0]?.next_pos ?? 10);
-  await conn.execute(INSERT_WORK_GROUP, [
+  const posRes = await conn.query<NextPosRow>(SELECT_NEXT_GROUP_POSITION, [params.reportId]);
+  const nextPos = Number(posRes.rows[0]?.next_pos ?? 10);
+  await conn.query(INSERT_WORK_GROUP, [
     params.groupId,
     params.reportId,
     params.categoryId,
@@ -278,13 +278,13 @@ export async function findOrCreateWorkGroup(
   return params.groupId;
 }
 
-export async function getNextEntryPosition(conn: PoolConnection, groupId: string): Promise<number> {
-  const [rows] = await conn.execute<NextPosRow[]>(SELECT_NEXT_ENTRY_POSITION, [groupId]);
-  return Number(rows[0]?.next_pos ?? 10);
+export async function getNextEntryPosition(conn: PoolClient, groupId: string): Promise<number> {
+  const res = await conn.query<NextPosRow>(SELECT_NEXT_ENTRY_POSITION, [groupId]);
+  return Number(res.rows[0]?.next_pos ?? 10);
 }
 
 export async function insertWorkEntry(
-  conn: PoolConnection,
+  conn: PoolClient,
   params: {
     id: string;
     groupId: string;
@@ -295,7 +295,7 @@ export async function insertWorkEntry(
     createdByUserId: string;
   },
 ): Promise<void> {
-  await conn.execute(INSERT_WORK_ENTRY, [
+  await conn.query(INSERT_WORK_ENTRY, [
     params.id,
     params.groupId,
     params.statusText,
@@ -308,15 +308,12 @@ export async function insertWorkEntry(
 }
 
 export async function findWorkEntryForEdit(
-  conn: PoolConnection,
+  conn: PoolClient,
   entryId: string,
   teamId: string,
 ) {
-  const [rows] = await conn.execute<EntryForEditRow[]>(SELECT_WORK_ENTRY_FOR_EDIT, [
-    entryId,
-    teamId,
-  ]);
-  const r = rows[0];
+  const res = await conn.query<EntryForEditRow>(SELECT_WORK_ENTRY_FOR_EDIT, [entryId, teamId]);
+  const r = res.rows[0];
   if (!r) return null;
   return {
     entry: mapEntryRow(r),
@@ -327,18 +324,19 @@ export async function findWorkEntryForEdit(
 }
 
 export async function findWorkGroupCategoryAndTitleIds(
-  conn: Conn,
+  conn: DbClient,
   groupId: string,
 ): Promise<{ categoryId: string; titleId: string } | null> {
-  const [rows] = await conn.execute<
-    Array<RowDataPacket & { category_id: string; title_id: string }>
-  >(`SELECT category_id, title_id FROM work_groups WHERE id = ? LIMIT 1`, [groupId]);
-  const r = rows[0];
+  const res = await conn.query<{ category_id: string; title_id: string }>(
+    `SELECT category_id, title_id FROM work_groups WHERE id = $1 LIMIT 1`,
+    [groupId],
+  );
+  const r = res.rows[0];
   return r ? { categoryId: r.category_id, titleId: r.title_id } : null;
 }
 
 export async function updateWorkEntryOptimistic(
-  conn: PoolConnection,
+  conn: PoolClient,
   params: {
     entryId: string;
     statusText: string;
@@ -348,7 +346,7 @@ export async function updateWorkEntryOptimistic(
     updatedByUserId: string;
   },
 ): Promise<boolean> {
-  const [res] = await conn.execute<ResultSetHeader>(UPDATE_WORK_ENTRY_OPTIMISTIC, [
+  const res = await conn.query(UPDATE_WORK_ENTRY_OPTIMISTIC, [
     params.statusText,
     params.completedByMemberId,
     params.completedByLabel,
@@ -356,65 +354,59 @@ export async function updateWorkEntryOptimistic(
     params.entryId,
     params.expectedVersion,
   ]);
-  return res.affectedRows === 1;
+  return (res.rowCount ?? 0) === 1;
 }
 
 export async function softDeleteWorkEntry(
-  conn: PoolConnection,
+  conn: PoolClient,
   entryId: string,
   updatedByUserId: string,
 ): Promise<boolean> {
-  const [res] = await conn.execute<ResultSetHeader>(SOFT_DELETE_WORK_ENTRY, [
-    updatedByUserId,
-    entryId,
-  ]);
-  return res.affectedRows === 1;
+  const res = await conn.query(SOFT_DELETE_WORK_ENTRY, [updatedByUserId, entryId]);
+  return (res.rowCount ?? 0) === 1;
 }
 
 export async function updateWorkGroupPosition(
-  conn: PoolConnection,
+  conn: PoolClient,
   reportId: string,
   groupId: string,
   position: number,
 ): Promise<void> {
-  await conn.execute(UPDATE_WORK_GROUP_POSITION, [position, groupId, reportId]);
+  await conn.query(UPDATE_WORK_GROUP_POSITION, [position, groupId, reportId]);
 }
 
 export async function updateWorkEntryPosition(
-  conn: PoolConnection,
+  conn: PoolClient,
   groupId: string,
   entryId: string,
   position: number,
 ): Promise<void> {
-  await conn.execute(UPDATE_WORK_ENTRY_POSITION, [position, entryId, groupId]);
+  await conn.query(UPDATE_WORK_ENTRY_POSITION, [position, entryId, groupId]);
 }
 
 export async function updateWorkGroupNumbering(
-  conn: Conn,
+  conn: DbClient,
   teamId: string,
   reportId: string,
   groupId: string,
   numberingMode: NumberingMode,
 ): Promise<boolean> {
-  const [res] = await conn.execute<ResultSetHeader>(UPDATE_WORK_GROUP_NUMBERING, [
+  const res = await conn.query(UPDATE_WORK_GROUP_NUMBERING, [
     numberingMode,
     groupId,
     reportId,
     teamId,
   ]);
-  return res.affectedRows === 1;
+  return (res.rowCount ?? 0) === 1;
 }
 
-export async function countWorkGroupsByReport(conn: Conn, reportId: string): Promise<number> {
-  const [rows] = await conn.execute<(RowDataPacket & { cnt: number })[]>(
-    COUNT_WORK_GROUPS_BY_REPORT,
-    [reportId],
-  );
-  return Number(rows[0]?.cnt ?? 0);
+export async function countWorkGroupsByReport(conn: DbClient, reportId: string): Promise<number> {
+  const res = await conn.query<{ cnt: number }>(COUNT_WORK_GROUPS_BY_REPORT, [reportId]);
+  return Number(res.rows[0]?.cnt ?? 0);
 }
 
 export async function insertWorkGroupAtPosition(
-  conn: PoolConnection,
+  conn: PoolClient,
   input: {
     id: string;
     reportId: string;
@@ -425,13 +417,13 @@ export async function insertWorkGroupAtPosition(
     actorUserId: string;
   },
 ): Promise<void> {
-  const [existing] = await conn.execute<GroupIdRow[]>(SELECT_GROUP_BY_REPORT_CAT_TITLE, [
+  const existing = await conn.query<GroupIdRow>(SELECT_GROUP_BY_REPORT_CAT_TITLE, [
     input.reportId,
     input.categoryId,
     input.titleId,
   ]);
-  if (existing[0]) return;
-  await conn.execute(INSERT_WORK_GROUP, [
+  if (existing.rows[0]) return;
+  await conn.query(INSERT_WORK_GROUP, [
     input.id,
     input.reportId,
     input.categoryId,
@@ -443,43 +435,43 @@ export async function insertWorkGroupAtPosition(
 }
 
 export async function updateWorkGroupCategoryTitle(
-  conn: PoolConnection,
+  conn: PoolClient,
   reportId: string,
   groupId: string,
   categoryId: string,
   titleId: string,
 ): Promise<{ ok: boolean; duplicate: boolean }> {
-  const [existing] = await conn.execute<GroupIdRow[]>(SELECT_GROUP_BY_REPORT_CAT_TITLE, [
+  const existing = await conn.query<GroupIdRow>(SELECT_GROUP_BY_REPORT_CAT_TITLE, [
     reportId,
     categoryId,
     titleId,
   ]);
-  if (existing[0] && existing[0].id !== groupId) {
+  if (existing.rows[0] && existing.rows[0].id !== groupId) {
     return { ok: false, duplicate: true };
   }
-  const [res] = await conn.execute<ResultSetHeader>(UPDATE_WORK_GROUP_CAT_TITLE, [
+  const res = await conn.query(UPDATE_WORK_GROUP_CAT_TITLE, [
     categoryId,
     titleId,
     groupId,
     reportId,
   ]);
-  return { ok: res.affectedRows === 1, duplicate: false };
+  return { ok: (res.rowCount ?? 0) === 1, duplicate: false };
 }
 
 export async function deleteWorkGroup(
-  conn: PoolConnection,
+  conn: PoolClient,
   reportId: string,
   groupId: string,
 ): Promise<boolean> {
-  const [res] = await conn.execute<ResultSetHeader>(DELETE_WORK_GROUP, [groupId, reportId]);
-  return res.affectedRows === 1;
+  const res = await conn.query(DELETE_WORK_GROUP, [groupId, reportId]);
+  return (res.rowCount ?? 0) === 1;
 }
 
 export async function deleteDailyReport(
-  conn: PoolConnection,
+  conn: PoolClient,
   teamId: string,
   reportId: string,
 ): Promise<boolean> {
-  const [res] = await conn.execute<ResultSetHeader>(DELETE_DAILY_REPORT, [reportId, teamId]);
-  return res.affectedRows === 1;
+  const res = await conn.query(DELETE_DAILY_REPORT, [reportId, teamId]);
+  return (res.rowCount ?? 0) === 1;
 }

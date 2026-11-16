@@ -1,5 +1,5 @@
-import type { Pool, PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 import type { MemberRole } from '@cghq/contracts';
+import type { DbClient } from '../pool.js';
 import {
   COUNT_USERS,
   DELETE_RATE_LIMIT,
@@ -20,18 +20,16 @@ import {
   UPSERT_RATE_LIMIT_FAILURE,
 } from '../sql/auth.sql.js';
 
-type Conn = Pool | PoolConnection;
-
-type CountRow = RowDataPacket & { total: number };
-type UserLoginRow = RowDataPacket & {
+type CountRow = { total: number };
+type UserLoginRow = {
   id: string;
   name: string;
   email: string;
   password_hash: string;
-  is_active: number;
+  is_active: boolean;
   session_version: number;
 };
-type ActiveSessionRow = RowDataPacket & {
+type ActiveSessionRow = {
   session_id: string;
   last_active_at: Date | string;
   expires_at: Date | string;
@@ -50,13 +48,13 @@ type ActiveSessionRow = RowDataPacket & {
   role: MemberRole;
   display_name: string;
 };
-type RateLimitRow = RowDataPacket & {
+type RateLimitRow = {
   bucket_key: string;
   failures: number;
   window_start: Date | string;
   locked_until: Date | string | null;
 };
-type InviteRow = RowDataPacket & {
+type InviteRow = {
   id: string;
   team_id: string;
   email: string | null;
@@ -64,54 +62,54 @@ type InviteRow = RowDataPacket & {
   expires_at: Date | string;
   accepted_at: Date | string | null;
 };
-type PasswordResetRow = RowDataPacket & {
+type PasswordResetRow = {
   id: string;
   user_id: string;
   expires_at: Date | string;
   used_at: Date | string | null;
 };
 
-export async function countUsers(conn: Conn): Promise<number> {
-  const [rows] = await conn.execute<CountRow[]>(COUNT_USERS, []);
-  return Number(rows[0]?.total ?? 0);
+export async function countUsers(conn: DbClient): Promise<number> {
+  const res = await conn.query<CountRow>(COUNT_USERS);
+  return Number(res.rows[0]?.total ?? 0);
 }
 
-export async function findUserForLogin(conn: Conn, email: string) {
-  const [rows] = await conn.execute<UserLoginRow[]>(SELECT_USER_FOR_LOGIN, [email]);
-  const r = rows[0];
+export async function findUserForLogin(conn: DbClient, email: string) {
+  const res = await conn.query<UserLoginRow>(SELECT_USER_FOR_LOGIN, [email]);
+  const r = res.rows[0];
   if (!r) return null;
   return {
     id: r.id,
     name: r.name,
     email: r.email,
     passwordHash: r.password_hash,
-    isActive: r.is_active === 1,
+    isActive: Boolean(r.is_active),
     sessionVersion: r.session_version,
   };
 }
 
 export async function insertUser(
-  conn: Conn,
+  conn: DbClient,
   params: { id: string; name: string; email: string; passwordHash: string },
 ): Promise<void> {
-  await conn.execute(INSERT_USER, [params.id, params.name, params.email, params.passwordHash]);
+  await conn.query(INSERT_USER, [params.id, params.name, params.email, params.passwordHash]);
 }
 
-export async function updateUserLoginTimestamp(conn: Conn, userId: string): Promise<void> {
-  await conn.execute(UPDATE_USER_LOGIN_TIMESTAMP, [userId]);
+export async function updateUserLoginTimestamp(conn: DbClient, userId: string): Promise<void> {
+  await conn.query(UPDATE_USER_LOGIN_TIMESTAMP, [userId]);
 }
 
 export async function updateUserPasswordAndRevoke(
-  conn: Conn,
+  conn: DbClient,
   userId: string,
   passwordHash: string,
 ): Promise<void> {
-  await conn.execute(UPDATE_USER_PASSWORD_AND_REVOKE, [passwordHash, userId]);
-  await conn.execute(DELETE_SESSIONS_BY_USER, [userId]);
+  await conn.query(UPDATE_USER_PASSWORD_AND_REVOKE, [passwordHash, userId]);
+  await conn.query(DELETE_SESSIONS_BY_USER, [userId]);
 }
 
 export async function insertSession(
-  conn: Conn,
+  conn: DbClient,
   params: {
     id: string;
     userId: string;
@@ -120,7 +118,7 @@ export async function insertSession(
     ttlDays: number;
   },
 ): Promise<void> {
-  await conn.execute(INSERT_SESSION, [
+  await conn.query(INSERT_SESSION, [
     params.id,
     params.userId,
     params.tokenHash,
@@ -129,9 +127,9 @@ export async function insertSession(
   ]);
 }
 
-export async function findActiveSessionByTokenHash(conn: Conn, tokenHash: string) {
-  const [rows] = await conn.execute<ActiveSessionRow[]>(SELECT_ACTIVE_SESSION, [tokenHash]);
-  const r = rows[0];
+export async function findActiveSessionByTokenHash(conn: DbClient, tokenHash: string) {
+  const res = await conn.query<ActiveSessionRow>(SELECT_ACTIVE_SESSION, [tokenHash]);
+  const r = res.rows[0];
   if (!r) return null;
   return {
     sessionId: r.session_id,
@@ -154,37 +152,37 @@ export async function findActiveSessionByTokenHash(conn: Conn, tokenHash: string
   };
 }
 
-export async function touchSessionActivity(conn: Conn, sessionId: string): Promise<void> {
-  await conn.execute(TOUCH_SESSION, [sessionId]);
+export async function touchSessionActivity(conn: DbClient, sessionId: string): Promise<void> {
+  await conn.query(TOUCH_SESSION, [sessionId]);
 }
 
-export async function deleteSessionById(conn: Conn, sessionId: string): Promise<void> {
-  await conn.execute(DELETE_SESSION_BY_ID, [sessionId]);
+export async function deleteSessionById(conn: DbClient, sessionId: string): Promise<void> {
+  await conn.query(DELETE_SESSION_BY_ID, [sessionId]);
 }
 
-export async function deleteSessionsByUserId(conn: Conn, userId: string): Promise<void> {
-  await conn.execute(DELETE_SESSIONS_BY_USER, [userId]);
+export async function deleteSessionsByUserId(conn: DbClient, userId: string): Promise<void> {
+  await conn.query(DELETE_SESSIONS_BY_USER, [userId]);
 }
 
-export async function getRateLimitLock(conn: Conn, bucketKey: string): Promise<Date | null> {
-  const [rows] = await conn.execute<RateLimitRow[]>(SELECT_RATE_LIMIT, [bucketKey]);
-  const r = rows[0];
+export async function getRateLimitLock(conn: DbClient, bucketKey: string): Promise<Date | null> {
+  const res = await conn.query<RateLimitRow>(SELECT_RATE_LIMIT, [bucketKey]);
+  const r = res.rows[0];
   if (!r?.locked_until) return null;
   const lockedUntil = new Date(r.locked_until);
   return lockedUntil.getTime() > Date.now() ? lockedUntil : null;
 }
 
-export async function recordRateLimitFailure(conn: Conn, bucketKey: string): Promise<void> {
-  await conn.execute(UPSERT_RATE_LIMIT_FAILURE, [bucketKey]);
+export async function recordRateLimitFailure(conn: DbClient, bucketKey: string): Promise<void> {
+  await conn.query(UPSERT_RATE_LIMIT_FAILURE, [bucketKey]);
 }
 
-export async function clearRateLimit(conn: Conn, bucketKey: string): Promise<void> {
-  await conn.execute(DELETE_RATE_LIMIT, [bucketKey]);
+export async function clearRateLimit(conn: DbClient, bucketKey: string): Promise<void> {
+  await conn.query(DELETE_RATE_LIMIT, [bucketKey]);
 }
 
-export async function findInviteByHash(conn: Conn, tokenHash: string) {
-  const [rows] = await conn.execute<InviteRow[]>(SELECT_INVITE_BY_HASH, [tokenHash]);
-  const r = rows[0];
+export async function findInviteByHash(conn: DbClient, tokenHash: string) {
+  const res = await conn.query<InviteRow>(SELECT_INVITE_BY_HASH, [tokenHash]);
+  const r = res.rows[0];
   if (!r) return null;
   return {
     id: r.id,
@@ -197,17 +195,17 @@ export async function findInviteByHash(conn: Conn, tokenHash: string) {
 }
 
 export async function markInviteAccepted(
-  conn: Conn,
+  conn: DbClient,
   inviteId: string,
   userId: string,
 ): Promise<boolean> {
-  const [res] = await conn.execute<ResultSetHeader>(MARK_INVITE_ACCEPTED, [userId, inviteId]);
-  return res.affectedRows === 1;
+  const res = await conn.query(MARK_INVITE_ACCEPTED, [userId, inviteId]);
+  return (res.rowCount ?? 0) === 1;
 }
 
-export async function findPasswordResetByHash(conn: Conn, tokenHash: string) {
-  const [rows] = await conn.execute<PasswordResetRow[]>(SELECT_PASSWORD_RESET_BY_HASH, [tokenHash]);
-  const r = rows[0];
+export async function findPasswordResetByHash(conn: DbClient, tokenHash: string) {
+  const res = await conn.query<PasswordResetRow>(SELECT_PASSWORD_RESET_BY_HASH, [tokenHash]);
+  const r = res.rows[0];
   if (!r) return null;
   return {
     id: r.id,
@@ -217,7 +215,7 @@ export async function findPasswordResetByHash(conn: Conn, tokenHash: string) {
   };
 }
 
-export async function markPasswordResetUsed(conn: Conn, resetId: string): Promise<boolean> {
-  const [res] = await conn.execute<ResultSetHeader>(MARK_PASSWORD_RESET_USED, [resetId]);
-  return res.affectedRows === 1;
+export async function markPasswordResetUsed(conn: DbClient, resetId: string): Promise<boolean> {
+  const res = await conn.query(MARK_PASSWORD_RESET_USED, [resetId]);
+  return (res.rowCount ?? 0) === 1;
 }

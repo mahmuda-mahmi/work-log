@@ -1,35 +1,35 @@
 export const COUNT_USERS = `
-  SELECT COUNT(*) AS total
+  SELECT COUNT(*)::int AS total
   FROM users
 `;
 
 export const SELECT_USER_FOR_LOGIN = `
   SELECT id, name, email, password_hash, is_active, session_version
   FROM users
-  WHERE email = ?
+  WHERE LOWER(email) = LOWER($1)
   LIMIT 1
 `;
 
 export const INSERT_USER = `
   INSERT INTO users (id, name, email, password_hash, is_active, session_version)
-  VALUES (?, ?, ?, ?, 1, 0)
+  VALUES ($1, $2, $3, $4, TRUE, 0)
 `;
 
 export const UPDATE_USER_LOGIN_TIMESTAMP = `
   UPDATE users
-  SET last_login_at = UTC_TIMESTAMP(3)
-  WHERE id = ?
+  SET last_login_at = NOW()
+  WHERE id = $1
 `;
 
 export const UPDATE_USER_PASSWORD_AND_REVOKE = `
   UPDATE users
-  SET password_hash = ?, session_version = session_version + 1
-  WHERE id = ?
+  SET password_hash = $1, session_version = session_version + 1
+  WHERE id = $2
 `;
 
 export const INSERT_SESSION = `
   INSERT INTO sessions (id, user_id, token_hash, session_version, last_active_at, expires_at)
-  VALUES (?, ?, ?, ?, UTC_TIMESTAMP(3), DATE_ADD(UTC_TIMESTAMP(3), INTERVAL ? DAY))
+  VALUES ($1, $2, $3, $4, NOW(), NOW() + ($5 * INTERVAL '1 day'))
 `;
 
 export const SELECT_ACTIVE_SESSION = `
@@ -53,79 +53,89 @@ export const SELECT_ACTIVE_SESSION = `
     tm.display_name
   FROM sessions s
   INNER JOIN users u ON u.id = s.user_id
-  INNER JOIN team_members tm ON tm.user_id = u.id AND tm.is_active = 1
+  INNER JOIN team_members tm ON tm.user_id = u.id AND tm.is_active = TRUE
   INNER JOIN teams t ON t.id = tm.team_id
-  WHERE s.token_hash = ?
-    AND s.expires_at > UTC_TIMESTAMP(3)
+  WHERE s.token_hash = $1
+    AND s.expires_at > NOW()
     AND s.session_version = u.session_version
-    AND u.is_active = 1
+    AND u.is_active = TRUE
   ORDER BY tm.sort_order ASC, tm.created_at ASC
   LIMIT 1
 `;
 
 export const TOUCH_SESSION = `
   UPDATE sessions
-  SET last_active_at = UTC_TIMESTAMP(3)
-  WHERE id = ?
+  SET last_active_at = NOW()
+  WHERE id = $1
 `;
 
 export const DELETE_SESSION_BY_ID = `
   DELETE FROM sessions
-  WHERE id = ?
+  WHERE id = $1
 `;
 
 export const DELETE_SESSIONS_BY_USER = `
   DELETE FROM sessions
-  WHERE user_id = ?
+  WHERE user_id = $1
 `;
 
 export const SELECT_RATE_LIMIT = `
   SELECT bucket_key, failures, window_start, locked_until
   FROM rate_limits
-  WHERE bucket_key = ?
+  WHERE bucket_key = $1
   LIMIT 1
 `;
 
 export const UPSERT_RATE_LIMIT_FAILURE = `
   INSERT INTO rate_limits (bucket_key, failures, window_start, locked_until)
-  VALUES (?, 1, UTC_TIMESTAMP(3), NULL)
-  ON DUPLICATE KEY UPDATE
-    failures = IF(window_start < DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 15 MINUTE), 1, failures + 1),
-    window_start = IF(window_start < DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 15 MINUTE), UTC_TIMESTAMP(3), window_start),
-    locked_until = IF(
-      IF(window_start < DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 15 MINUTE), 1, failures + 1) >= 5,
-      DATE_ADD(UTC_TIMESTAMP(3), INTERVAL 15 MINUTE),
-      NULL
-    )
+  VALUES ($1, 1, NOW(), NULL)
+  ON CONFLICT (bucket_key) DO UPDATE SET
+    failures = CASE
+      WHEN rate_limits.window_start < NOW() - INTERVAL '15 minutes' THEN 1
+      ELSE rate_limits.failures + 1
+    END,
+    window_start = CASE
+      WHEN rate_limits.window_start < NOW() - INTERVAL '15 minutes' THEN NOW()
+      ELSE rate_limits.window_start
+    END,
+    locked_until = CASE
+      WHEN (
+        CASE
+          WHEN rate_limits.window_start < NOW() - INTERVAL '15 minutes' THEN 1
+          ELSE rate_limits.failures + 1
+        END
+      ) >= 5 THEN NOW() + INTERVAL '15 minutes'
+      ELSE NULL
+    END
 `;
 
 export const DELETE_RATE_LIMIT = `
   DELETE FROM rate_limits
-  WHERE bucket_key = ?
+  WHERE bucket_key = $1
 `;
 
 export const SELECT_INVITE_BY_HASH = `
   SELECT id, team_id, email, role, expires_at, accepted_at
   FROM invites
-  WHERE token_hash = ?
+  WHERE token_hash = $1
   LIMIT 1
 `;
 
 export const MARK_INVITE_ACCEPTED = `
   UPDATE invites
-  SET accepted_at = UTC_TIMESTAMP(3), accepted_by_user_id = ?
-  WHERE id = ? AND accepted_at IS NULL
+  SET accepted_at = NOW(), accepted_by_user_id = $1
+  WHERE id = $2 AND accepted_at IS NULL
 `;
 
 export const SELECT_PASSWORD_RESET_BY_HASH = `
   SELECT id, user_id, expires_at, used_at
   FROM password_resets
-  WHERE token_hash = ?
+  WHERE token_hash = $1
   LIMIT 1
 `;
 
 export const MARK_PASSWORD_RESET_USED = `
   UPDATE password_resets
-  SET used_at = UTC_TIMESTAMP(3)
-  WHERE id = ? AND used_at IS NULL
+  SET used_at = NOW()
+  WHERE id = $1 AND used_at IS NULL
 `;

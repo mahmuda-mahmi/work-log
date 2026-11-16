@@ -1,5 +1,5 @@
-import type { Pool, PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 import type { FollowupItemDto, FollowupStatus } from '@cghq/contracts';
+import type { DbClient } from '../pool.js';
 import {
   ARCHIVE_FOLLOWUP_ITEM,
   COUNT_FOLLOWUPS_BY_TEAM,
@@ -11,9 +11,7 @@ import {
   UPDATE_FOLLOWUP_POSITION,
 } from '../sql/followups.sql.js';
 
-type Conn = Pool | PoolConnection;
-
-type FollowupRow = RowDataPacket & {
+type FollowupRow = {
   id: string;
   category_id: string | null;
   category_name: string;
@@ -57,23 +55,19 @@ function mapFollowupRow(r: FollowupRow): FollowupItemDto {
 
 const dedupedFollowupTeams = new Set<string>();
 
-export async function deduplicateTeamFollowups(conn: Conn, teamId: string): Promise<void> {
+export async function deduplicateTeamFollowups(conn: DbClient, teamId: string): Promise<void> {
   if (dedupedFollowupTeams.has(teamId)) return;
 
-  const [rows] = await conn.execute<
-    Array<
-      RowDataPacket & {
-        id: string;
-        category_id: string | null;
-        title_id: string | null;
-        status_text: string;
-      }
-    >
-  >(
+  const res = await conn.query<{
+    id: string;
+    category_id: string | null;
+    title_id: string | null;
+    status_text: string;
+  }>(
     `
     SELECT id, category_id, title_id, status_text
     FROM followup_items
-    WHERE team_id = ? AND status <> 'archived'
+    WHERE team_id = $1 AND status <> 'archived'
     ORDER BY position ASC, created_at ASC
     `,
     [teamId],
@@ -82,7 +76,7 @@ export async function deduplicateTeamFollowups(conn: Conn, teamId: string): Prom
   const seen = new Set<string>();
   const duplicateIds: string[] = [];
 
-  for (const r of rows) {
+  for (const r of res.rows) {
     const key = `${r.category_id ?? ''}\u0000${r.title_id ?? ''}\u0000${r.status_text.trim().toLowerCase()}`;
     if (seen.has(key)) {
       duplicateIds.push(r.id);
@@ -91,15 +85,18 @@ export async function deduplicateTeamFollowups(conn: Conn, teamId: string): Prom
     }
   }
 
-  for (const dupId of duplicateIds) {
-    await conn.execute(`DELETE FROM followup_items WHERE id = ? AND team_id = ?`, [dupId, teamId]);
+  if (duplicateIds.length > 0) {
+    await conn.query(`DELETE FROM followup_items WHERE team_id = $1 AND id = ANY($2::uuid[])`, [
+      teamId,
+      duplicateIds,
+    ]);
   }
 
   dedupedFollowupTeams.add(teamId);
 }
 
 export async function findExistingActiveFollowup(
-  conn: Conn,
+  conn: DbClient,
   params: {
     teamId: string;
     categoryId: string | null;
@@ -107,7 +104,7 @@ export async function findExistingActiveFollowup(
     statusText: string;
   },
 ): Promise<FollowupItemDto | null> {
-  const [rows] = await conn.execute<FollowupRow[]>(
+  const res = await conn.query<FollowupRow>(
     `
     SELECT
       fi.id,
@@ -120,7 +117,7 @@ export async function findExistingActiveFollowup(
       fi.completed_by_member_id,
       fi.completed_by_label,
       tm.display_name AS member_display_name,
-      DATE_FORMAT(fi.completed_on, '%Y-%m-%d') AS completed_on,
+      TO_CHAR(fi.completed_on, 'YYYY-MM-DD') AS completed_on,
       fi.position,
       fi.version,
       fi.created_at,
@@ -129,50 +126,44 @@ export async function findExistingActiveFollowup(
     LEFT JOIN categories c ON c.id = fi.category_id
     LEFT JOIN titles t ON t.id = fi.title_id
     LEFT JOIN team_members tm ON tm.id = fi.completed_by_member_id
-    WHERE fi.team_id = ?
+    WHERE fi.team_id = $1
       AND fi.status <> 'archived'
-      AND COALESCE(fi.category_id, '') = COALESCE(?, '')
-      AND fi.title_id = ?
-      AND LOWER(TRIM(fi.status_text)) = LOWER(TRIM(?))
+      AND COALESCE(fi.category_id::text, '') = COALESCE($2::text, '')
+      AND fi.title_id = $3
+      AND LOWER(TRIM(fi.status_text)) = LOWER(TRIM($4))
     LIMIT 1
     `,
     [params.teamId, params.categoryId, params.titleId, params.statusText],
   );
-  return rows[0] ? mapFollowupRow(rows[0]) : null;
+  return res.rows[0] ? mapFollowupRow(res.rows[0]) : null;
 }
 
 export async function listTeamFollowups(
-  conn: Conn,
+  conn: DbClient,
   teamId: string,
   includeArchived = false,
 ): Promise<FollowupItemDto[]> {
   await deduplicateTeamFollowups(conn, teamId);
-  const [rows] = await conn.execute<FollowupRow[]>(SELECT_FOLLOWUPS_BY_TEAM, [
-    teamId,
-    includeArchived ? 1 : 0,
-  ]);
-  return rows.map(mapFollowupRow);
+  const res = await conn.query<FollowupRow>(SELECT_FOLLOWUPS_BY_TEAM, [teamId, includeArchived]);
+  return res.rows.map(mapFollowupRow);
 }
 
 export async function findFollowupById(
-  conn: Conn,
+  conn: DbClient,
   teamId: string,
   followupId: string,
 ): Promise<FollowupItemDto | null> {
-  const [rows] = await conn.execute<FollowupRow[]>(SELECT_FOLLOWUP_BY_ID, [teamId, followupId]);
-  return rows[0] ? mapFollowupRow(rows[0]) : null;
+  const res = await conn.query<FollowupRow>(SELECT_FOLLOWUP_BY_ID, [teamId, followupId]);
+  return res.rows[0] ? mapFollowupRow(res.rows[0]) : null;
 }
 
-export async function getNextFollowupPosition(conn: Conn, teamId: string): Promise<number> {
-  const [rows] = await conn.execute<(RowDataPacket & { next_pos: number })[]>(
-    SELECT_NEXT_FOLLOWUP_POSITION,
-    [teamId],
-  );
-  return Number(rows[0]?.next_pos ?? 1000);
+export async function getNextFollowupPosition(conn: DbClient, teamId: string): Promise<number> {
+  const res = await conn.query<{ next_pos: number }>(SELECT_NEXT_FOLLOWUP_POSITION, [teamId]);
+  return Number(res.rows[0]?.next_pos ?? 1000);
 }
 
 export async function insertFollowupItem(
-  conn: Conn,
+  conn: DbClient,
   input: {
     id: string;
     teamId: string;
@@ -185,7 +176,7 @@ export async function insertFollowupItem(
     actorUserId: string;
   },
 ): Promise<void> {
-  await conn.execute(INSERT_FOLLOWUP_ITEM, [
+  await conn.query(INSERT_FOLLOWUP_ITEM, [
     input.id,
     input.teamId,
     input.categoryId,
@@ -199,16 +190,13 @@ export async function insertFollowupItem(
   ]);
 }
 
-export async function countTeamFollowups(conn: Conn, teamId: string): Promise<number> {
-  const [rows] = await conn.execute<(RowDataPacket & { cnt: number })[]>(
-    COUNT_FOLLOWUPS_BY_TEAM,
-    [teamId],
-  );
-  return Number(rows[0]?.cnt ?? 0);
+export async function countTeamFollowups(conn: DbClient, teamId: string): Promise<number> {
+  const res = await conn.query<{ cnt: number }>(COUNT_FOLLOWUPS_BY_TEAM, [teamId]);
+  return Number(res.rows[0]?.cnt ?? 0);
 }
 
 export async function updateFollowupItemOptimistic(
-  conn: Conn,
+  conn: DbClient,
   input: {
     teamId: string;
     followupId: string;
@@ -223,7 +211,7 @@ export async function updateFollowupItemOptimistic(
     expectedVersion: number;
   },
 ): Promise<boolean> {
-  const [res] = await conn.execute<ResultSetHeader>(UPDATE_FOLLOWUP_ITEM_OPTIMISTIC, [
+  const res = await conn.query(UPDATE_FOLLOWUP_ITEM_OPTIMISTIC, [
     input.categoryId,
     input.titleId,
     input.status,
@@ -236,28 +224,24 @@ export async function updateFollowupItemOptimistic(
     input.followupId,
     input.expectedVersion,
   ]);
-  return res.affectedRows === 1;
+  return (res.rowCount ?? 0) === 1;
 }
 
 export async function updateFollowupPosition(
-  conn: Conn,
+  conn: DbClient,
   teamId: string,
   followupId: string,
   position: number,
 ): Promise<void> {
-  await conn.execute(UPDATE_FOLLOWUP_POSITION, [position, teamId, followupId]);
+  await conn.query(UPDATE_FOLLOWUP_POSITION, [position, teamId, followupId]);
 }
 
 export async function archiveFollowupItem(
-  conn: Conn,
+  conn: DbClient,
   teamId: string,
   followupId: string,
   actorUserId: string,
 ): Promise<boolean> {
-  const [res] = await conn.execute<ResultSetHeader>(ARCHIVE_FOLLOWUP_ITEM, [
-    actorUserId,
-    teamId,
-    followupId,
-  ]);
-  return res.affectedRows === 1;
+  const res = await conn.query(ARCHIVE_FOLLOWUP_ITEM, [actorUserId, teamId, followupId]);
+  return (res.rowCount ?? 0) === 1;
 }

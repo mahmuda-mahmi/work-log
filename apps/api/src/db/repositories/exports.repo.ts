@@ -1,10 +1,10 @@
-import type { Pool, PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 import type {
   ExportFormat,
   ReportExportInfo,
   ReportHistoryItem,
   ReportStatus,
 } from '@cghq/contracts';
+import type { DbClient } from '../pool.js';
 import {
   DELETE_FROZEN_FOLLOWUPS_FOR_REPORT,
   FINALIZE_DAILY_REPORT,
@@ -19,9 +19,7 @@ import {
   SELECT_REPORT_HISTORY,
 } from '../sql/exports.sql.js';
 
-type Conn = Pool | PoolConnection;
-
-type HistoryRow = RowDataPacket & {
+type HistoryRow = {
   id: string;
   report_date: string;
   status: ReportStatus;
@@ -33,7 +31,7 @@ type HistoryRow = RowDataPacket & {
   export_count: number;
 };
 
-type SnapshotRow = RowDataPacket & {
+type SnapshotRow = {
   id: string;
   report_id: string;
   revision: number;
@@ -42,24 +40,24 @@ type SnapshotRow = RowDataPacket & {
   created_at: Date | string;
 };
 
-type ExportRow = RowDataPacket & {
+type ExportRow = {
   id: string;
   report_id: string;
   snapshot_id: string;
   format: ExportFormat;
   file_name: string;
   storage_key: string;
-  byte_size: number;
+  byte_size: number | string;
   sha256: string;
   download_count: number;
   created_at: Date | string;
 };
 
-type ExportInfoRow = RowDataPacket & {
+type ExportInfoRow = {
   id: string;
   format: ExportFormat;
   file_name: string;
-  byte_size: number;
+  byte_size: number | string;
   download_count: number;
   created_at: Date | string;
 };
@@ -69,30 +67,26 @@ function toIso(val: Date | string): string {
 }
 
 export async function finalizeDailyReportRow(
-  conn: Conn,
+  conn: DbClient,
   reportId: string,
   preparedByName: string,
   actorUserId: string,
 ): Promise<boolean> {
-  const [res] = await conn.execute<ResultSetHeader>(FINALIZE_DAILY_REPORT, [
-    preparedByName,
-    actorUserId,
-    reportId,
-  ]);
-  return res.affectedRows === 1;
+  const res = await conn.query(FINALIZE_DAILY_REPORT, [preparedByName, actorUserId, reportId]);
+  return (res.rowCount ?? 0) === 1;
 }
 
-export async function reopenDailyReportRow(conn: Conn, reportId: string): Promise<boolean> {
-  const [res] = await conn.execute<ResultSetHeader>(REOPEN_DAILY_REPORT, [reportId]);
-  return res.affectedRows === 1;
+export async function reopenDailyReportRow(conn: DbClient, reportId: string): Promise<boolean> {
+  const res = await conn.query(REOPEN_DAILY_REPORT, [reportId]);
+  return (res.rowCount ?? 0) === 1;
 }
 
-export async function deleteFrozenFollowups(conn: Conn, reportId: string): Promise<void> {
-  await conn.execute(DELETE_FROZEN_FOLLOWUPS_FOR_REPORT, [reportId]);
+export async function deleteFrozenFollowups(conn: DbClient, reportId: string): Promise<void> {
+  await conn.query(DELETE_FROZEN_FOLLOWUPS_FOR_REPORT, [reportId]);
 }
 
 export async function insertFrozenFollowup(
-  conn: Conn,
+  conn: DbClient,
   input: {
     id: string;
     reportId: string;
@@ -104,7 +98,7 @@ export async function insertFrozenFollowup(
     position: number;
   },
 ): Promise<void> {
-  await conn.execute(INSERT_FROZEN_REPORT_FOLLOWUP, [
+  await conn.query(INSERT_FROZEN_REPORT_FOLLOWUP, [
     input.id,
     input.reportId,
     input.followupItemId,
@@ -117,7 +111,7 @@ export async function insertFrozenFollowup(
 }
 
 export async function insertReportSnapshot(
-  conn: Conn,
+  conn: DbClient,
   input: {
     id: string;
     reportId: string;
@@ -127,7 +121,7 @@ export async function insertReportSnapshot(
     actorUserId: string;
   },
 ): Promise<void> {
-  await conn.execute(INSERT_REPORT_SNAPSHOT, [
+  await conn.query(INSERT_REPORT_SNAPSHOT, [
     input.id,
     input.reportId,
     input.revision,
@@ -137,29 +131,29 @@ export async function insertReportSnapshot(
   ]);
 }
 
-export async function findLatestSnapshotForReport(conn: Conn, reportId: string) {
-  const [rows] = await conn.execute<SnapshotRow[]>(SELECT_LATEST_SNAPSHOT_FOR_REPORT, [
-    reportId,
-  ]);
-  const row = rows[0];
+export async function findLatestSnapshotForReport(conn: DbClient, reportId: string) {
+  const res = await conn.query<SnapshotRow>(SELECT_LATEST_SNAPSHOT_FOR_REPORT, [reportId]);
+  const row = res.rows[0];
   if (!row) return null;
   return {
     id: row.id,
     reportId: row.report_id,
     revision: row.revision,
     payload:
-      typeof row.payload === 'string' ? (JSON.parse(row.payload) as Record<string, unknown>) : row.payload,
+      typeof row.payload === 'string'
+        ? (JSON.parse(row.payload) as Record<string, unknown>)
+        : row.payload,
     contentHash: row.content_hash,
     createdAt: toIso(row.created_at),
   };
 }
 
 export async function listReportHistory(
-  conn: Conn,
+  conn: DbClient,
   teamId: string,
 ): Promise<ReportHistoryItem[]> {
-  const [rows] = await conn.execute<HistoryRow[]>(SELECT_REPORT_HISTORY, [teamId]);
-  return rows.map((r) => ({
+  const res = await conn.query<HistoryRow>(SELECT_REPORT_HISTORY, [teamId]);
+  return res.rows.map((r) => ({
     id: r.id,
     reportDate: r.report_date,
     status: r.status,
@@ -173,15 +167,12 @@ export async function listReportHistory(
 }
 
 export async function findExportBySnapshotAndFormat(
-  conn: Conn,
+  conn: DbClient,
   snapshotId: string,
   format: ExportFormat,
 ) {
-  const [rows] = await conn.execute<ExportRow[]>(SELECT_EXPORT_BY_SNAPSHOT_FORMAT, [
-    snapshotId,
-    format,
-  ]);
-  const r = rows[0];
+  const res = await conn.query<ExportRow>(SELECT_EXPORT_BY_SNAPSHOT_FORMAT, [snapshotId, format]);
+  const r = res.rows[0];
   if (!r) return null;
   return {
     id: r.id,
@@ -198,11 +189,11 @@ export async function findExportBySnapshotAndFormat(
 }
 
 export async function listExportsForReport(
-  conn: Conn,
+  conn: DbClient,
   reportId: string,
 ): Promise<ReportExportInfo[]> {
-  const [rows] = await conn.execute<ExportInfoRow[]>(SELECT_EXPORTS_FOR_REPORT, [reportId]);
-  return rows.map((r) => ({
+  const res = await conn.query<ExportInfoRow>(SELECT_EXPORTS_FOR_REPORT, [reportId]);
+  return res.rows.map((r) => ({
     id: r.id,
     format: r.format,
     fileName: r.file_name,
@@ -213,7 +204,7 @@ export async function listExportsForReport(
 }
 
 export async function insertReportExport(
-  conn: Conn,
+  conn: DbClient,
   input: {
     id: string;
     reportId: string;
@@ -226,7 +217,7 @@ export async function insertReportExport(
     actorUserId: string;
   },
 ): Promise<void> {
-  await conn.execute(INSERT_REPORT_EXPORT, [
+  await conn.query(INSERT_REPORT_EXPORT, [
     input.id,
     input.reportId,
     input.snapshotId,
@@ -239,6 +230,6 @@ export async function insertReportExport(
   ]);
 }
 
-export async function incrementExportDownloadCount(conn: Conn, exportId: string): Promise<void> {
-  await conn.execute(INCREMENT_EXPORT_DOWNLOAD_COUNT, [exportId]);
+export async function incrementExportDownloadCount(conn: DbClient, exportId: string): Promise<void> {
+  await conn.query(INCREMENT_EXPORT_DOWNLOAD_COUNT, [exportId]);
 }

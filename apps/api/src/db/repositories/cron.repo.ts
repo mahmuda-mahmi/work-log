@@ -1,4 +1,4 @@
-import type { Pool, ResultSetHeader } from 'mysql2/promise';
+import type { Pool } from 'pg';
 import {
   DELETE_EXPIRED_SESSIONS,
   DELETE_STALE_INVITES,
@@ -14,15 +14,17 @@ export interface CleanupCounts {
 }
 
 export async function runDatabaseCleanup(pool: Pool): Promise<CleanupCounts> {
-  const [sessionsRes] = await pool.execute<ResultSetHeader>(DELETE_EXPIRED_SESSIONS);
-  const [invitesRes] = await pool.execute<ResultSetHeader>(DELETE_STALE_INVITES);
-  const [resetsRes] = await pool.execute<ResultSetHeader>(DELETE_STALE_PASSWORD_RESETS);
-  const [rateLimitsRes] = await pool.execute<ResultSetHeader>(DELETE_STALE_RATE_LIMITS);
+  const [sessionsRes, invitesRes, resetsRes, rateLimitsRes] = await Promise.all([
+    pool.query(DELETE_EXPIRED_SESSIONS),
+    pool.query(DELETE_STALE_INVITES),
+    pool.query(DELETE_STALE_PASSWORD_RESETS),
+    pool.query(DELETE_STALE_RATE_LIMITS),
+  ]);
 
   return {
-    sessions: sessionsRes.affectedRows,
-    invites: invitesRes.affectedRows,
-    passwordResets: resetsRes.affectedRows,
-    rateLimits: rateLimitsRes.affectedRows,
+    sessions: sessionsRes.rowCount ?? 0,
+    invites: invitesRes.rowCount ?? 0,
+    passwordResets: resetsRes.rowCount ?? 0,
+    rateLimits: rateLimitsRes.rowCount ?? 0,
   };
 }
