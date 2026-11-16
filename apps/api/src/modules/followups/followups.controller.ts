@@ -15,9 +15,11 @@ import {
 } from '@nestjs/common';
 import {
   CreateFollowupSchema,
+  MoveFollowupToDailySchema,
   ReorderIdsSchema,
   UpdateFollowupSchema,
   type CreateFollowupInput,
+  type MoveFollowupToDailyInput,
   type ReorderIdsInput,
   type UpdateFollowupInput,
 } from '@cghq/contracts';
@@ -41,6 +43,16 @@ import {
   updateFollowupPosition,
 } from '../../db/repositories/followups.repo.js';
 import { ensureDefaultFollowups } from '../../domain/defaults.js';
+import { getTeamTodayDate } from '../../domain/timezone.js';
+import {
+  bumpDailyReportVersion,
+  findOrCreateWorkGroup,
+  findReportForUpdate,
+  getNextEntryPosition,
+  insertIgnoreDailyReport,
+  insertWorkEntry,
+} from '../../db/repositories/reports.repo.js';
+import { findTeamSettings } from '../../db/repositories/teams.repo.js';
 
 @Controller('teams/:teamId/followups')
 @UseGuards(SessionGuard, TeamScopeGuard)
@@ -233,5 +245,100 @@ export class FollowupsController {
       throw new NotFoundException({ code: 'FOLLOWUP_NOT_FOUND', message: 'Follow-up not found' });
     }
     return { ok: true };
+  }
+
+  @Post(':followupId/move-to-daily')
+  async moveToDaily(
+    @Param('teamId') teamId: string,
+    @Param('followupId') followupId: string,
+    @Body(new ZodValidationPipe(MoveFollowupToDailySchema)) body: MoveFollowupToDailyInput,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const auth = req.auth!;
+    const pool = getPool()!;
+    const todayDate = getTeamTodayDate(auth.teamTimezone);
+
+    return withTransaction(pool, async (conn) => {
+      const existing = await findFollowupById(conn, teamId, followupId);
+      if (!existing) {
+        throw new NotFoundException({
+          code: 'FOLLOWUP_NOT_FOUND',
+          message: 'Follow-up not found',
+        });
+      }
+
+      let report = await findReportForUpdate(conn, teamId, todayDate);
+      if (!report) {
+        const settings = await findTeamSettings(conn, teamId);
+        const preparedBy = settings?.preparedByDefault?.trim() || auth.displayName;
+        await insertIgnoreDailyReport(conn, {
+          id: uuidv7(),
+          teamId,
+          reportDate: todayDate,
+          preparedByName: preparedBy,
+          preparedByUserId: auth.userId,
+        });
+        report = await findReportForUpdate(conn, teamId, todayDate);
+      }
+
+      if (!report) {
+        throw new NotFoundException({ code: 'REPORT_NOT_FOUND', message: 'Report not found' });
+      }
+      if (report.status === 'finalized') {
+        throw new ConflictException({
+          code: 'REPORT_FINALIZED',
+          message: "Today's report is finalized; reopen it before moving follow-ups",
+        });
+      }
+
+      const catName = existing.categoryName?.trim() || 'General';
+      const { categoryId, titleId } = await findOrCreateCategoryAndTitle(
+        conn,
+        teamId,
+        catName,
+        existing.titleName,
+      );
+
+      const groupId = await findOrCreateWorkGroup(conn, {
+        groupId: uuidv7(),
+        reportId: report.id,
+        categoryId,
+        titleId,
+        numberingMode: catName.toLowerCase() === 'support' ? 'numbered' : 'plain',
+        createdByUserId: auth.userId,
+      });
+
+      const pos = await getNextEntryPosition(conn, groupId);
+      const entryId = uuidv7();
+      const nextStatusText = body.statusText?.trim() || existing.statusText;
+      const nextLabel = existing.completedByMemberId
+        ? null
+        : existing.completedByLabel && existing.completedByLabel !== 'As Previous'
+          ? existing.completedByLabel
+          : null;
+
+      await insertWorkEntry(conn, {
+        id: entryId,
+        groupId,
+        statusText: nextStatusText,
+        completedByMemberId: existing.completedByMemberId,
+        completedByLabel: nextLabel,
+        position: pos,
+        createdByUserId: auth.userId,
+      });
+
+      await bumpDailyReportVersion(conn, report.id);
+      await archiveFollowupItem(conn, teamId, followupId, auth.userId);
+      await appendAuditEvent(conn, {
+        teamId,
+        actorUserId: auth.userId,
+        action: 'followup.moved_to_daily',
+        entityType: 'followup_item',
+        entityId: followupId,
+        metadata: { reportDate: todayDate, entryId },
+      });
+
+      return { ok: true, reportDate: todayDate, entryId };
+    });
   }
 }

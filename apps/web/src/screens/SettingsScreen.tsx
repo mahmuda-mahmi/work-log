@@ -45,9 +45,13 @@ export function SettingsScreen({ session }: { session: AuthSession }) {
     enabled: isLead,
   });
 
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<'member' | 'lead'>('member');
-  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const { data: joinRequests = [] } = useQuery({
+    queryKey: ['join-requests', teamId],
+    queryFn: () => teamsApi.listJoinRequests(teamId),
+    enabled: isLead,
+  });
+
+  const [joinLink, setJoinLink] = useState<string | null>(null);
   const [resetLink, setResetLink] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
@@ -131,15 +135,32 @@ export function SettingsScreen({ session }: { session: AuthSession }) {
     onError: (err: Error) => setStatusMsg(err.message),
   });
 
-  const inviteMutation = useMutation({
-    mutationFn: () =>
-      teamsApi.createInvite(teamId, {
-        email: inviteEmail.trim() || undefined,
-        role: inviteRole,
-      }),
+  const joinLinkMutation = useMutation({
+    mutationFn: () => teamsApi.createJoinLink(teamId),
     onSuccess: (res) => {
-      setInviteLink(`${window.location.origin}${res.invitePath}`);
-      setInviteEmail('');
+      setJoinLink(`${window.location.origin}${res.joinPath}`);
+    },
+    onError: (err: Error) => setStatusMsg(err.message),
+  });
+
+  const approveJoinMutation = useMutation({
+    mutationFn: (requestId: string) => teamsApi.approveJoinRequest(teamId, requestId),
+    onSuccess: async () => {
+      setStatusMsg('Member approved and added to team.');
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['join-requests', teamId] }),
+        queryClient.invalidateQueries({ queryKey: ['team-members', teamId] }),
+        queryClient.invalidateQueries({ queryKey: ['members', teamId] }),
+      ]);
+    },
+    onError: (err: Error) => setStatusMsg(err.message),
+  });
+
+  const rejectJoinMutation = useMutation({
+    mutationFn: (requestId: string) => teamsApi.rejectJoinRequest(teamId, requestId),
+    onSuccess: async () => {
+      setStatusMsg('Join request rejected.');
+      await queryClient.invalidateQueries({ queryKey: ['join-requests', teamId] });
     },
     onError: (err: Error) => setStatusMsg(err.message),
   });
@@ -433,69 +454,98 @@ export function SettingsScreen({ session }: { session: AuthSession }) {
               )}
 
               {isLead && (
-                <form
-                  className="grid gap-3 border-t border-zinc-100 pt-3"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    inviteMutation.mutate();
-                  }}
-                >
-                  <h3 className="text-xs font-bold uppercase tracking-wide text-zinc-700">
-                    Invite Team Member
-                  </h3>
-                  <div className="grid grid-cols-1 items-end gap-2.5 sm:grid-cols-[1.5fr_1fr_auto]">
-                    <div className="grid gap-1.5">
-                      <Label htmlFor="invite-email">Email (optional)</Label>
-                      <Input
-                        id="invite-email"
-                        type="email"
-                        placeholder="teammate@example.com"
-                        value={inviteEmail}
-                        onChange={(e) => setInviteEmail(e.target.value)}
-                      />
-                    </div>
-                    <div className="grid gap-1.5">
-                      <Label>Role</Label>
-                      <Select
-                        value={inviteRole}
-                        onValueChange={(v) => setInviteRole(v as 'member' | 'lead')}
+                <div className="grid gap-4 border-t border-zinc-100 pt-3">
+                  <div className="grid gap-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <h3 className="text-xs font-bold uppercase tracking-wide text-zinc-700">
+                          Team Join Link
+                        </h3>
+                        <p className="text-xs text-zinc-500">
+                          Share this link with teammates—no email needed. You approve requests
+                          below before they gain access.
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        disabled={joinLinkMutation.isPending}
+                        onClick={() => joinLinkMutation.mutate()}
                       >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="member">Member</SelectItem>
-                          <SelectItem value="lead">Team Lead</SelectItem>
-                        </SelectContent>
-                      </Select>
+                        {joinLinkMutation.isPending ? 'Generating…' : 'Generate Join Link'}
+                      </Button>
                     </div>
-                    <Button type="submit" disabled={inviteMutation.isPending}>
-                      {inviteMutation.isPending ? 'Generating…' : 'Generate Invite Link'}
-                    </Button>
+
+                    {joinLink && (
+                      <Alert className="grid gap-2">
+                        <strong className="text-xs">Shareable Team Join Link:</strong>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            readOnly
+                            value={joinLink}
+                            className="h-8 font-mono text-xs"
+                            onFocus={(e) => e.currentTarget.select()}
+                          />
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => void copyToClipboard(joinLink, 'join')}
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                            {copiedKey === 'join' ? 'Copied!' : 'Copy'}
+                          </Button>
+                        </div>
+                      </Alert>
+                    )}
                   </div>
 
-                  {inviteLink && (
-                    <Alert className="grid gap-2">
-                      <strong className="text-xs">Invite Link (72h single-use):</strong>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          readOnly
-                          value={inviteLink}
-                          className="h-8 font-mono text-xs"
-                          onFocus={(e) => e.currentTarget.select()}
-                        />
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={() => void copyToClipboard(inviteLink, 'invite')}
-                        >
-                          <Copy className="h-3.5 w-3.5" />
-                          {copiedKey === 'invite' ? 'Copied!' : 'Copy'}
-                        </Button>
+                  <div className="grid gap-2 border-t border-zinc-100 pt-3">
+                    <h3 className="text-xs font-bold uppercase tracking-wide text-zinc-700">
+                      Pending Join Requests ({joinRequests.length})
+                    </h3>
+                    {joinRequests.length === 0 ? (
+                      <p className="text-xs text-zinc-500">No pending join requests.</p>
+                    ) : (
+                      <div className="divide-y divide-zinc-100 rounded-md border border-zinc-200 bg-white">
+                        {joinRequests.map((reqItem) => (
+                          <div
+                            key={reqItem.id}
+                            className="flex flex-wrap items-center justify-between gap-2 p-2.5"
+                          >
+                            <div className="min-w-0">
+                              <div className="text-sm font-semibold text-zinc-950">
+                                {reqItem.name}
+                              </div>
+                              <div className="text-xs text-zinc-500">{reqItem.email}</div>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <Button
+                                type="button"
+                                size="xs"
+                                disabled={
+                                  approveJoinMutation.isPending || rejectJoinMutation.isPending
+                                }
+                                onClick={() => approveJoinMutation.mutate(reqItem.id)}
+                              >
+                                Approve
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="xs"
+                                disabled={
+                                  approveJoinMutation.isPending || rejectJoinMutation.isPending
+                                }
+                                onClick={() => rejectJoinMutation.mutate(reqItem.id)}
+                              >
+                                Reject
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    </Alert>
-                  )}
-                </form>
+                    )}
+                  </div>
+                </div>
               )}
             </CardContent>
           </Card>

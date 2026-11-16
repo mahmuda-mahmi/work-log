@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Eye, EyeOff } from 'lucide-react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { authApi } from '../api/client';
 import { Alert } from '../components/ui/alert';
-import { Button } from '../components/ui/button';
+import { Button, buttonVariants } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 
 export function LoginScreen() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
 
   const { data: status } = useQuery({
@@ -25,7 +26,18 @@ export function LoginScreen() {
   const [teamName, setTeamName] = useState('CGHQ');
   const [teamSlug, setTeamSlug] = useState('cghq');
   const [name, setName] = useState('');
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const oauthErrorParam = searchParams.get('error');
+  const initialOauthError =
+    oauthErrorParam === 'google_not_configured'
+      ? 'Google Sign-In is not configured yet (add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in Vercel).'
+      : oauthErrorParam === 'no_active_team'
+        ? 'Your Google account is not an active member of any team yet. Ask your Team Lead for a join link or to approve your request.'
+        : oauthErrorParam === 'google_unverified_email'
+          ? 'Please use a Google account with a verified email address.'
+          : oauthErrorParam
+            ? 'Google Sign-In failed. Please try again.'
+            : null;
+  const [errorMsg, setErrorMsg] = useState<string | null>(initialOauthError);
 
   const loginMutation = useMutation({
     mutationFn: authApi.login,
@@ -202,6 +214,23 @@ export function LoginScreen() {
               <Button type="submit" className="mt-1 w-full" disabled={loginMutation.isPending}>
                 {loginMutation.isPending ? 'Signing in…' : 'Sign In'}
               </Button>
+              {status?.googleEnabled !== false && (
+                <>
+                  <div className="relative my-1 flex items-center justify-center">
+                    <span className="h-px w-full bg-zinc-200" />
+                    <span className="bg-white px-2.5 text-[11px] font-semibold uppercase text-zinc-400">
+                      or
+                    </span>
+                    <span className="h-px w-full bg-zinc-200" />
+                  </div>
+                  <a
+                    href="/api/auth/google?next=/today"
+                    className={buttonVariants({ variant: 'dark', size: 'default' })}
+                  >
+                    Continue with Google
+                  </a>
+                </>
+              )}
             </form>
           )}
         </CardContent>

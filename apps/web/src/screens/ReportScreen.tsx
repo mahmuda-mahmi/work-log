@@ -123,6 +123,7 @@ export function ReportScreen({ session }: ReportScreenProps) {
   const workspaceCacheKey = `cghq:workspace:${teamId}:${dateKey}`;
 
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [editingEntry, setEditingEntry] = useState<EditingEntryState | null>(null);
   const [editingGroup, setEditingGroup] = useState<EditingGroupState | null>(null);
   const [quickAdd, setQuickAdd] = useState<QuickAddState | null>(null);
@@ -217,6 +218,7 @@ export function ReportScreen({ session }: ReportScreenProps) {
     }) => followupsApi.create(teamId, payload),
     onSuccess: () => {
       setActionError(null);
+      setActionSuccess('Added to Follow-ups.');
       void queryClient.invalidateQueries({ queryKey: ['followups', teamId] });
       syncReportCache();
     },
@@ -591,6 +593,7 @@ export function ReportScreen({ session }: ReportScreenProps) {
       </Card>
 
       {actionError && <Alert variant="destructive">{actionError}</Alert>}
+      {actionSuccess && <Alert variant="success">{actionSuccess}</Alert>}
 
       <EntryComposer
         teamId={teamId}
@@ -986,16 +989,22 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                                   variant="outline"
                                                   size="icon-xs"
                                                   title="Promote to follow-up"
-                                                  onClick={() =>
+                                                  disabled={
+                                                    promoteFollowupMutation.isPending ||
+                                                    entry.id.startsWith('optimistic-')
+                                                  }
+                                                  onClick={() => {
+                                                    setActionSuccess(null);
                                                     promoteFollowupMutation.mutate({
                                                       categoryName: group.categoryName,
                                                       titleName: group.titleName,
                                                       statusText: entry.statusText,
                                                       completedByMemberId:
                                                         entry.completedByMemberId,
-                                                      completedByLabel: entry.completedByLabel,
-                                                    })
-                                                  }
+                                                      completedByLabel:
+                                                        entry.completedByLabel?.trim() || null,
+                                                    });
+                                                  }}
                                                 >
                                                   <Forward className="h-3 w-3" />
                                                 </Button>

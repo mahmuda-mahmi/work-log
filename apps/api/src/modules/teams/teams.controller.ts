@@ -37,6 +37,12 @@ import { getPool, withTransaction } from '../../db/pool.js';
 import { appendAuditEvent } from '../../db/repositories/audit.repo.js';
 import { deleteSessionsByUserId } from '../../db/repositories/auth.repo.js';
 import {
+  findJoinRequestById,
+  listPendingJoinRequests,
+  markJoinRequestStatus,
+  upsertActiveTeamMember,
+} from '../../db/repositories/join-requests.repo.js';
+import {
   countActiveLeads,
   deactivateTeamMember,
   findTeamLogo,
@@ -144,6 +150,127 @@ export class TeamsController {
       invitePath: `/invite/${rawToken}`,
       role: body.role,
     };
+  }
+
+  @Post('join-link')
+  @UseGuards(TeamLeadGuard)
+  async createJoinLink(@Param('teamId') teamId: string, @Req() req: AuthenticatedRequest) {
+    const pool = getPool()!;
+    const rawToken = generateOpaqueToken();
+    const tokenHash = sha256Hex(rawToken);
+    const inviteId = uuidv7();
+
+    await withTransaction(pool, async (conn) => {
+      await insertInvite(conn, {
+        id: inviteId,
+        teamId,
+        email: null,
+        role: 'member',
+        tokenHash,
+        createdByUserId: req.auth!.userId,
+      });
+      await appendAuditEvent(conn, {
+        teamId,
+        actorUserId: req.auth!.userId,
+        action: 'team.join_link_created',
+        entityType: 'invite',
+        entityId: inviteId,
+      });
+    });
+
+    return {
+      inviteId,
+      token: rawToken,
+      joinPath: `/join/${rawToken}`,
+    };
+  }
+
+  @Get('join-requests')
+  @UseGuards(TeamLeadGuard)
+  async getJoinRequests(@Param('teamId') teamId: string) {
+    const pool = getPool()!;
+    return listPendingJoinRequests(pool, teamId);
+  }
+
+  @Post('join-requests/:requestId/approve')
+  @UseGuards(TeamLeadGuard)
+  async approveJoinRequest(
+    @Param('teamId') teamId: string,
+    @Param('requestId') requestId: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const pool = getPool()!;
+    await withTransaction(pool, async (conn) => {
+      const request = await findJoinRequestById(conn, teamId, requestId);
+      if (!request || request.status !== 'pending') {
+        throw new NotFoundException({
+          code: 'JOIN_REQUEST_NOT_FOUND',
+          message: 'Pending join request not found',
+        });
+      }
+
+      await upsertActiveTeamMember(conn, {
+        id: uuidv7(),
+        teamId,
+        userId: request.user_id,
+        displayName: request.display_name,
+      });
+
+      await markJoinRequestStatus(conn, {
+        teamId,
+        requestId,
+        status: 'approved',
+        reviewedByUserId: req.auth!.userId,
+      });
+
+      await appendAuditEvent(conn, {
+        teamId,
+        actorUserId: req.auth!.userId,
+        action: 'team.join_request_approved',
+        entityType: 'join_request',
+        entityId: requestId,
+        metadata: { userId: request.user_id, email: request.email },
+      });
+    });
+
+    return { ok: true };
+  }
+
+  @Post('join-requests/:requestId/reject')
+  @UseGuards(TeamLeadGuard)
+  async rejectJoinRequest(
+    @Param('teamId') teamId: string,
+    @Param('requestId') requestId: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const pool = getPool()!;
+    await withTransaction(pool, async (conn) => {
+      const request = await findJoinRequestById(conn, teamId, requestId);
+      if (!request || request.status !== 'pending') {
+        throw new NotFoundException({
+          code: 'JOIN_REQUEST_NOT_FOUND',
+          message: 'Pending join request not found',
+        });
+      }
+
+      await markJoinRequestStatus(conn, {
+        teamId,
+        requestId,
+        status: 'rejected',
+        reviewedByUserId: req.auth!.userId,
+      });
+
+      await appendAuditEvent(conn, {
+        teamId,
+        actorUserId: req.auth!.userId,
+        action: 'team.join_request_rejected',
+        entityType: 'join_request',
+        entityId: requestId,
+        metadata: { userId: request.user_id, email: request.email },
+      });
+    });
+
+    return { ok: true };
   }
 
   @Patch('members/:memberId/role')

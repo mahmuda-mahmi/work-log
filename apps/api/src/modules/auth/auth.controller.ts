@@ -8,6 +8,7 @@ import {
   HttpException,
   HttpStatus,
   Post,
+  Query,
   Req,
   Res,
   ServiceUnavailableException,
@@ -20,12 +21,14 @@ import {
   ChangePasswordSchema,
   CompletePasswordResetSchema,
   LoginSchema,
+  SubmitJoinRequestSchema,
   type AcceptInviteInput,
   type AuthSession,
   type BootstrapLeadInput,
   type ChangePasswordInput,
   type CompletePasswordResetInput,
   type LoginInput,
+  type SubmitJoinRequestInput,
 } from '@cghq/contracts';
 import type { Request, Response } from 'express';
 import {
@@ -57,6 +60,10 @@ import {
   updateUserPasswordAndRevoke,
 } from '../../db/repositories/auth.repo.js';
 import { insertTeam, insertTeamMember } from '../../db/repositories/teams.repo.js';
+import {
+  findTeamNameById,
+  upsertPendingJoinRequest,
+} from '../../db/repositories/join-requests.repo.js';
 
 const SESSION_TTL_DAYS = Number(process.env.SESSION_TTL_DAYS ?? 30);
 
@@ -91,7 +98,10 @@ export class AuthController {
       });
     }
     const total = await countUsers(pool);
-    return { needsBootstrap: total === 0 };
+    return {
+      needsBootstrap: total === 0,
+      googleEnabled: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
+    };
   }
 
   @Post('bootstrap')
@@ -459,5 +469,299 @@ export class AuthController {
 
     res.clearCookie(SESSION_COOKIE_NAME, { path: '/' });
     return { ok: true };
+  }
+
+  @Get('google')
+  async googleAuthStart(
+    @Req() req: Request,
+    @Res() res: Response,
+    @Query('next') next?: string,
+    @Query('joinToken') joinToken?: string,
+  ) {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
+      return res.redirect('/login?error=google_not_configured');
+    }
+
+    const proto =
+      (req.headers['x-forwarded-proto'] as string | undefined)?.split(',')[0]?.trim() ||
+      req.protocol ||
+      'https';
+    const host = (req.headers['x-forwarded-host'] as string | undefined) || req.get('host');
+    const redirectUri = `${proto}://${host}/api/auth/google/callback`;
+
+    const nonce = generateOpaqueToken(16);
+    const safeNext = next && next.startsWith('/') ? next : '/today';
+    const statePayload = JSON.stringify({
+      nonce,
+      next: safeNext,
+      joinToken: joinToken?.trim() || null,
+    });
+
+    res.cookie('oauth_state', statePayload, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 10 * 60 * 1000,
+    });
+
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      response_type: 'code',
+      scope: 'openid email profile',
+      state: nonce,
+      prompt: 'select_account',
+    });
+
+    return res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
+  }
+
+  @Get('google/callback')
+  async googleAuthCallback(
+    @Req() req: Request,
+    @Res() res: Response,
+    @Query('code') code?: string,
+    @Query('state') state?: string,
+  ) {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const rawCookie = req.cookies?.['oauth_state'] as string | undefined;
+    res.clearCookie('oauth_state', { path: '/' });
+
+    if (!clientId || !clientSecret || !code || !state || !rawCookie) {
+      return res.redirect('/login?error=google_auth_failed');
+    }
+
+    let parsedState: { nonce: string; next: string; joinToken: string | null };
+    try {
+      parsedState = JSON.parse(rawCookie) as {
+        nonce: string;
+        next: string;
+        joinToken: string | null;
+      };
+    } catch {
+      return res.redirect('/login?error=google_auth_failed');
+    }
+
+    if (parsedState.nonce !== state) {
+      return res.redirect('/login?error=google_auth_failed');
+    }
+
+    const proto =
+      (req.headers['x-forwarded-proto'] as string | undefined)?.split(',')[0]?.trim() ||
+      req.protocol ||
+      'https';
+    const host = (req.headers['x-forwarded-host'] as string | undefined) || req.get('host');
+    const redirectUri = `${proto}://${host}/api/auth/google/callback`;
+
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: redirectUri,
+        grant_type: 'authorization_code',
+      }),
+    });
+
+    if (!tokenRes.ok) {
+      return res.redirect('/login?error=google_auth_failed');
+    }
+
+    const tokenData = (await tokenRes.json()) as { access_token?: string };
+    if (!tokenData.access_token) {
+      return res.redirect('/login?error=google_auth_failed');
+    }
+
+    const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+    });
+
+    if (!userInfoRes.ok) {
+      return res.redirect('/login?error=google_auth_failed');
+    }
+
+    const profile = (await userInfoRes.json()) as {
+      email?: string;
+      email_verified?: boolean;
+      name?: string;
+    };
+
+    if (!profile.email || !profile.email_verified) {
+      return res.redirect('/login?error=google_unverified_email');
+    }
+
+    const email = profile.email.trim().toLowerCase();
+    const displayName = (profile.name?.trim() || email.split('@')[0] || 'Member').slice(0, 120);
+    const pool = getPool()!;
+
+    let user = await findUserForLogin(pool, email);
+    if (!user) {
+      const userId = uuidv7();
+      const randomPasswordHash = await hashPassword(generateOpaqueToken(24));
+      await withTransaction(pool, async (conn) => {
+        await insertUser(conn, {
+          id: userId,
+          name: displayName,
+          email,
+          passwordHash: randomPasswordHash,
+        });
+      });
+      user = await findUserForLogin(pool, email);
+    }
+
+    if (!user || !user.isActive) {
+      return res.redirect('/login?error=account_disabled');
+    }
+
+    if (parsedState.joinToken) {
+      const invite = await findInviteByHash(pool, sha256Hex(parsedState.joinToken));
+      if (!invite || new Date(invite.expiresAt).getTime() <= Date.now()) {
+        return res.redirect(`/join/${parsedState.joinToken}?error=invalid_link`);
+      }
+
+      const rawToken = generateOpaqueToken();
+      const tokenHash = sha256Hex(rawToken);
+      await withTransaction(pool, async (conn) => {
+        await insertSession(conn, {
+          id: uuidv7(),
+          userId: user.id,
+          tokenHash,
+          sessionVersion: user.sessionVersion,
+          ttlDays: SESSION_TTL_DAYS,
+        });
+        await updateUserLoginTimestamp(conn, user.id);
+      });
+
+      const activeSession = await findActiveSessionByTokenHash(pool, tokenHash);
+      if (activeSession && activeSession.teamId === invite.teamId) {
+        setSessionCookie(res, rawToken);
+        return res.redirect('/today');
+      }
+
+      await withTransaction(pool, async (conn) => {
+        await upsertPendingJoinRequest(conn, {
+          id: uuidv7(),
+          teamId: invite.teamId,
+          userId: user.id,
+          displayName,
+          email,
+        });
+        await appendAuditEvent(conn, {
+          teamId: invite.teamId,
+          actorUserId: user.id,
+          action: 'team.join_requested',
+          entityType: 'join_request',
+          entityId: user.id,
+          metadata: { via: 'google', email },
+        });
+      });
+
+      return res.redirect(`/join/${parsedState.joinToken}?requested=1`);
+    }
+
+    const rawToken = generateOpaqueToken();
+    const tokenHash = sha256Hex(rawToken);
+    await withTransaction(pool, async (conn) => {
+      await insertSession(conn, {
+        id: uuidv7(),
+        userId: user.id,
+        tokenHash,
+        sessionVersion: user.sessionVersion,
+        ttlDays: SESSION_TTL_DAYS,
+      });
+      await updateUserLoginTimestamp(conn, user.id);
+    });
+
+    const session = await findActiveSessionByTokenHash(pool, tokenHash);
+    if (!session) {
+      return res.redirect('/login?error=no_active_team');
+    }
+
+    setSessionCookie(res, rawToken);
+    return res.redirect(parsedState.next || '/today');
+  }
+
+  @Post('join-requests')
+  @HttpCode(200)
+  async submitJoinRequest(
+    @Body(new ZodValidationPipe(SubmitJoinRequestSchema)) body: SubmitJoinRequestInput,
+  ) {
+    const pool = getPool()!;
+    const invite = await findInviteByHash(pool, sha256Hex(body.token));
+    if (!invite || new Date(invite.expiresAt).getTime() <= Date.now()) {
+      throw new BadRequestException({
+        code: 'INVALID_JOIN_LINK',
+        message: 'Join link is invalid or has expired',
+      });
+    }
+
+    if (!body.email) {
+      throw new BadRequestException({
+        code: 'EMAIL_REQUIRED',
+        message: 'Email address is required',
+      });
+    }
+
+    const email = body.email.trim().toLowerCase();
+    let existingUser = await findUserForLogin(pool, email);
+
+    if (!existingUser) {
+      if (!body.password) {
+        throw new BadRequestException({
+          code: 'PASSWORD_REQUIRED',
+          message: 'Password (min 8 characters) is required for new accounts',
+        });
+      }
+      const userId = uuidv7();
+      const passwordHash = await hashPassword(body.password);
+      await withTransaction(pool, async (conn) => {
+        await insertUser(conn, {
+          id: userId,
+          name: body.name.trim(),
+          email,
+          passwordHash,
+        });
+      });
+      existingUser = await findUserForLogin(pool, email);
+    } else if (body.password) {
+      const ok = await verifyPassword(existingUser.passwordHash, body.password);
+      if (!ok) {
+        throw new UnauthorizedException({
+          code: 'INVALID_CREDENTIALS',
+          message: 'Incorrect password for this existing email account',
+        });
+      }
+    }
+
+    if (!existingUser) {
+      throw new BadRequestException({ code: 'USER_ERROR', message: 'Could not create user' });
+    }
+
+    const teamName = await withTransaction(pool, async (conn) => {
+      await upsertPendingJoinRequest(conn, {
+        id: uuidv7(),
+        teamId: invite.teamId,
+        userId: existingUser.id,
+        displayName: body.name.trim(),
+        email,
+      });
+      await appendAuditEvent(conn, {
+        teamId: invite.teamId,
+        actorUserId: existingUser.id,
+        action: 'team.join_requested',
+        entityType: 'join_request',
+        entityId: existingUser.id,
+        metadata: { via: 'form', email },
+      });
+      return findTeamNameById(conn, invite.teamId);
+    });
+
+    return { ok: true, status: 'pending', teamName: teamName ?? 'Team' };
   }
 }

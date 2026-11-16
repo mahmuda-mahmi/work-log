@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AuthSession, FollowupItemDto, FollowupStatus } from '@cghq/contracts';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArrowUpRight, Pencil, Plus, Trash2 } from 'lucide-react';
 import { ApiError, dictionaryApi, followupsApi, teamsApi } from '../api/client.js';
 import { Alert } from '../components/ui/alert.js';
 import { Badge } from '../components/ui/badge.js';
@@ -50,8 +50,15 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
   const [completedByMemberId, setCompletedByMemberId] = useState<string>('');
   const [completedByLabel, setCompletedByLabel] = useState('As Previous');
   const [editing, setEditing] = useState<EditRowState | null>(null);
+  const [movingToDaily, setMovingToDaily] = useState<{
+    id: string;
+    categoryName: string;
+    titleName: string;
+    statusText: string;
+  } | null>(null);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const followupsQuery = useQuery({
     queryKey: ['followups', teamId, includeArchived],
@@ -148,6 +155,21 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
     },
   });
 
+  const moveToDailyMutation = useMutation({
+    mutationFn: (payload: { id: string; statusText: string }) =>
+      followupsApi.moveToDaily(teamId, payload.id, payload.statusText.trim()),
+    onSuccess: () => {
+      setMovingToDaily(null);
+      setErrorMsg(null);
+      setSuccessMsg("Moved to today's Daily Work.");
+      void queryClient.invalidateQueries({ queryKey: ['followups', teamId] });
+      void queryClient.invalidateQueries({ queryKey: ['report', teamId] });
+    },
+    onError: (err) => {
+      setErrorMsg(err instanceof ApiError ? err.message : 'Failed to move to Daily Work');
+    },
+  });
+
   const activeMembers = (membersQuery.data ?? []).filter((m) => m.isActive);
   const items = followupsQuery.data ?? [];
 
@@ -185,6 +207,7 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
   return (
     <div className="flex flex-col gap-3.5">
       {errorMsg && <Alert variant="destructive">{errorMsg}</Alert>}
+      {successMsg && <Alert variant="success">{successMsg}</Alert>}
 
       {showAddForm && (
         <Card className="border-t-2 border-t-primary">
@@ -525,6 +548,63 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
                       );
                     }
 
+                    if (movingToDaily?.id === item.id) {
+                      return (
+                        <tr key={item.id} className="border-b border-zinc-200">
+                          <td colSpan={6} className="bg-zinc-50 p-3">
+                            <div className="grid gap-3 rounded-md border border-orange-300 border-l-4 border-l-primary bg-white p-3.5">
+                              <div className="border-b border-zinc-100 pb-2 text-xs font-bold text-zinc-950">
+                                Move Follow-up #{idx + 1} to Today&apos;s Daily Work (
+                                {movingToDaily.categoryName} / {movingToDaily.titleName})
+                              </div>
+                              <div className="grid gap-1.5">
+                                <Label>Updated Status for Today&apos;s Report</Label>
+                                <Textarea
+                                  rows={2}
+                                  value={movingToDaily.statusText}
+                                  onChange={(e) =>
+                                    setMovingToDaily({
+                                      ...movingToDaily,
+                                      statusText: e.target.value,
+                                    })
+                                  }
+                                />
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  disabled={
+                                    moveToDailyMutation.isPending ||
+                                    !movingToDaily.statusText.trim()
+                                  }
+                                  onClick={() =>
+                                    moveToDailyMutation.mutate({
+                                      id: movingToDaily.id,
+                                      statusText: movingToDaily.statusText,
+                                    })
+                                  }
+                                >
+                                  <ArrowUpRight className="h-3.5 w-3.5" />
+                                  {moveToDailyMutation.isPending
+                                    ? 'Moving…'
+                                    : "Move to Today's Daily Work"}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setMovingToDaily(null)}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    }
+
                     return (
                       <tr key={item.id} className="border-b border-zinc-200 last:border-b-0">
                         <td className="border-r border-zinc-200 p-2.5 text-center align-top">
@@ -557,24 +637,42 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
                         </td>
                         <td className="p-2.5 align-top">
                           {item.status !== 'archived' && (
-                            <div className="flex flex-wrap items-center justify-end gap-1.5">
+                            <div className="flex flex-wrap items-center justify-end gap-1">
                               <Button
                                 type="button"
                                 variant="outline"
-                                size="xs"
+                                size="icon-xs"
+                                title="Move to today's Daily Work"
+                                onClick={() => {
+                                  setSuccessMsg(null);
+                                  setMovingToDaily({
+                                    id: item.id,
+                                    categoryName: item.categoryName,
+                                    titleName: item.titleName,
+                                    statusText: item.statusText,
+                                  });
+                                }}
+                              >
+                                <ArrowUpRight className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon-xs"
+                                title="Edit follow-up"
                                 onClick={() => startEdit(item)}
                               >
                                 <Pencil className="h-3 w-3" />
-                                Edit
                               </Button>
                               <Button
                                 type="button"
                                 variant="destructive"
-                                size="xs"
+                                size="icon-xs"
+                                title="Delete follow-up"
+                                disabled={archiveMutation.isPending}
                                 onClick={() => setDeleteTargetId(item.id)}
                               >
                                 <Trash2 className="h-3 w-3" />
-                                Delete
                               </Button>
                             </div>
                           )}

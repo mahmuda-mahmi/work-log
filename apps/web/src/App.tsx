@@ -20,6 +20,9 @@ const HistoryScreen = lazy(() =>
 const InviteAcceptScreen = lazy(() =>
   import('./screens/InviteAcceptScreen').then((m) => ({ default: m.InviteAcceptScreen })),
 );
+const JoinTeamScreen = lazy(() =>
+  import('./screens/JoinTeamScreen').then((m) => ({ default: m.JoinTeamScreen })),
+);
 const LoginScreen = lazy(() =>
   import('./screens/LoginScreen').then((m) => ({ default: m.LoginScreen })),
 );
@@ -193,6 +196,7 @@ export function App() {
         <Route path="/" element={<LandingScreen />} />
         <Route path="/login" element={<LoginScreen />} />
         <Route path="/invite/:token" element={<InviteAcceptScreen />} />
+        <Route path="/join/:token" element={<JoinTeamScreen />} />
         <Route path="/reset-password/:token" element={<ResetPasswordScreen />} />
         <Route path="/*" element={<AuthenticatedShell />} />
       </Routes>

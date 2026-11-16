@@ -139,9 +139,14 @@ export const CreateFollowupSchema = z.object({
   titleName: z.string().trim().min(1).max(120),
   statusText: z.string().trim().min(1).max(4000),
   completedByMemberId: z.string().uuid().nullable().optional().default(null),
-  completedByLabel: z.string().trim().min(1).max(80).nullable().optional().default('As Previous'),
+  completedByLabel: z.string().trim().max(80).nullable().optional().default('As Previous'),
 });
 export type CreateFollowupInput = z.infer<typeof CreateFollowupSchema>;
+
+export const MoveFollowupToDailySchema = z.object({
+  statusText: z.string().trim().min(1).max(4000).optional(),
+});
+export type MoveFollowupToDailyInput = z.infer<typeof MoveFollowupToDailySchema>;
 
 export const UpdateFollowupSchema = z.object({
   categoryName: z.string().trim().max(80).optional(),

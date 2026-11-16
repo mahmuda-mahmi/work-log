@@ -78,3 +78,21 @@ export const AuthSessionSchema = z.object({
   }),
 });
 export type AuthSession = z.infer<typeof AuthSessionSchema>;
+
+export const SubmitJoinRequestSchema = z.object({
+  token: z.string().trim().min(16).max(256),
+  name: z.string().trim().min(1).max(120),
+  email: EmailSchema.optional(),
+  password: PasswordSchema.optional(),
+});
+export type SubmitJoinRequestInput = z.infer<typeof SubmitJoinRequestSchema>;
+
+export interface TeamJoinRequestDto {
+  id: string;
+  teamId: string;
+  userId: string;
+  name: string;
+  email: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
+}

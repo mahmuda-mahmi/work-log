@@ -16,6 +16,8 @@ import type {
   ReorderIdsInput,
   ReportExportInfo,
   ReportHistoryItem,
+  SubmitJoinRequestInput,
+  TeamJoinRequestDto,
   TeamSettings,
   UpdateEntryInput,
   UpdateFollowupInput,
@@ -63,7 +65,8 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
 }
 
 export const authApi = {
-  bootstrapStatus: () => apiFetch<{ needsBootstrap: boolean }>('/api/auth/bootstrap-status'),
+  bootstrapStatus: () =>
+    apiFetch<{ needsBootstrap: boolean; googleEnabled?: boolean }>('/api/auth/bootstrap-status'),
   bootstrap: (body: BootstrapLeadInput) =>
     apiFetch<{ ok: boolean; teamId: string }>('/api/auth/bootstrap', {
       method: 'POST',
@@ -78,6 +81,11 @@ export const authApi = {
   me: () => apiFetch<AuthSession>('/api/auth/me'),
   acceptInvite: (body: AcceptInviteInput) =>
     apiFetch<{ ok: boolean; teamId: string }>('/api/auth/invites/accept', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  submitJoinRequest: (body: SubmitJoinRequestInput) =>
+    apiFetch<{ ok: boolean; status: string; teamName: string }>('/api/auth/join-requests', {
       method: 'POST',
       body: JSON.stringify(body),
     }),
@@ -101,6 +109,21 @@ export const teamsApi = {
       `/api/teams/${teamId}/invites`,
       { method: 'POST', body: JSON.stringify(body) },
     ),
+  createJoinLink: (teamId: string) =>
+    apiFetch<{ inviteId: string; token: string; joinPath: string }>(
+      `/api/teams/${teamId}/join-link`,
+      { method: 'POST' },
+    ),
+  listJoinRequests: (teamId: string) =>
+    apiFetch<TeamJoinRequestDto[]>(`/api/teams/${teamId}/join-requests`),
+  approveJoinRequest: (teamId: string, requestId: string) =>
+    apiFetch<{ ok: boolean }>(`/api/teams/${teamId}/join-requests/${requestId}/approve`, {
+      method: 'POST',
+    }),
+  rejectJoinRequest: (teamId: string, requestId: string) =>
+    apiFetch<{ ok: boolean }>(`/api/teams/${teamId}/join-requests/${requestId}/reject`, {
+      method: 'POST',
+    }),
   changeRole: (teamId: string, memberId: string, role: 'lead' | 'member') =>
     apiFetch<{ ok: boolean }>(`/api/teams/${teamId}/members/${memberId}/role`, {
       method: 'PATCH',
@@ -257,4 +280,12 @@ export const followupsApi = {
     apiFetch<{ ok: boolean }>(`/api/teams/${teamId}/followups/${followupId}`, {
       method: 'DELETE',
     }),
+  moveToDaily: (teamId: string, followupId: string, statusText?: string) =>
+    apiFetch<{ ok: boolean; reportDate: string; entryId: string }>(
+      `/api/teams/${teamId}/followups/${followupId}/move-to-daily`,
+      {
+        method: 'POST',
+        body: JSON.stringify(statusText ? { statusText } : {}),
+      },
+    ),
 };
