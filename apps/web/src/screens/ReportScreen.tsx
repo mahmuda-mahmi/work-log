@@ -414,7 +414,7 @@ export function ReportScreen({ session }: ReportScreenProps) {
             {err instanceof ApiError ? err.message : 'Could not load report for this date.'}
           </Alert>
           <div>
-            <Button type="button" variant="outline" size="sm" onClick={() => navigate('/')}>
+            <Button type="button" variant="outline" size="sm" onClick={() => navigate('/today')}>
               Go to Today&apos;s Report
             </Button>
           </div>
@@ -474,7 +474,7 @@ export function ReportScreen({ session }: ReportScreenProps) {
             <strong>{report.todayDate}</strong> (you are viewing{' '}
             <strong>{report.reportDate}</strong>).
           </span>
-          <Button type="button" variant="dark" size="sm" onClick={() => navigate('/')}>
+          <Button type="button" variant="dark" size="sm" onClick={() => navigate('/today')}>
             Jump to Today
           </Button>
         </Alert>
@@ -496,7 +496,7 @@ export function ReportScreen({ session }: ReportScreenProps) {
                   const next = e.target.value;
                   if (!next) return;
                   if (next === report.todayDate) {
-                    navigate('/');
+                    navigate('/today');
                   } else {
                     navigate(`/reports/${next}`);
                   }

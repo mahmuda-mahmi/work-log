@@ -24,7 +24,7 @@ export function InviteAcceptScreen() {
     mutationFn: authApi.acceptInvite,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['me'] });
-      navigate('/');
+      navigate('/today');
     },
     onError: (err: Error) => setErrorMsg(err.message),
   });

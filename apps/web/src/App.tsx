@@ -8,6 +8,7 @@ import { PageCardSkeleton, WorkspaceShellSkeleton } from './components/Workspace
 import { Badge } from './components/ui/badge';
 import { Button } from './components/ui/button';
 import { cn } from './lib/utils';
+import { LandingScreen } from './screens/LandingScreen';
 import { ReportScreen } from './screens/ReportScreen';
 
 const FollowupsScreen = lazy(() =>
@@ -95,7 +96,7 @@ function AuthenticatedShell() {
 
   const path = location.pathname;
   const navItems = [
-    { to: '/', label: 'Today', active: path === '/' || path.startsWith('/reports/') },
+    { to: '/today', label: 'Today', active: path === '/today' || path.startsWith('/reports/') },
     { to: '/followups', label: 'Follow-ups', active: path.startsWith('/followups') },
     { to: '/history', label: 'History', active: path.startsWith('/history') },
     { to: '/settings', label: 'Settings', active: path.startsWith('/settings') },
@@ -106,13 +107,17 @@ function AuthenticatedShell() {
       <header className="no-print sticky top-0 z-40 w-full border-t-[3px] border-t-primary border-b border-b-zinc-800 bg-zinc-950 text-white shadow-sm">
         <div className="mx-auto flex min-h-14 w-full max-w-[1440px] flex-wrap items-center justify-between gap-3 px-4 py-1.5 sm:px-6">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="flex h-9 shrink-0 items-center justify-center rounded-md border border-zinc-800 bg-white px-2.5">
+            <Link
+              to="/"
+              title="Back to Landing Page"
+              className="flex h-9 shrink-0 items-center justify-center rounded-md border border-zinc-800 bg-white px-2.5 transition-opacity hover:opacity-90"
+            >
               <img
                 src="/default-logo.png"
                 alt="Solution Art"
                 className="h-6 w-auto object-contain"
               />
-            </div>
+            </Link>
             <div className="flex flex-col min-w-0">
               <div className="flex items-center gap-2">
                 <span className="truncate text-sm font-bold tracking-tight text-white">
@@ -168,12 +173,12 @@ function AuthenticatedShell() {
       <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-4 sm:px-6 sm:py-5">
         <Suspense fallback={<PageCardSkeleton rows={5} />}>
           <Routes>
-            <Route path="/" element={<ReportScreen session={session} />} />
+            <Route path="/today" element={<ReportScreen session={session} />} />
             <Route path="/reports/:date" element={<ReportScreen session={session} />} />
             <Route path="/followups" element={<FollowupsScreen session={session} />} />
             <Route path="/history" element={<HistoryScreen session={session} />} />
             <Route path="/settings" element={<SettingsScreen session={session} />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<Navigate to="/today" replace />} />
           </Routes>
         </Suspense>
       </main>
@@ -185,6 +190,7 @@ export function App() {
   return (
     <Suspense fallback={<WorkspaceShellSkeleton />}>
       <Routes>
+        <Route path="/" element={<LandingScreen />} />
         <Route path="/login" element={<LoginScreen />} />
         <Route path="/invite/:token" element={<InviteAcceptScreen />} />
         <Route path="/reset-password/:token" element={<ResetPasswordScreen />} />

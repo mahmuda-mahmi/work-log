@@ -31,7 +31,7 @@ export function LoginScreen() {
     mutationFn: authApi.login,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['me'] });
-      navigate('/');
+      navigate('/today');
     },
     onError: (err: Error) => setErrorMsg(err.message),
   });
@@ -41,7 +41,7 @@ export function LoginScreen() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['me'] });
       await queryClient.invalidateQueries({ queryKey: ['bootstrap-status'] });
-      navigate('/');
+      navigate('/today');
     },
     onError: (err: Error) => setErrorMsg(err.message),
   });
