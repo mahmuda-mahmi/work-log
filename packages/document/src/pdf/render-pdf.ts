@@ -1,7 +1,3 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import fontkit from '@pdf-lib/fontkit';
 import {
   PDFDocument,
   type PDFFont,
@@ -12,27 +8,6 @@ import {
 } from 'pdf-lib';
 import type { DocumentModel, DocumentRow } from '../model.js';
 import { FONT, HEADER, PAGE, TABLE, TWIPS_PER_PT } from '../tokens.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const FONTS_DIR = path.resolve(__dirname, '../../assets/fonts');
-
-let cachedFonts: { regular: Uint8Array; bold: Uint8Array } | null = null;
-
-function loadFonts(): { regular: Uint8Array; bold: Uint8Array } | null {
-  if (!cachedFonts) {
-    try {
-      const regularPath = path.join(FONTS_DIR, 'LiberationSerif-Regular.ttf');
-      const boldPath = path.join(FONTS_DIR, 'LiberationSerif-Bold.ttf');
-      cachedFonts = {
-        regular: fs.readFileSync(regularPath),
-        bold: fs.readFileSync(boldPath),
-      };
-    } catch {
-      return null;
-    }
-  }
-  return cachedFonts;
-}
 
 function wrapText(text: string, font: PDFFont, fontSize: number, maxWidth: number): string[] {
   const result: string[] = [];
@@ -183,18 +158,12 @@ function measureRow(
  */
 export async function renderPdf(model: DocumentModel): Promise<Buffer> {
   const pdfDoc = await PDFDocument.create();
-  pdfDoc.registerFontkit(fontkit);
   pdfDoc.setTitle(model.documentTitle);
   pdfDoc.setSubject('Daily Work Report');
   pdfDoc.setCreator('CGHQ Team Work Report');
 
-  const customFonts = loadFonts();
-  const regularFont = customFonts
-    ? await pdfDoc.embedFont(customFonts.regular)
-    : await pdfDoc.embedFont(StandardFonts.TimesRoman);
-  const boldFont = customFonts
-    ? await pdfDoc.embedFont(customFonts.bold)
-    : await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
+  const regularFont = await pdfDoc.embedFont(StandardFonts.TimesRoman);
+  const boldFont = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
 
   let embeddedLogo: PDFImage | null = null;
   if (model.logoBytes) {
@@ -226,7 +195,7 @@ export async function renderPdf(model: DocumentModel): Promise<Buffer> {
         width: HEADER.logoWidthPt,
         height: HEADER.logoHeightPt,
       });
-      y -= HEADER.spacerFontPt + 6;
+      y -= 20;
     }
 
     const titleWidth = boldFont.widthOfTextAtSize(model.documentTitle, HEADER.titleFontPt);
@@ -239,7 +208,7 @@ export async function renderPdf(model: DocumentModel): Promise<Buffer> {
       color: rgb(0, 0, 0),
     });
 
-    cursorY = Math.min(y - 18, pageHeight - PAGE.marginsPt.top);
+    cursorY = Math.min(y - 22, pageHeight - PAGE.marginsPt.top);
   }
 
   function drawRow(layout: LayoutRow, colWidthsPt: number[]) {

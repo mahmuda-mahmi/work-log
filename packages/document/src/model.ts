@@ -58,6 +58,12 @@ function normalizeGroupKey(category: string, title: string): string {
   return `${category.trim().toLowerCase()}\u0000${title.trim().toLowerCase()}`;
 }
 
+function capitalizeFirst(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+}
+
 /**
  * Builds the deterministic DocumentModel consumed by both DOCX and PDF renderers.
  * Implements PRD FR-7 (grouping & Ser), Q1 (zero-padded date), Q2 (individual Completed By),
@@ -82,8 +88,8 @@ export function buildDocumentModel(input: ReportDocumentInput): DocumentModel {
     let group = groups.get(key);
     if (!group) {
       group = {
-        category: entry.categoryName.trim(),
-        title: entry.titleName.trim(),
+        category: capitalizeFirst(entry.categoryName),
+        title: capitalizeFirst(entry.titleName),
         numberingMode: entry.numberingMode ?? 'numbered',
         items: [],
       };
@@ -128,8 +134,8 @@ export function buildDocumentModel(input: ReportDocumentInput): DocumentModel {
         ]
       : input.followups.map((item, idx) => ({
           ser: String(idx + 1),
-          category: item.categoryName.trim(),
-          title: item.titleName.trim(),
+          category: capitalizeFirst(item.categoryName),
+          title: capitalizeFirst(item.titleName),
           status: item.statusText.trim(),
           completedBy: item.completedBy.trim(),
           groupMerge: 'none',
