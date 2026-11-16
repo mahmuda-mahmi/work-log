@@ -102,7 +102,6 @@ export function buildDocumentModel(input: ReportDocumentInput): DocumentModel {
     const isSingle = group.items.length === 1;
 
     group.items.forEach((item, idx) => {
-      const statusPrefix = group.numberingMode === 'numbered' ? `${idx + 1}.` : undefined;
       mainRows.push({
         ser: idx === 0 ? serStr : '',
         category: idx === 0 ? group.category : '',
@@ -110,7 +109,7 @@ export function buildDocumentModel(input: ReportDocumentInput): DocumentModel {
         status: item.statusText.trim(),
         completedBy: item.completedBy.trim(),
         groupMerge: isSingle ? 'none' : idx === 0 ? 'restart' : 'continue',
-        statusPrefix,
+        statusPrefix: undefined,
       });
     });
   }

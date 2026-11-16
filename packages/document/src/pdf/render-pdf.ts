@@ -412,7 +412,7 @@ export async function renderPdf(model: DocumentModel): Promise<Buffer> {
     font: regularFont,
     color: rgb(0, 0, 0),
   });
-  cursorY -= 14;
+  cursorY -= 18;
 
   // Table 1: Daily Work Status
   renderTable(model.mainRows, TABLE.mainColumnsTwips, true);
@@ -421,10 +421,10 @@ export async function renderPdf(model: DocumentModel): Promise<Buffer> {
   renderTable(model.followupRows, TABLE.followupColumnsTwips, false, 'Follow-up Items:');
 
   // Prepared By
-  if (cursorY - 28 < bottomMargin) {
+  if (cursorY - 32 < bottomMargin) {
     startNewPage();
   }
-  cursorY -= 20;
+  cursorY -= 24;
   const prepLabel = 'Prepared By: ';
   const prepLabelWidth = boldFont.widthOfTextAtSize(prepLabel, FONT.bodyPt);
   page.drawText(prepLabel, {

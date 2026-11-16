@@ -242,13 +242,6 @@ export class ReportsController {
     const reportDate = assertValidIsoDate(dateParam);
     const todayDate = getTeamTodayDate(auth.teamTimezone);
 
-    if (body.completedByMemberIds.length === 0 && !body.completedByLabel) {
-      throw new BadRequestException({
-        code: 'COMPLETED_BY_REQUIRED',
-        message: 'Select at least one member or provide a label',
-      });
-    }
-
     const createdIds: string[] = [];
 
     await withTransaction(pool, async (conn) => {

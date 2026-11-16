@@ -15,16 +15,16 @@ export const PAGE = {
   marginsTwips: {
     top: 1440,
     bottom: 1440,
-    left: 1440,
-    right: 0,
+    left: 1196,
+    right: 1196,
     header: 720,
     footer: 720,
   },
   marginsPt: {
     top: 72,
     bottom: 72,
-    left: 72,
-    right: 0,
+    left: 59.82,
+    right: 59.82,
     header: 36,
     footer: 36,
   },
@@ -51,8 +51,8 @@ export const FONT = {
 export const TABLE = {
   totalWidthTwips: 14445,
   totalWidthPt: 14445 / TWIPS_PER_PT,
-  indentTwips: -780,
-  indentPt: -780 / TWIPS_PER_PT,
+  indentTwips: 0,
+  indentPt: 0,
   borderSizeEighths: 7, // 0.875 pt
   borderPt: 0.875,
   borderColor: '000000',
