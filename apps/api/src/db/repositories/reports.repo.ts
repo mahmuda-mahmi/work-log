@@ -326,6 +326,17 @@ export async function findWorkEntryForEdit(
   };
 }
 
+export async function findWorkGroupCategoryAndTitleIds(
+  conn: Conn,
+  groupId: string,
+): Promise<{ categoryId: string; titleId: string } | null> {
+  const [rows] = await conn.execute<
+    Array<RowDataPacket & { category_id: string; title_id: string }>
+  >(`SELECT category_id, title_id FROM work_groups WHERE id = ? LIMIT 1`, [groupId]);
+  const r = rows[0];
+  return r ? { categoryId: r.category_id, titleId: r.title_id } : null;
+}
+
 export async function updateWorkEntryOptimistic(
   conn: PoolConnection,
   params: {

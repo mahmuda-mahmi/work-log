@@ -208,6 +208,11 @@ export const reportsApi = {
     apiFetch<{ ok: boolean }>(`/api/teams/${teamId}/reports/${date}/entries/${entryId}`, {
       method: 'DELETE',
     }),
+  moveEntryToFollowup: (teamId: string, date: string, entryId: string) =>
+    apiFetch<{ ok: boolean }>(
+      `/api/teams/${teamId}/reports/${date}/entries/${entryId}/move-to-followup`,
+      { method: 'POST' },
+    ),
   reorderGroups: (teamId: string, date: string, body: ReorderIdsInput) =>
     apiFetch<{ ok: boolean }>(`/api/teams/${teamId}/reports/${date}/groups/reorder`, {
       method: 'PUT',

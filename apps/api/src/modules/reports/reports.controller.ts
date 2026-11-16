@@ -61,7 +61,12 @@ import {
   listReportHistory,
   reopenDailyReportRow,
 } from '../../db/repositories/exports.repo.js';
-import { listTeamFollowups } from '../../db/repositories/followups.repo.js';
+import {
+  findExistingActiveFollowup,
+  getNextFollowupPosition,
+  insertFollowupItem,
+  listTeamFollowups,
+} from '../../db/repositories/followups.repo.js';
 import {
   assembleDailyReportDto,
   bumpDailyReportVersion,
@@ -71,6 +76,7 @@ import {
   findReportByDate,
   findReportForUpdate,
   findWorkEntryForEdit,
+  findWorkGroupCategoryAndTitleIds,
   getNextEntryPosition,
   insertIgnoreDailyReport,
   insertWorkEntry,
@@ -427,6 +433,78 @@ export class ReportsController {
         entityType: 'work_entry',
         entityId: entryId,
       });
+    });
+
+    return { ok: true };
+  }
+
+  @Post(':date/entries/:entryId/move-to-followup')
+  async moveEntryToFollowup(
+    @Param('teamId') teamId: string,
+    @Param('entryId') entryId: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const pool = getPool()!;
+    const auth = req.auth!;
+
+    await withTransaction(pool, async (conn) => {
+      const found = await findWorkEntryForEdit(conn, entryId, teamId);
+      if (!found) {
+        throw new NotFoundException({ code: 'ENTRY_NOT_FOUND', message: 'Entry not found' });
+      }
+      if (found.reportStatus === 'finalized') {
+        throw new ConflictException({
+          code: 'REPORT_FINALIZED',
+          message: 'Report was finalized and cannot be edited',
+        });
+      }
+      if (auth.role !== 'lead' && found.entry.createdByUserId !== auth.userId) {
+        throw new ForbiddenException({
+          code: 'FORBIDDEN_ENTRY_MOVE',
+          message: 'You can only move entries you created',
+        });
+      }
+
+      const groupIds = await findWorkGroupCategoryAndTitleIds(conn, found.entry.groupId);
+      if (!groupIds) {
+        throw new NotFoundException({ code: 'GROUP_NOT_FOUND', message: 'Work group not found' });
+      }
+
+      const existingDup = await findExistingActiveFollowup(conn, {
+        teamId,
+        categoryId: groupIds.categoryId,
+        titleId: groupIds.titleId,
+        statusText: found.entry.statusText,
+      });
+
+      if (!existingDup) {
+        const position = await getNextFollowupPosition(conn, teamId);
+        await insertFollowupItem(conn, {
+          id: uuidv7(),
+          teamId,
+          categoryId: groupIds.categoryId,
+          titleId: groupIds.titleId,
+          statusText: found.entry.statusText,
+          completedByMemberId: found.entry.completedByMemberId,
+          completedByLabel: found.entry.completedByMemberId
+            ? null
+            : found.entry.completedByLabel?.trim() || 'As Previous',
+          position,
+          actorUserId: auth.userId,
+        });
+      }
+
+      await softDeleteWorkEntry(conn, entryId, auth.userId);
+      await Promise.all([
+        bumpDailyReportVersion(conn, found.reportId),
+        appendAuditEvent(conn, {
+          teamId,
+          actorUserId: auth.userId,
+          action: 'entry.moved_to_followup',
+          entityType: 'work_entry',
+          entityId: entryId,
+        }),
+      ]);
     });
 
     return { ok: true };

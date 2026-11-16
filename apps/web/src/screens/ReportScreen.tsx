@@ -25,7 +25,6 @@ import {
 } from 'lucide-react';
 import {
   ApiError,
-  followupsApi,
   reportsApi,
 } from '../api/client.js';
 import { EntryComposer } from '../components/EntryComposer.js';
@@ -209,21 +208,47 @@ export function ReportScreen({ session }: ReportScreenProps) {
   });
 
   const promoteFollowupMutation = useMutation({
-    mutationFn: (payload: {
-      categoryName: string;
-      titleName: string;
-      statusText: string;
-      completedByMemberId: string | null;
-      completedByLabel: string | null;
-    }) => followupsApi.create(teamId, payload),
-    onSuccess: () => {
+    mutationFn: (entryId: string) => reportsApi.moveEntryToFollowup(teamId, activeDate, entryId),
+    onMutate: async (entryId: string) => {
+      await queryClient.cancelQueries({ queryKey: ['report', teamId] });
+      const previous = queryClient.getQueryData<WorkspaceBundle>([
+        'report',
+        teamId,
+        'workspace',
+        dateKey,
+      ]);
+
+      queryClient.setQueryData<WorkspaceBundle | undefined>(
+        ['report', teamId, 'workspace', dateKey],
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            report: {
+              ...old.report,
+              groups: old.report.groups.map((g) => ({
+                ...g,
+                entries: g.entries.filter((e) => e.id !== entryId),
+              })),
+            },
+          };
+        },
+      );
+
       setActionError(null);
-      setActionSuccess('Added to Follow-ups.');
+      setActionSuccess('Moved to Follow-ups.');
+      return { previous };
+    },
+    onError: (err, _entryId, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['report', teamId, 'workspace', dateKey], context.previous);
+      }
+      setActionSuccess(null);
+      setActionError(err instanceof ApiError ? err.message : 'Failed to move to follow-up');
+    },
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ['followups', teamId] });
       syncReportCache();
-    },
-    onError: (err) => {
-      setActionError(err instanceof ApiError ? err.message : 'Failed to promote to follow-up');
     },
   });
 
@@ -988,22 +1013,14 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                                   type="button"
                                                   variant="outline"
                                                   size="icon-xs"
-                                                  title="Promote to follow-up"
+                                                  title="Move to follow-up"
                                                   disabled={
                                                     promoteFollowupMutation.isPending ||
                                                     entry.id.startsWith('optimistic-')
                                                   }
                                                   onClick={() => {
                                                     setActionSuccess(null);
-                                                    promoteFollowupMutation.mutate({
-                                                      categoryName: group.categoryName,
-                                                      titleName: group.titleName,
-                                                      statusText: entry.statusText,
-                                                      completedByMemberId:
-                                                        entry.completedByMemberId,
-                                                      completedByLabel:
-                                                        entry.completedByLabel?.trim() || null,
-                                                    });
+                                                    promoteFollowupMutation.mutate(entry.id);
                                                   }}
                                                 >
                                                   <Forward className="h-3 w-3" />
