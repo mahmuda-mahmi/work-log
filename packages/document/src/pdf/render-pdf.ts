@@ -195,7 +195,7 @@ export async function renderPdf(model: DocumentModel): Promise<Buffer> {
         width: HEADER.logoWidthPt,
         height: HEADER.logoHeightPt,
       });
-      y -= 20;
+      y -= 30;
     }
 
     const titleWidth = boldFont.widthOfTextAtSize(model.documentTitle, HEADER.titleFontPt);

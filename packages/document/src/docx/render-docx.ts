@@ -80,7 +80,7 @@ function buildHeader(model: DocumentModel): Header {
     children.push(
       new Paragraph({
         alignment: AlignmentType.CENTER,
-        spacing: { before: 0, after: 0 },
+        spacing: { before: HEADER.titleBeforeTwips, after: HEADER.titleAfterTwips },
         children: [
           new ImageRun({
             type: 'png',
@@ -97,8 +97,8 @@ function buildHeader(model: DocumentModel): Header {
     children.push(
       new Paragraph({
         alignment: AlignmentType.CENTER,
-        spacing: { before: 0, after: 0 },
-        children: [makeRun('', { size: HEADER.spacerFontPt * 2 })],
+        spacing: { before: HEADER.titleBeforeTwips, after: HEADER.titleAfterTwips },
+        children: [makeRun(' ', { bold: true, size: HEADER.spacerFontPt * 2 })],
       }),
     );
   }
