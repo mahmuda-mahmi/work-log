@@ -960,6 +960,7 @@ export class ReportsController {
             access: 'private',
             contentType,
             addRandomSuffix: false,
+            allowOverwrite: true,
           });
         }
         await insertReportExport(pool, {
