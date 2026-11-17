@@ -67,6 +67,7 @@ interface LayoutRow {
     drawBottomBorder: boolean;
   }>;
   heightPt: number;
+  mergedHeightPt: number;
   groupMerge: 'none' | 'restart' | 'continue';
 }
 
@@ -142,13 +143,22 @@ function measureRow(
     };
   });
 
-  const maxContentHeight = Math.max(
-    ...cells.map((c) => c.lines.length * c.lineHeightPt + padY * 2),
+  const mergedHeightPt = Math.max(
+    ...cells.slice(0, 3).map((c) => c.lines.length * c.lineHeightPt + padY * 2),
   );
+  const bodyContentHeight = Math.max(
+    ...cells.slice(3).map((c) => c.lines.length * c.lineHeightPt + padY * 2),
+  );
+  const useDeferredMergedHeight =
+    !options.isHeader && options.allowVerticalMerge && row.groupMerge === 'restart';
+  const maxContentHeight = useDeferredMergedHeight
+    ? bodyContentHeight
+    : Math.max(mergedHeightPt, bodyContentHeight);
 
   return {
     cells,
     heightPt: Math.max(minHeight, maxContentHeight),
+    mergedHeightPt,
     groupMerge: row.groupMerge,
   };
 }
@@ -320,6 +330,8 @@ export async function renderPdf(model: DocumentModel): Promise<Buffer> {
 
     drawRow(headerLayout, colWidthsPt);
 
+    let remainingMergedHeightPt = 0;
+
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i]!;
       const nextRow = rows[i + 1];
@@ -334,6 +346,7 @@ export async function renderPdf(model: DocumentModel): Promise<Buffer> {
 
       if (cursorY - layout.heightPt < bottomMargin) {
         startNewPage();
+        remainingMergedHeightPt = 0;
         layout = measureRow(row, colWidthsPt, regularFont, boldFont, {
           isLastRowInGroup,
           isFirstRowOnPage: true,
@@ -342,6 +355,7 @@ export async function renderPdf(model: DocumentModel): Promise<Buffer> {
         });
       }
 
+      let isLastOnPage = false;
       // Check if next row will push to a new page so we close the bottom border cleanly
       if (nextRow) {
         const nextLayout = measureRow(nextRow, colWidthsPt, regularFont, boldFont, {
@@ -349,12 +363,28 @@ export async function renderPdf(model: DocumentModel): Promise<Buffer> {
           allowVerticalMerge,
         });
         if (cursorY - layout.heightPt - nextLayout.heightPt < bottomMargin) {
+          isLastOnPage = true;
           layout = measureRow(row, colWidthsPt, regularFont, boldFont, {
             isLastRowInGroup,
             isFirstRowOnPage: layout.cells[0]?.drawTopBorder && row.groupMerge === 'continue',
             isLastRowOnPage: true,
             allowVerticalMerge,
           });
+        }
+      }
+
+      if (allowVerticalMerge) {
+        if (row.groupMerge === 'restart') {
+          remainingMergedHeightPt = Math.max(0, layout.mergedHeightPt - layout.heightPt);
+        } else if (row.groupMerge === 'continue') {
+          remainingMergedHeightPt = Math.max(0, remainingMergedHeightPt - layout.heightPt);
+        } else {
+          remainingMergedHeightPt = 0;
+        }
+
+        if ((isLastRowInGroup || isLastOnPage) && remainingMergedHeightPt > 0) {
+          layout.heightPt += remainingMergedHeightPt;
+          remainingMergedHeightPt = 0;
         }
       }
 
