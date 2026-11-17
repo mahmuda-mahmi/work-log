@@ -132,15 +132,19 @@
 }
 
 /* Ensure high-contrast legibility for Tailwind zinc utility classes in dark mode */
-.dark .bg-white {
+.dark .bg-white,
+.dark [class*="bg-white/"] {
   background-color: #18181b !important;
 }
-.dark .bg-zinc-50 {
+.dark .bg-zinc-50,
+.dark [class*="bg-zinc-50/"] {
   background-color: #111114 !important;
 }
-.dark .bg-zinc-100 {
+.dark .bg-zinc-100,
+.dark [class*="bg-zinc-100/"] {
   background-color: #27272a !important;
 }
+.dark .text-black,
 .dark .text-zinc-950,
 .dark .text-zinc-900,
 .dark .text-zinc-800 {

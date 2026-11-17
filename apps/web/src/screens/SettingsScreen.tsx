@@ -439,7 +439,7 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
               </div>
 
               <div
-                className="rounded-md border border-zinc-200 bg-white p-3 text-black"
+                className="rounded-md border border-zinc-200 bg-white p-3 text-zinc-950"
                 style={{
                   fontFamily:
                     (docFontFamily ?? settings?.documentFontFamily ?? 'Liberation Serif') ===
@@ -694,7 +694,7 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
                 {members.map((m) => (
                   <li
                     key={m.id}
-                    className="flex flex-wrap items-center justify-between gap-2.5 rounded-md border border-zinc-200 bg-zinc-50/70 px-3 py-2.5"
+                    className="flex flex-wrap items-center justify-between gap-2.5 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2.5"
                   >
                     <div>
                       <div className="flex items-center gap-2">
