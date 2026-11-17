@@ -2,12 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { DailyReportDto, DictionaryCategory, MemberSummary, WorkEntryDto } from '@cghq/contracts';
 import { findUnsupportedLatinChars } from '@cghq/document/date';
-import { Plus } from 'lucide-react';
+import { List, Plus } from 'lucide-react';
 import { ApiError, reportsApi } from '../api/client.js';
 import { Alert } from './ui/alert.js';
 import { Badge } from './ui/badge.js';
 import { Button } from './ui/button.js';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js';
+import { Input } from './ui/input.js';
 import { Label } from './ui/label.js';
 import {
   Select,
@@ -126,6 +127,8 @@ export function EntryComposer({
 
   const [categoryName, setCategoryName] = useState('');
   const [titleName, setTitleName] = useState('');
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
+  const [isCustomTitle, setIsCustomTitle] = useState(false);
   const [communicationType, setCommunicationType] = useState<string>('');
   const [statusText, setStatusText] = useState('');
   const [completedByMemberIds, setCompletedByMemberIds] = useState<string[]>([]);
@@ -151,7 +154,7 @@ export function EntryComposer({
   }, [draftKey, lastPairKey]);
 
   useEffect(() => {
-    if (activeCategories.length === 0) return;
+    if (activeCategories.length === 0 || isCustomCategory) return;
     const defaultCategory =
       activeCategories.find((c) => c.name.trim().toLowerCase() === 'support') ??
       activeCategories[0]!;
@@ -159,14 +162,18 @@ export function EntryComposer({
     const matchedCat = activeCategories.find((c) => c.name === categoryName);
     if (!matchedCat) {
       setCategoryName(defaultCategory.name);
-      setTitleName(defaultCategory.titles[0]?.name ?? '');
+      if (!isCustomTitle) {
+        setTitleName(defaultCategory.titles[0]?.name ?? '');
+      }
       return;
     }
-    const matchedTitle = matchedCat.titles.find((t) => t.name === titleName);
-    if (!matchedTitle) {
-      setTitleName(matchedCat.titles[0]?.name ?? '');
+    if (!isCustomTitle) {
+      const matchedTitle = matchedCat.titles.find((t) => t.name === titleName);
+      if (!matchedTitle) {
+        setTitleName(matchedCat.titles[0]?.name ?? '');
+      }
     }
-  }, [activeCategories, categoryName, titleName]);
+  }, [activeCategories, categoryName, titleName, isCustomCategory, isCustomTitle]);
 
   useEffect(() => {
     if (!statusText) {
@@ -276,6 +283,8 @@ export function EntryComposer({
 
       setErrorMsg(null);
       writeJsonStorage(lastPairKey, { categoryName: vars.cat, titleName: vars.title });
+      setIsCustomCategory(false);
+      setIsCustomTitle(false);
       setCommunicationType('');
       setStatusText('');
       setCompletedByMemberIds([]);
@@ -377,49 +386,134 @@ export function EntryComposer({
           <div className="grid grid-cols-1 items-end gap-3 md:grid-cols-2 lg:grid-cols-[1fr_1.3fr_2.2fr_auto]">
             <div className="grid gap-1.5">
               <Label>Report Category</Label>
-              <Select
-                value={categoryName}
-                onValueChange={(nextCatName) => {
-                  setCategoryName(nextCatName);
-                  if (nextCatName.trim().toLowerCase() !== 'communication') {
-                    setCommunicationType('');
-                  }
-                  const nextCat = activeCategories.find((c) => c.name === nextCatName);
-                  setTitleName(nextCat?.titles[0]?.name ?? '');
-                }}
-                disabled={disabled || createMutation.isPending || activeCategories.length === 0}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {activeCategories.map((cat) => (
-                    <SelectItem key={cat.id} value={cat.name}>
-                      {cat.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {isCustomCategory ? (
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    value={categoryName}
+                    onChange={(e) => {
+                      const nextVal = e.target.value;
+                      setCategoryName(nextVal);
+                      if (nextVal.trim().toLowerCase() !== 'communication') {
+                        setCommunicationType('');
+                      }
+                    }}
+                    placeholder="Type new category…"
+                    disabled={disabled || createMutation.isPending}
+                    maxLength={80}
+                    autoFocus
+                  />
+                  {activeCategories.length > 0 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      title="Choose from existing categories"
+                      aria-label="Choose from existing categories"
+                      disabled={disabled || createMutation.isPending}
+                      onClick={() => {
+                        const fallbackCat = activeCategories[0]!;
+                        setIsCustomCategory(false);
+                        setIsCustomTitle(false);
+                        setCategoryName(fallbackCat.name);
+                        setTitleName(fallbackCat.titles[0]?.name ?? '');
+                      }}
+                    >
+                      <List className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <Select
+                  value={categoryName}
+                  onValueChange={(nextCatName) => {
+                    if (nextCatName === '__custom__') {
+                      setIsCustomCategory(true);
+                      setIsCustomTitle(true);
+                      setCategoryName('');
+                      setTitleName('');
+                      setCommunicationType('');
+                      return;
+                    }
+                    setCategoryName(nextCatName);
+                    if (nextCatName.trim().toLowerCase() !== 'communication') {
+                      setCommunicationType('');
+                    }
+                    const nextCat = activeCategories.find((c) => c.name === nextCatName);
+                    setIsCustomTitle(false);
+                    setTitleName(nextCat?.titles[0]?.name ?? '');
+                  }}
+                  disabled={disabled || createMutation.isPending}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {activeCategories.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.name}>
+                        {cat.name}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="__custom__">+ Type new category…</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
             </div>
 
             <div className="grid gap-1.5">
               <Label>Title</Label>
-              <Select
-                value={titleName}
-                onValueChange={setTitleName}
-                disabled={disabled || createMutation.isPending || titleOptions.length === 0}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select title" />
-                </SelectTrigger>
-                <SelectContent>
-                  {titleOptions.map((t) => (
-                    <SelectItem key={t.id} value={t.name}>
-                      {t.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {isCustomCategory || isCustomTitle ? (
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    value={titleName}
+                    onChange={(e) => setTitleName(e.target.value)}
+                    placeholder="Type new title…"
+                    disabled={disabled || createMutation.isPending}
+                    maxLength={120}
+                    autoFocus={!isCustomCategory}
+                  />
+                  {!isCustomCategory && titleOptions.length > 0 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      title="Choose from existing titles"
+                      aria-label="Choose from existing titles"
+                      disabled={disabled || createMutation.isPending}
+                      onClick={() => {
+                        setIsCustomTitle(false);
+                        setTitleName(titleOptions[0]?.name ?? '');
+                      }}
+                    >
+                      <List className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <Select
+                  value={titleName}
+                  onValueChange={(nextTitle) => {
+                    if (nextTitle === '__custom__') {
+                      setIsCustomTitle(true);
+                      setTitleName('');
+                      return;
+                    }
+                    setTitleName(nextTitle);
+                  }}
+                  disabled={disabled || createMutation.isPending}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select title" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {titleOptions.map((t) => (
+                      <SelectItem key={t.id} value={t.name}>
+                        {t.name}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="__custom__">+ Type new title…</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
             </div>
 
             <div className="grid gap-1.5 md:col-span-2 lg:col-span-1">

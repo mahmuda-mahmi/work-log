@@ -64,6 +64,7 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
   const [docTitle, setDocTitle] = useState<string | null>(null);
   const [filePrefix, setFilePrefix] = useState<string | null>(null);
   const [preparedBy, setPreparedBy] = useState<string | null>(null);
+  const [profileDisplayName, setProfileDisplayName] = useState<string | null>(null);
 
   async function copyToClipboard(text: string, key: string) {
     try {
@@ -74,6 +75,23 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
       setStatusMsg('Select the link and press Ctrl+C to copy.');
     }
   }
+
+  const saveProfile = useMutation({
+    mutationFn: () =>
+      teamsApi.updateProfile(teamId, {
+        displayName: (profileDisplayName ?? session.member.displayName).trim(),
+      }),
+    onSuccess: async (res) => {
+      setProfileDisplayName(res.displayName);
+      setStatusMsg(`Profile updated. Your DOC/PDF display name is now "${res.displayName}".`);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['me'] }),
+        queryClient.invalidateQueries({ queryKey: ['team-members', teamId] }),
+        queryClient.invalidateQueries({ queryKey: ['report', teamId] }),
+      ]);
+    },
+    onError: (err: Error) => setStatusMsg(err.message),
+  });
 
   const saveSettings = useMutation({
     mutationFn: () =>
@@ -211,6 +229,53 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
         {/* Left Column (5 cols) */}
         <div className="flex flex-col gap-4 lg:col-span-5">
+          <Card className="border-t-2 border-t-primary">
+            <CardHeader className="py-3">
+              <CardTitle>My Profile</CardTitle>
+              <CardDescription>
+                Choose the name shown for you in daily work entries, DOCX, and PDF exports.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3 pt-3">
+              <div className="text-xs text-zinc-500">
+                Signed in as <strong className="text-zinc-800">{session.user.name}</strong> (
+                {session.user.email})
+              </div>
+              <form
+                className="grid gap-3"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  saveProfile.mutate();
+                }}
+              >
+                <div className="grid gap-1.5">
+                  <Label htmlFor="set-profile-display-name">Display Name (DOC / PDF)</Label>
+                  <Input
+                    id="set-profile-display-name"
+                    value={profileDisplayName ?? session.member.displayName}
+                    onChange={(e) => setProfileDisplayName(e.target.value)}
+                    placeholder="e.g. Alex or Short Name"
+                    maxLength={80}
+                    required
+                  />
+                </div>
+                <div className="flex justify-end">
+                  <Button
+                    type="submit"
+                    size="sm"
+                    disabled={
+                      saveProfile.isPending ||
+                      !(profileDisplayName ?? session.member.displayName).trim()
+                    }
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                    {saveProfile.isPending ? 'Saving…' : 'Save Profile'}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+
           <Card className="border-t-2 border-t-primary">
             <CardHeader className="py-3">
               <CardTitle>Team Settings &amp; Branding</CardTitle>

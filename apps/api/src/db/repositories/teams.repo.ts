@@ -13,6 +13,7 @@ import {
   SELECT_TEAM_MEMBERS,
   SELECT_TEAM_MEMBER_BY_ID,
   SELECT_TEAM_SETTINGS,
+  UPDATE_MEMBER_DISPLAY_NAME,
   UPDATE_MEMBER_ROLE,
   UPDATE_TEAM_LOGO,
   UPDATE_TEAM_SETTINGS,
@@ -163,6 +164,15 @@ export async function findTeamMemberById(conn: DbClient, teamId: string, memberI
 export async function countActiveLeads(conn: DbClient, teamId: string): Promise<number> {
   const res = await conn.query<CountRow>(COUNT_ACTIVE_LEADS, [teamId]);
   return Number(res.rows[0]?.total ?? 0);
+}
+
+export async function updateMemberDisplayName(
+  conn: DbClient,
+  teamId: string,
+  memberId: string,
+  displayName: string,
+): Promise<void> {
+  await conn.query(UPDATE_MEMBER_DISPLAY_NAME, [displayName, memberId, teamId]);
 }
 
 export async function updateMemberRole(

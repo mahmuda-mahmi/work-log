@@ -38,6 +38,11 @@ export const UpdateMemberRoleSchema = z.object({
 });
 export type UpdateMemberRoleInput = z.infer<typeof UpdateMemberRoleSchema>;
 
+export const UpdateMemberProfileSchema = z.object({
+  displayName: z.string().trim().min(1).max(80),
+});
+export type UpdateMemberProfileInput = z.infer<typeof UpdateMemberProfileSchema>;
+
 export const MemberSummarySchema = z.object({
   id: z.string().uuid(),
   userId: z.string().uuid(),

@@ -26,6 +26,7 @@ import type {
   UpdateFollowupInput,
   UpdateGroupInput,
   UpdateGroupNumberingInput,
+  UpdateMemberProfileInput,
   UpdateTeamSettingsInput,
 } from '@cghq/contracts';
 
@@ -118,6 +119,11 @@ export const teamsApi = {
   getSettings: (teamId: string) => apiFetch<TeamSettings>(`/api/teams/${teamId}/settings`),
   updateSettings: (teamId: string, body: UpdateTeamSettingsInput) =>
     apiFetch<TeamSettings>(`/api/teams/${teamId}/settings`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  updateProfile: (teamId: string, body: UpdateMemberProfileInput) =>
+    apiFetch<{ displayName: string }>(`/api/teams/${teamId}/profile`, {
       method: 'PATCH',
       body: JSON.stringify(body),
     }),

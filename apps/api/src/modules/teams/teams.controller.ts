@@ -16,15 +16,18 @@ import {
 } from '@nestjs/common';
 import {
   CreateInviteSchema,
+  UpdateMemberProfileSchema,
   UpdateMemberRoleSchema,
   UpdateTeamSettingsSchema,
   type CreateInviteInput,
+  type UpdateMemberProfileInput,
   type UpdateMemberRoleInput,
   type UpdateTeamSettingsInput,
 } from '@cghq/contracts';
 import type { Response } from 'express';
 import {
   type AuthenticatedRequest,
+  invalidateSessionCache,
   SessionGuard,
   TeamLeadGuard,
   TeamScopeGuard,
@@ -51,6 +54,7 @@ import {
   insertInvite,
   insertPasswordReset,
   listTeamMembers,
+  updateMemberDisplayName,
   updateMemberRole,
   updateTeamSettings,
   upsertTeamLogo,
@@ -105,6 +109,31 @@ export class TeamsController {
     });
 
     return findTeamSettings(pool, teamId);
+  }
+
+  @Patch('profile')
+  async updateMyProfile(
+    @Param('teamId') teamId: string,
+    @Req() req: AuthenticatedRequest,
+    @Body(new ZodValidationPipe(UpdateMemberProfileSchema)) body: UpdateMemberProfileInput,
+  ) {
+    const pool = getPool()!;
+    const displayName = body.displayName.trim();
+
+    await withTransaction(pool, async (conn) => {
+      await updateMemberDisplayName(conn, teamId, req.auth!.memberId, displayName);
+      await appendAuditEvent(conn, {
+        teamId,
+        actorUserId: req.auth!.userId,
+        action: 'member.profile_updated',
+        entityType: 'team_member',
+        entityId: req.auth!.memberId,
+        metadata: { displayName },
+      });
+    });
+
+    invalidateSessionCache();
+    return { displayName };
   }
 
   @Get('members')

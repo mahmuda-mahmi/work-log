@@ -73,6 +73,12 @@ export const UPDATE_MEMBER_ROLE = `
   WHERE id = $2 AND team_id = $3
 `;
 
+export const UPDATE_MEMBER_DISPLAY_NAME = `
+  UPDATE team_members
+  SET display_name = $1
+  WHERE id = $2 AND team_id = $3
+`;
+
 export const DEACTIVATE_TEAM_MEMBER = `
   UPDATE team_members
   SET is_active = FALSE
