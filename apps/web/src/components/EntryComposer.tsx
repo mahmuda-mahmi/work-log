@@ -142,7 +142,7 @@ export function EntryComposer({
 
   useEffect(() => {
     const savedDraft = readJsonStorage<StoredDraft>(draftKey);
-    if (savedDraft) {
+    if (savedDraft && savedDraft.statusText?.trim()) {
       setCategoryName(savedDraft.categoryName ?? '');
       setTitleName(savedDraft.titleName ?? '');
       setStatusText(savedDraft.statusText ?? '');

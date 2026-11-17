@@ -304,15 +304,19 @@ export function ReportScreen({ session }: ReportScreenProps) {
     mutationFn: (payload: QuickAddState) => {
       const trimmedStatus = payload.statusText.trim();
       const isComm = payload.categoryName.trim().toLowerCase() === 'communication';
+      const hasCommPrefix = /^(officer|sailor)\s*:/i.test(trimmedStatus);
       const formattedStatus =
-        isComm && payload.communicationType && trimmedStatus
+        isComm && payload.communicationType && trimmedStatus && !hasCommPrefix
           ? `${payload.communicationType}: ${trimmedStatus}`
           : trimmedStatus;
+      const effectiveMemberIds = isNilCommunicationStatus(formattedStatus)
+        ? []
+        : payload.completedByMemberIds;
       return reportsApi.createEntry(teamId, activeDate, {
         categoryName: payload.categoryName,
         titleName: payload.titleName,
         statusLines: formattedStatus ? [formattedStatus] : [],
-        completedByMemberIds: payload.completedByMemberIds,
+        completedByMemberIds: effectiveMemberIds,
       });
     },
     onSuccess: () => {
@@ -835,7 +839,9 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                       titleName: group.titleName,
                                       communicationType: '',
                                       statusText: '',
-                                      completedByMemberIds: [],
+                                      completedByMemberIds: session.member.id
+                                        ? [session.member.id]
+                                        : [],
                                     })
                                   }
                                 >
@@ -1240,7 +1246,9 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                             titleName: group.titleName,
                                             communicationType: '',
                                             statusText: '',
-                                            completedByMemberIds: [],
+                                            completedByMemberIds: session.member.id
+                                              ? [session.member.id]
+                                              : [],
                                           })
                                         }
                                       >
