@@ -58,6 +58,23 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
       message?: string;
       [key: string]: unknown;
     };
+    if (
+      res.status === 401 &&
+      path !== '/api/auth/me' &&
+      path !== '/api/auth/login' &&
+      typeof window !== 'undefined' &&
+      !window.location.pathname.startsWith('/login') &&
+      !window.location.pathname.startsWith('/invite/') &&
+      !window.location.pathname.startsWith('/join/') &&
+      !window.location.pathname.startsWith('/reset-password/')
+    ) {
+      try {
+        window.localStorage.removeItem('cghq:session');
+      } catch {
+        // Ignore
+      }
+      window.location.replace('/login');
+    }
     throw new ApiError(
       res.status,
       body.code ?? 'HTTP_ERROR',
