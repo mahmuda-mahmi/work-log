@@ -22,6 +22,7 @@ export const SELECT_CATEGORY_BY_NAME = `
 export const INSERT_CATEGORY = `
   INSERT INTO categories (id, team_id, name, position, is_active)
   VALUES ($1, $2, $3, $4, TRUE)
+  ON CONFLICT DO NOTHING
 `;
 
 export const SELECT_NEXT_CATEGORY_POSITION = `
@@ -40,6 +41,7 @@ export const SELECT_TITLE_BY_NAME = `
 export const INSERT_TITLE = `
   INSERT INTO titles (id, team_id, category_id, name, position, is_active)
   VALUES ($1, $2, $3, $4, $5, TRUE)
+  ON CONFLICT DO NOTHING
 `;
 
 export const SELECT_NEXT_TITLE_POSITION = `

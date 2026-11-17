@@ -75,10 +75,16 @@ export async function findOrCreateCategoryAndTitle(
   const existingCats = await conn.query<FoundRow>(SELECT_CATEGORY_BY_NAME, [teamId, trimmedCat]);
   let categoryId = existingCats.rows[0]?.id;
   if (!categoryId) {
-    categoryId = uuidv7();
+    const newCategoryId = uuidv7();
     const posRes = await conn.query<NextPosRow>(SELECT_NEXT_CATEGORY_POSITION, [teamId]);
     const nextPos = Number(posRes.rows[0]?.next_pos ?? 10);
-    await conn.query(INSERT_CATEGORY, [categoryId, teamId, trimmedCat, nextPos]);
+    const insCat = await conn.query(INSERT_CATEGORY, [newCategoryId, teamId, trimmedCat, nextPos]);
+    if (insCat.rowCount && insCat.rowCount > 0) {
+      categoryId = newCategoryId;
+    } else {
+      const retryCats = await conn.query<FoundRow>(SELECT_CATEGORY_BY_NAME, [teamId, trimmedCat]);
+      categoryId = retryCats.rows[0]!.id;
+    }
   }
 
   const existingTitles = await conn.query<FoundRow>(SELECT_TITLE_BY_NAME, [
@@ -88,10 +94,26 @@ export async function findOrCreateCategoryAndTitle(
   ]);
   let titleId = existingTitles.rows[0]?.id;
   if (!titleId) {
-    titleId = uuidv7();
+    const newTitleId = uuidv7();
     const posRes = await conn.query<NextPosRow>(SELECT_NEXT_TITLE_POSITION, [teamId, categoryId]);
     const nextPos = Number(posRes.rows[0]?.next_pos ?? 10);
-    await conn.query(INSERT_TITLE, [titleId, teamId, categoryId, trimmedTitle, nextPos]);
+    const insTitle = await conn.query(INSERT_TITLE, [
+      newTitleId,
+      teamId,
+      categoryId,
+      trimmedTitle,
+      nextPos,
+    ]);
+    if (insTitle.rowCount && insTitle.rowCount > 0) {
+      titleId = newTitleId;
+    } else {
+      const retryTitles = await conn.query<FoundRow>(SELECT_TITLE_BY_NAME, [
+        teamId,
+        categoryId,
+        trimmedTitle,
+      ]);
+      titleId = retryTitles.rows[0]!.id;
+    }
   }
 
   return { categoryId, titleId };

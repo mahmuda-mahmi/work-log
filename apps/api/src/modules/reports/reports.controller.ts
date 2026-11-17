@@ -157,9 +157,10 @@ export class ReportsController {
     req: AuthenticatedRequest,
   ) {
     const pool = getPool()!;
+    await ensureDefaultDictionary(pool, teamId);
     const [report, dictionary, members] = await Promise.all([
       this.loadReportDto(pool, teamId, reportDate, req),
-      ensureDefaultDictionary(pool, teamId).then(() => listDictionary(pool, teamId)),
+      listDictionary(pool, teamId),
       listTeamMembers(pool, teamId),
     ]);
     return { report, dictionary, members };
