@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import type { AuthSession } from '@cghq/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, CheckCircle2, FileDown, Layers, ListChecks, LogOut } from 'lucide-react';
+import { ArrowRight, CheckCircle2, FileDown, Layers, ListChecks, LogOut, Plus } from 'lucide-react';
 import { Link } from 'react-router';
 import { authApi } from '../api/client';
 import { Badge } from '../components/ui/badge';
@@ -174,16 +174,13 @@ export function LandingScreen() {
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                   {isSignedIn ? (
-                    <Button
-                      type="button"
-                      variant="dark"
-                      size="default"
-                      disabled={logoutMutation.isPending}
-                      onClick={() => logoutMutation.mutate()}
+                    <Link
+                      to="/teams/new"
+                      className={buttonVariants({ variant: 'dark', size: 'default' })}
                     >
-                      <LogOut className="h-4 w-4" />
-                      {logoutMutation.isPending ? 'Signing out…' : 'Sign Out'}
-                    </Button>
+                      <Plus className="h-4 w-4" />
+                      Create New Team
+                    </Link>
                   ) : (
                     <Link
                       to="/login"

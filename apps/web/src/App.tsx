@@ -98,7 +98,7 @@ function AuthenticatedShell() {
     return <Navigate to="/login" replace />;
   }
 
-  if (!session.team || !session.member) {
+  if (!session.team || !session.member || location.pathname === '/teams/new') {
     return (
       <OnboardingScreen
         session={session}

@@ -67,7 +67,7 @@ export const SELECT_ACTIVE_SESSION = `
     AND s.expires_at > NOW()
     AND s.session_version = u.session_version
     AND u.is_active = TRUE
-  ORDER BY tm.sort_order ASC NULLS LAST, tm.created_at ASC NULLS LAST
+  ORDER BY tm.created_at DESC NULLS LAST
   LIMIT 1
 `;
 
