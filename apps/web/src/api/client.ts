@@ -28,6 +28,7 @@ import type {
   UpdateGroupNumberingInput,
   UpdateMemberProfileInput,
   UpdateTeamSettingsInput,
+  UserTeamSummary,
 } from '@cghq/contracts';
 
 export class ApiError extends Error {
@@ -98,6 +99,16 @@ export const authApi = {
     }),
   logout: () => apiFetch<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
   me: () => apiFetch<AuthSession>('/api/auth/me'),
+  updateAvatar: (avatarUrl: string | null) =>
+    apiFetch<{ avatarUrl: string | null }>('/api/auth/avatar', {
+      method: 'PATCH',
+      body: JSON.stringify({ avatarUrl }),
+    }),
+  listMyTeams: () => apiFetch<UserTeamSummary[]>('/api/auth/teams'),
+  switchTeam: (teamId: string) =>
+    apiFetch<{ ok: boolean; teamId: string }>(`/api/auth/teams/${teamId}/switch`, {
+      method: 'POST',
+    }),
   acceptInvite: (body: AcceptInviteInput) =>
     apiFetch<{ ok: boolean; teamId: string }>('/api/auth/invites/accept', {
       method: 'POST',
@@ -199,6 +210,14 @@ export const dictionaryApi = {
     apiFetch<{ ok: boolean }>(`/api/teams/${teamId}/dictionary/titles/${titleId}`, {
       method: 'PATCH',
       body: JSON.stringify(body),
+    }),
+  deleteCategory: (teamId: string, categoryId: string) =>
+    apiFetch<{ ok: boolean }>(`/api/teams/${teamId}/dictionary/categories/${categoryId}`, {
+      method: 'DELETE',
+    }),
+  deleteTitle: (teamId: string, titleId: string) =>
+    apiFetch<{ ok: boolean }>(`/api/teams/${teamId}/dictionary/titles/${titleId}`, {
+      method: 'DELETE',
     }),
 };
 
@@ -307,6 +326,10 @@ export const followupsApi = {
     }),
   archive: (teamId: string, followupId: string) =>
     apiFetch<{ ok: boolean }>(`/api/teams/${teamId}/followups/${followupId}`, {
+      method: 'DELETE',
+    }),
+  removeAll: (teamId: string) =>
+    apiFetch<{ ok: boolean; removedCount: number }>(`/api/teams/${teamId}/followups`, {
       method: 'DELETE',
     }),
   moveToDaily: (teamId: string, followupId: string, statusText?: string) =>

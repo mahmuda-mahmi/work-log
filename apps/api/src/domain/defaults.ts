@@ -99,155 +99,31 @@ const seededFollowupsTeams = new Set<string>();
 const seededReportGroups = new Set<string>();
 
 /**
- * Ensures default categories & titles from the reference CGHQ report exist for a team.
+ * No-op: new teams start with a blank dictionary and configure their own categories/titles.
  */
-export async function ensureDefaultDictionary(pool: Pool, teamId: string): Promise<void> {
-  if (seededDictionaryTeams.has(teamId)) return;
-
-  const alreadySeeded = await hasCategoryByLowerName(pool, teamId, 'Physically Visit');
-  if (alreadySeeded) {
-    seededDictionaryTeams.add(teamId);
-    return;
-  }
-
-  await withTransaction(pool, async (conn) => {
-    for (const pair of DEFAULT_DICTIONARY_PAIRS) {
-      await findOrCreateCategoryAndTitle(conn, teamId, pair.categoryName, pair.titleName);
-    }
-  });
-  seededDictionaryTeams.add(teamId);
+export async function ensureDefaultDictionary(_pool: Pool, _teamId: string): Promise<void> {
+  return;
 }
 
 /**
- * Ensures the 5 default follow-up items from the reference CGHQ report are seeded
- * when a team has 0 follow-up items. Once seeded, user edits/deletions are preserved.
+ * No-op: new teams start with no default follow-up items or follow-up table.
  */
 export async function ensureDefaultFollowups(
-  pool: Pool,
-  teamId: string,
-  actorUserId: string,
+  _pool: Pool,
+  _teamId: string,
+  _actorUserId: string,
 ): Promise<void> {
-  await deduplicateTeamFollowups(pool, teamId);
-  if (seededFollowupsTeams.has(teamId)) return;
-
-  const count = await countTeamFollowups(pool, teamId);
-  if (count > 0) {
-    seededFollowupsTeams.add(teamId);
-    return;
-  }
-
-  await withTransaction(pool, async (conn) => {
-    const innerCount = await countTeamFollowups(conn, teamId);
-    if (innerCount > 0) return;
-
-    for (let i = 0; i < DEFAULT_FOLLOWUPS.length; i += 1) {
-      const item = DEFAULT_FOLLOWUPS[i]!;
-      const { categoryId, titleId } = await findOrCreateCategoryAndTitle(
-        conn,
-        teamId,
-        item.categoryName,
-        item.titleName,
-      );
-      await insertFollowupItem(conn, {
-        id: uuidv7(),
-        teamId,
-        categoryId,
-        titleId,
-        statusText: item.statusText,
-        completedByLabel: item.completedByLabel,
-        completedByMemberId: null,
-        position: (i + 1) * 1000,
-        actorUserId,
-      });
-    }
-  });
-  seededFollowupsTeams.add(teamId);
+  return;
 }
 
 /**
- * Ensures the 4 default report groups (Ser 1..4) from the reference CGHQ report exist
- * on a draft/reopened report in their canonical serial order.
+ * No-op: new teams start with a blank daily report table (headers only).
  */
 export async function ensureDefaultReportGroups(
-  pool: Pool,
-  teamId: string,
-  reportId: string,
-  actorUserId: string,
+  _pool: Pool,
+  _teamId: string,
+  _reportId: string,
+  _actorUserId: string,
 ): Promise<void> {
-  if (seededReportGroups.has(reportId)) return;
-
-  const count = await countWorkGroupsByReport(pool, reportId);
-  if (count > 0) {
-    const emptyCommIds = await listEmptyCommunicationGroupIds(pool, reportId);
-    if (emptyCommIds.length > 0) {
-      await withTransaction(pool, async (conn) => {
-        for (const groupId of emptyCommIds) {
-          await insertWorkEntry(conn, {
-            id: uuidv7(),
-            groupId,
-            statusText: 'Officer: Nil',
-            completedByMemberId: null,
-            completedByLabel: null,
-            position: 1000,
-            createdByUserId: null,
-          });
-          await insertWorkEntry(conn, {
-            id: uuidv7(),
-            groupId,
-            statusText: 'Sailor: Nil',
-            completedByMemberId: null,
-            completedByLabel: null,
-            position: 2000,
-            createdByUserId: null,
-          });
-        }
-      });
-    }
-    seededReportGroups.add(reportId);
-    return;
-  }
-
-  await withTransaction(pool, async (conn) => {
-    for (let i = 0; i < DEFAULT_REPORT_GROUPS.length; i += 1) {
-      const grp = DEFAULT_REPORT_GROUPS[i]!;
-      const { categoryId, titleId } = await findOrCreateCategoryAndTitle(
-        conn,
-        teamId,
-        grp.categoryName,
-        grp.titleName,
-      );
-      const groupId = uuidv7();
-      await insertWorkGroupAtPosition(conn, {
-        id: groupId,
-        reportId,
-        categoryId,
-        titleId,
-        position: (i + 1) * 10,
-        numberingMode: grp.numberingMode,
-        actorUserId,
-      });
-
-      if (grp.categoryName === 'Communication') {
-        await insertWorkEntry(conn, {
-          id: uuidv7(),
-          groupId,
-          statusText: 'Officer: Nil',
-          completedByMemberId: null,
-          completedByLabel: null,
-          position: 1000,
-          createdByUserId: null,
-        });
-        await insertWorkEntry(conn, {
-          id: uuidv7(),
-          groupId,
-          statusText: 'Sailor: Nil',
-          completedByMemberId: null,
-          completedByLabel: null,
-          position: 2000,
-          createdByUserId: null,
-        });
-      }
-    }
-  });
-  seededReportGroups.add(reportId);
+  return;
 }

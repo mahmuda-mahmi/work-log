@@ -14,7 +14,10 @@ import {
   SELECT_PASSWORD_RESET_BY_HASH,
   SELECT_RATE_LIMIT,
   SELECT_USER_FOR_LOGIN,
+  SELECT_USER_TEAMS,
   TOUCH_SESSION,
+  UPDATE_SESSION_ACTIVE_TEAM,
+  UPDATE_USER_AVATAR,
   UPDATE_USER_LOGIN_TIMESTAMP,
   UPDATE_USER_PASSWORD_AND_REVOKE,
   UPSERT_RATE_LIMIT_FAILURE,
@@ -36,6 +39,7 @@ type ActiveSessionRow = {
   user_id: string;
   user_name: string;
   user_email: string;
+  avatar_url: string | null;
   team_id: string | null;
   team_name: string | null;
   team_slug: string | null;
@@ -139,6 +143,7 @@ export async function findActiveSessionByTokenHash(conn: DbClient, tokenHash: st
     userId: r.user_id,
     userName: r.user_name,
     userEmail: r.user_email,
+    avatarUrl: r.avatar_url,
     teamId: r.team_id,
     teamName: r.team_name,
     teamSlug: r.team_slug,
@@ -156,6 +161,39 @@ export async function findActiveSessionByTokenHash(conn: DbClient, tokenHash: st
 
 export async function touchSessionActivity(conn: DbClient, sessionId: string): Promise<void> {
   await conn.query(TOUCH_SESSION, [sessionId]);
+}
+
+export async function updateUserAvatar(
+  conn: DbClient,
+  userId: string,
+  avatarUrl: string | null,
+): Promise<void> {
+  await conn.query(UPDATE_USER_AVATAR, [avatarUrl, userId]);
+}
+
+export async function listUserTeams(conn: DbClient, userId: string) {
+  const res = await conn.query<{
+    team_id: string;
+    team_name: string;
+    team_slug: string;
+    role: MemberRole;
+    display_name: string;
+  }>(SELECT_USER_TEAMS, [userId]);
+  return res.rows.map((r) => ({
+    teamId: r.team_id,
+    teamName: r.team_name,
+    teamSlug: r.team_slug,
+    role: r.role,
+    displayName: r.display_name,
+  }));
+}
+
+export async function setSessionActiveTeam(
+  conn: DbClient,
+  sessionId: string,
+  teamId: string,
+): Promise<void> {
+  await conn.query(UPDATE_SESSION_ACTIVE_TEAM, [teamId, sessionId]);
 }
 
 export async function deleteSessionById(conn: DbClient, sessionId: string): Promise<void> {

@@ -186,7 +186,7 @@ export async function assembleDailyReportDto(
     titleId: g.title_id,
     titleName: g.title_name,
     position: g.position,
-    numberingMode: g.category_name.trim().toLowerCase() === 'support' ? g.numbering_mode : 'plain',
+    numberingMode: g.numbering_mode,
     entries: entriesByGroup.get(g.id) ?? [],
   }));
 

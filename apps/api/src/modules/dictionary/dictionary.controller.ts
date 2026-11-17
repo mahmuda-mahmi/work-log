@@ -1,6 +1,8 @@
 import {
   Body,
+  ConflictException,
   Controller,
+  Delete,
   Get,
   NotFoundException,
   Param,
@@ -29,6 +31,8 @@ import { appendAuditEvent } from '../../db/repositories/audit.repo.js';
 import {
   createCategoryOnly,
   createTitleUnderCategory,
+  deleteCategoryIfUnused,
+  deleteTitleIfUnused,
   listDictionary,
   updateCategory,
   updateTitle,
@@ -142,6 +146,66 @@ export class DictionaryController {
         entityType: 'title',
         entityId: titleId,
         metadata: body as Record<string, unknown>,
+      });
+    });
+    return { ok: true };
+  }
+
+  @Delete('categories/:categoryId')
+  @UseGuards(TeamLeadGuard)
+  async deleteCategory(
+    @Param('teamId') teamId: string,
+    @Param('categoryId') categoryId: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const pool = getPool()!;
+    await withTransaction(pool, async (conn) => {
+      const outcome = await deleteCategoryIfUnused(conn, teamId, categoryId);
+      if (outcome === 'in_use') {
+        throw new ConflictException({
+          code: 'CATEGORY_IN_USE',
+          message: 'This category is used in existing reports. Archive it instead.',
+        });
+      }
+      if (outcome === 'not_found') {
+        throw new NotFoundException({ code: 'CATEGORY_NOT_FOUND', message: 'Category not found' });
+      }
+      await appendAuditEvent(conn, {
+        teamId,
+        actorUserId: req.auth!.userId,
+        action: 'category.deleted',
+        entityType: 'category',
+        entityId: categoryId,
+      });
+    });
+    return { ok: true };
+  }
+
+  @Delete('titles/:titleId')
+  @UseGuards(TeamLeadGuard)
+  async deleteTitle(
+    @Param('teamId') teamId: string,
+    @Param('titleId') titleId: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const pool = getPool()!;
+    await withTransaction(pool, async (conn) => {
+      const outcome = await deleteTitleIfUnused(conn, teamId, titleId);
+      if (outcome === 'in_use') {
+        throw new ConflictException({
+          code: 'TITLE_IN_USE',
+          message: 'This title is used in existing reports. Archive it instead.',
+        });
+      }
+      if (outcome === 'not_found') {
+        throw new NotFoundException({ code: 'TITLE_NOT_FOUND', message: 'Title not found' });
+      }
+      await appendAuditEvent(conn, {
+        teamId,
+        actorUserId: req.auth!.userId,
+        action: 'title.deleted',
+        entityType: 'title',
+        entityId: titleId,
       });
     });
     return { ok: true };

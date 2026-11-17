@@ -1,6 +1,6 @@
 export const INSERT_TEAM = `
   INSERT INTO teams (id, name, slug, document_title, file_prefix, timezone, prepared_by_default, created_by_user_id)
-  VALUES ($1, $2, $3, 'CGHQ Daily Report', 'CGHQ_Team_Work_Status', $4, $5, $6)
+  VALUES ($1, $2, $3, 'Work Log Daily Report', 'Team_Work_Status', $4, $5, $6)
 `;
 
 export const SELECT_TEAM_SETTINGS = `
@@ -14,7 +14,9 @@ export const SELECT_TEAM_SETTINGS = `
     prepared_by_default,
     members_can_add_dictionary,
     followups_enabled,
-    logo_asset_id
+    logo_asset_id,
+    document_font_family,
+    document_font_size_pt
   FROM teams
   WHERE id = $1
   LIMIT 1
@@ -29,8 +31,10 @@ export const UPDATE_TEAM_SETTINGS = `
     timezone = $4,
     prepared_by_default = $5,
     members_can_add_dictionary = $6,
-    followups_enabled = $7
-  WHERE id = $8
+    followups_enabled = $7,
+    document_font_family = $8,
+    document_font_size_pt = $9
+  WHERE id = $10
 `;
 
 export const INSERT_TEAM_MEMBER = `

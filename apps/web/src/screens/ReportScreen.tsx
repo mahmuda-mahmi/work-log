@@ -28,7 +28,9 @@ import {
 } from 'lucide-react';
 import {
   ApiError,
+  dictionaryApi,
   reportsApi,
+  teamsApi,
 } from '../api/client.js';
 import { EntryComposer } from '../components/EntryComposer.js';
 import { ReportPreview } from '../components/ReportPreview.js';
@@ -161,6 +163,18 @@ export function ReportScreen({ session }: ReportScreenProps) {
   const [quickAdd, setQuickAdd] = useState<QuickAddState | null>(null);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
   const [finalizePromptOpen, setFinalizePromptOpen] = useState(false);
+  const [setupDismissed, setSetupDismissed] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem(`worklog:setupDismissed:${teamId}`) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const [setupPairs, setSetupPairs] = useState<Array<{ category: string; title: string }>>([
+    { category: '', title: '' },
+  ]);
+  const [setupSaving, setSetupSaving] = useState(false);
+  const [setupError, setSetupError] = useState<string | null>(null);
 
   const workspaceQuery = useQuery({
     queryKey: ['report', teamId, 'workspace', dateKey],
@@ -180,6 +194,11 @@ export function ReportScreen({ session }: ReportScreenProps) {
 
   const dictionary = workspaceQuery.data?.dictionary ?? [];
   const members = workspaceQuery.data?.members ?? [];
+
+  const settingsQuery = useQuery({
+    queryKey: ['team-settings', teamId],
+    queryFn: () => teamsApi.getSettings(teamId),
+  });
 
   const activeCategories = useMemo(
     () =>
@@ -706,6 +725,14 @@ export function ReportScreen({ session }: ReportScreenProps) {
                 </tr>
               </thead>
               <tbody>
+                {report.groups.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-8 text-center text-sm text-zinc-500">
+                      No rows added yet. Use <strong>Add Work Entry</strong> above to log your first
+                      entry.
+                    </td>
+                  </tr>
+                )}
                 {report.groups.map((group, gIdx) => {
                   const isEditingThisGroup = editingGroup?.groupId === group.id;
                   const isQuickAdding = quickAdd?.groupId === group.id;
@@ -791,26 +818,25 @@ export function ReportScreen({ session }: ReportScreenProps) {
                           <div className="font-medium text-zinc-700 leading-snug">
                             {group.titleName}
                           </div>
-                          {!isFinalized &&
-                            group.categoryName.trim().toLowerCase() === 'support' && (
-                              <div className="mt-2">
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="xs"
-                                  title="Toggle numbered vs plain status lines"
-                                  onClick={() =>
-                                    toggleNumberingMutation.mutate({
-                                      groupId: group.id,
-                                      numberingMode:
-                                        group.numberingMode === 'numbered' ? 'plain' : 'numbered',
-                                    })
-                                  }
-                                >
-                                  {group.numberingMode === 'numbered' ? '1. 2. 3.' : 'Plain'}
-                                </Button>
-                              </div>
-                            )}
+                          {!isFinalized && (
+                            <div className="mt-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="xs"
+                                title="Toggle numbered (1. 2. 3.) vs plain text"
+                                onClick={() =>
+                                  toggleNumberingMutation.mutate({
+                                    groupId: group.id,
+                                    numberingMode:
+                                      group.numberingMode === 'numbered' ? 'plain' : 'numbered',
+                                  })
+                                }
+                              >
+                                {group.numberingMode === 'numbered' ? '1. 2. 3.' : 'Plain'}
+                              </Button>
+                            </div>
+                          )}
                         </td>
 
                         <td colSpan={2} className="p-0 align-top">
@@ -1473,8 +1499,151 @@ export function ReportScreen({ session }: ReportScreenProps) {
           hasLogo={session.team.hasLogo}
           filterMemberId={isFinalized ? undefined : session.member.id}
           filterUserId={isFinalized ? undefined : session.user.id}
+          fontFamily={settingsQuery.data?.documentFontFamily}
+          fontSizePt={settingsQuery.data?.documentFontSizePt}
         />
       </div>
+
+      {/* First-Time Team Categories & Titles Setup Popup */}
+      {workspaceQuery.isSuccess &&
+        dictionary.length === 0 &&
+        report.groups.length === 0 &&
+        !setupDismissed &&
+        session.member.role === 'lead' && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-lg rounded-xl border border-zinc-200 bg-white p-5 text-zinc-900 shadow-xl">
+              <h3 className="text-base font-bold text-zinc-950">
+                Set Up Categories &amp; Titles for {session.team.name}
+              </h3>
+              <p className="mt-1 text-xs text-zinc-500">
+                Add the Report Categories and Titles your team uses in daily reports, or skip to
+                start with a blank table and add them anytime.
+              </p>
+
+              {setupError && (
+                <Alert variant="destructive" className="mt-3">
+                  {setupError}
+                </Alert>
+              )}
+
+              <div className="mt-3 grid max-h-72 gap-2.5 overflow-y-auto pr-1">
+                {setupPairs.map((pair, idx) => (
+                  <div key={idx} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                    <Input
+                      placeholder="Report Category (e.g. Support)"
+                      value={pair.category}
+                      onChange={(e) => {
+                        const next = [...setupPairs];
+                        next[idx] = { ...pair, category: e.target.value };
+                        setSetupPairs(next);
+                      }}
+                    />
+                    <Input
+                      placeholder="Title (e.g. Daily Calls)"
+                      value={pair.title}
+                      onChange={(e) => {
+                        const next = [...setupPairs];
+                        next[idx] = { ...pair, title: e.target.value };
+                        setSetupPairs(next);
+                      }}
+                    />
+                    {setupPairs.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setSetupPairs(setupPairs.filter((_, i) => i !== idx))}
+                      >
+                        <Trash2 className="h-4 w-4 text-rose-500" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-zinc-100 pt-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSetupPairs([...setupPairs, { category: '', title: '' }])}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add Another Row
+                </Button>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={setupSaving}
+                    onClick={() => {
+                      try {
+                        window.localStorage.setItem(`worklog:setupDismissed:${teamId}`, '1');
+                      } catch {
+                        // Ignore
+                      }
+                      setSetupDismissed(true);
+                    }}
+                  >
+                    Skip (Start Blank)
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={setupSaving}
+                    onClick={async () => {
+                      const valid = setupPairs
+                        .map((p) => ({ category: p.category.trim(), title: p.title.trim() }))
+                        .filter((p) => p.category.length > 0);
+                      if (valid.length === 0) {
+                        setSetupError('Add at least one category, or click Skip (Start Blank).');
+                        return;
+                      }
+                      setSetupError(null);
+                      setSetupSaving(true);
+                      try {
+                        const catCache = new Map<string, string>();
+                        for (const row of valid) {
+                          const key = row.category.toLowerCase();
+                          let catId = catCache.get(key);
+                          if (!catId) {
+                            const createdCat = await dictionaryApi.createCategory(
+                              teamId,
+                              row.category,
+                            );
+                            catId = createdCat.id;
+                            catCache.set(key, catId);
+                          }
+                          if (row.title) {
+                            await dictionaryApi.createTitle(teamId, catId, row.title);
+                          }
+                        }
+                        try {
+                          window.localStorage.setItem(`worklog:setupDismissed:${teamId}`, '1');
+                        } catch {
+                          // Ignore
+                        }
+                        setSetupDismissed(true);
+                        await queryClient.invalidateQueries({ queryKey: ['report', teamId] });
+                        await queryClient.invalidateQueries({ queryKey: ['dictionary', teamId] });
+                      } catch (err) {
+                        setSetupError(
+                          err instanceof Error ? err.message : 'Failed to save categories',
+                        );
+                      } finally {
+                        setSetupSaving(false);
+                      }
+                    }}
+                  >
+                    {setupSaving ? 'Saving…' : 'Save Categories'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
       {/* shadcn Confirmation & Finalize Dialogs */}
       {confirmDialogConfig && (

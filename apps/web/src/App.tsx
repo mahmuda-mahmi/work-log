@@ -1,9 +1,9 @@
 import { lazy, Suspense, useEffect } from 'react';
 import type { ActiveAuthSession, AuthSession } from '@cghq/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { LogOut } from 'lucide-react';
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router';
 import { authApi } from './api/client';
+import { ProfileMenu } from './components/ProfileMenu';
 import { PageCardSkeleton, WorkspaceShellSkeleton } from './components/WorkspaceSkeleton';
 import { Badge } from './components/ui/badge';
 import { Button } from './components/ui/button';
@@ -71,6 +71,7 @@ function AuthenticatedShell() {
     queryFn: authApi.me,
     retry: false,
     placeholderData: cachedSession,
+    refetchInterval: (query) => (query.state.data?.pendingJoinTeamName ? 4000 : false),
   });
 
   useEffect(() => {
@@ -177,17 +178,11 @@ function AuthenticatedShell() {
               </Link>
             ))}
             <span className="mx-1.5 hidden h-5 w-px bg-zinc-800 sm:inline-block" aria-hidden />
-            <Button
-              type="button"
-              variant="dark"
-              size="sm"
-              className="border-zinc-700 bg-zinc-900 text-white hover:border-zinc-600 hover:bg-zinc-800 hover:text-white"
-              disabled={logoutMutation.isPending}
-              onClick={() => logoutMutation.mutate()}
-            >
-              <LogOut className="h-3.5 w-3.5" />
-              Sign Out
-            </Button>
+            <ProfileMenu
+              session={activeSession}
+              onLogout={() => logoutMutation.mutate()}
+              logoutPending={logoutMutation.isPending}
+            />
           </nav>
         </div>
       </header>

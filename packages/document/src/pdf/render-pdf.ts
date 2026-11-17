@@ -82,11 +82,12 @@ function measureRow(
     isFirstRowOnPage?: boolean;
     isLastRowOnPage?: boolean;
     allowVerticalMerge: boolean;
+    bodyFontPt?: number;
   },
 ): LayoutRow {
   const padX = TABLE.cellPadHorizontalPt;
   const padY = TABLE.cellPadVerticalPt;
-  const fontSize = FONT.bodyPt;
+  const fontSize = options.bodyFontPt ?? FONT.bodyPt;
   const minHeight = options.isHeader ? TABLE.headerMinHeightPt : TABLE.bodyMinHeightPt;
 
   // On continuation pages, Q5 requires leaving Ser/Category/Title blank.
@@ -172,8 +173,22 @@ export async function renderPdf(model: DocumentModel): Promise<Buffer> {
   pdfDoc.setSubject('Daily Work Report');
   pdfDoc.setCreator('CGHQ Team Work Report');
 
-  const regularFont = await pdfDoc.embedFont(StandardFonts.TimesRoman);
-  const boldFont = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
+  const regularFontName =
+    model.fontFamily === 'Helvetica'
+      ? StandardFonts.Helvetica
+      : model.fontFamily === 'Courier'
+        ? StandardFonts.Courier
+        : StandardFonts.TimesRoman;
+  const boldFontName =
+    model.fontFamily === 'Helvetica'
+      ? StandardFonts.HelveticaBold
+      : model.fontFamily === 'Courier'
+        ? StandardFonts.CourierBold
+        : StandardFonts.TimesRomanBold;
+
+  const bodyFontPt = model.fontSizePt || FONT.bodyPt;
+  const regularFont = await pdfDoc.embedFont(regularFontName);
+  const boldFont = await pdfDoc.embedFont(boldFontName);
 
   let embeddedLogo: PDFImage | null = null;
   if (model.logoBytes) {
@@ -230,7 +245,7 @@ export async function renderPdf(model: DocumentModel): Promise<Buffer> {
       const colW = colWidthsPt[i]!;
       const cell = layout.cells[i]!;
       const font = cell.bold ? boldFont : regularFont;
-      const fontSize = FONT.bodyPt;
+      const fontSize = bodyFontPt;
 
       // Borders
       if (cell.drawTopBorder) {
@@ -300,7 +315,7 @@ export async function renderPdf(model: DocumentModel): Promise<Buffer> {
       colWidthsPt,
       regularFont,
       boldFont,
-      { isHeader: true, allowVerticalMerge: false },
+      { isHeader: true, allowVerticalMerge: false, bodyFontPt },
     );
 
     if (heading) {
@@ -312,11 +327,11 @@ export async function renderPdf(model: DocumentModel): Promise<Buffer> {
       page.drawText(heading, {
         x: leftMargin,
         y: cursorY,
-        size: FONT.bodyPt,
+        size: bodyFontPt,
         font: boldFont,
         color: rgb(0, 0, 0),
       });
-      const headingWidth = boldFont.widthOfTextAtSize(heading, FONT.bodyPt);
+      const headingWidth = boldFont.widthOfTextAtSize(heading, bodyFontPt);
       page.drawLine({
         start: { x: leftMargin, y: cursorY - 2 },
         end: { x: leftMargin + headingWidth, y: cursorY - 2 },
@@ -342,6 +357,7 @@ export async function renderPdf(model: DocumentModel): Promise<Buffer> {
         isFirstRowOnPage: false,
         isLastRowOnPage: false,
         allowVerticalMerge,
+        bodyFontPt,
       });
 
       if (cursorY - layout.heightPt < bottomMargin) {
@@ -352,6 +368,7 @@ export async function renderPdf(model: DocumentModel): Promise<Buffer> {
           isFirstRowOnPage: true,
           isLastRowOnPage: false,
           allowVerticalMerge,
+          bodyFontPt,
         });
       }
 
@@ -361,6 +378,7 @@ export async function renderPdf(model: DocumentModel): Promise<Buffer> {
         const nextLayout = measureRow(nextRow, colWidthsPt, regularFont, boldFont, {
           isLastRowInGroup: true,
           allowVerticalMerge,
+          bodyFontPt,
         });
         if (cursorY - layout.heightPt - nextLayout.heightPt < bottomMargin) {
           isLastOnPage = true;
@@ -369,6 +387,7 @@ export async function renderPdf(model: DocumentModel): Promise<Buffer> {
             isFirstRowOnPage: layout.cells[0]?.drawTopBorder && row.groupMerge === 'continue',
             isLastRowOnPage: true,
             allowVerticalMerge,
+            bodyFontPt,
           });
         }
       }
@@ -416,11 +435,13 @@ export async function renderPdf(model: DocumentModel): Promise<Buffer> {
   // Table 1: Daily Work Status
   renderTable(model.mainRows, TABLE.mainColumnsTwips, true);
 
-  // Add breathing room between Daily Work table and Follow-up Items
-  cursorY -= 16;
+  if (model.hasFollowups) {
+    // Add breathing room between Daily Work table and Follow-up Items
+    cursorY -= 16;
 
-  // Table 2: Follow-up Items
-  renderTable(model.followupRows, TABLE.followupColumnsTwips, false, 'Follow-up Items:');
+    // Table 2: Follow-up Items
+    renderTable(model.followupRows, TABLE.followupColumnsTwips, false, 'Follow-up Items:');
+  }
 
   // Prepared By
   if (cursorY - 32 < bottomMargin) {

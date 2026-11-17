@@ -2,6 +2,7 @@ import { formatReportDate } from './date.js';
 import { HEADER, PAGE, TABLE } from './tokens.js';
 
 export type NumberingMode = 'numbered' | 'plain';
+export type DocumentFontFamily = 'Liberation Serif' | 'Helvetica' | 'Courier';
 
 export interface ReportEntryInput {
   categoryName: string;
@@ -23,6 +24,8 @@ export interface ReportDocumentInput {
   reportDate: string; // YYYY-MM-DD
   preparedBy: string;
   logoBytes?: Buffer | Uint8Array | null;
+  fontFamily?: DocumentFontFamily;
+  fontSizePt?: number;
   entries: ReportEntryInput[];
   followups: FollowupRowInput[];
 }
@@ -49,6 +52,8 @@ export interface DocumentModel {
   mainRows: DocumentRow[];
   followupRows: DocumentRow[];
   hasFollowups: boolean;
+  fontFamily: DocumentFontFamily;
+  fontSizePt: number;
   page: typeof PAGE;
   header: typeof HEADER;
   table: typeof TABLE;
@@ -147,29 +152,17 @@ export function buildDocumentModel(input: ReportDocumentInput): DocumentModel {
     });
   }
 
-  const followupRows: DocumentRow[] =
-    input.followups.length === 0
-      ? [
-          {
-            ser: '',
-            category: '',
-            title: '',
-            status: 'None',
-            completedBy: '',
-            groupMerge: 'none',
-          },
-        ]
-      : input.followups.map((item, idx) => ({
-          ser: String(idx + 1),
-          category: capitalizeFirst(item.categoryName),
-          title: capitalizeFirst(item.titleName),
-          status: item.statusText.trim(),
-          completedBy: item.completedBy.trim(),
-          groupMerge: 'none',
-        }));
+  const followupRows: DocumentRow[] = input.followups.map((item, idx) => ({
+    ser: String(idx + 1),
+    category: capitalizeFirst(item.categoryName),
+    title: capitalizeFirst(item.titleName),
+    status: item.statusText.trim(),
+    completedBy: item.completedBy.trim(),
+    groupMerge: 'none',
+  }));
 
   return {
-    documentTitle: (input.documentTitle ?? 'CGHQ Daily Report').trim(),
+    documentTitle: (input.documentTitle ?? 'Work Log Daily Report').trim(),
     reportDate: input.reportDate,
     formattedDate: headerDate,
     preparedBy: input.preparedBy.trim(),
@@ -177,6 +170,8 @@ export function buildDocumentModel(input: ReportDocumentInput): DocumentModel {
     mainRows,
     followupRows,
     hasFollowups: input.followups.length > 0,
+    fontFamily: input.fontFamily ?? 'Liberation Serif',
+    fontSizePt: input.fontSizePt ?? 11,
     page: PAGE,
     header: HEADER,
     table: TABLE,

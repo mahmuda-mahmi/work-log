@@ -286,15 +286,17 @@ export async function renderDocx(model: DocumentModel): Promise<Buffer> {
             ],
           }),
           buildTable(model.mainRows, TABLE.mainColumnsTwips, true),
-          new Paragraph({
-            alignment: AlignmentType.LEFT,
-            keepNext: true,
-            spacing: { before: 240, after: 120 },
-            children: [
-              makeRun('Follow-up Items:', { bold: true, underline: true }),
-            ],
-          }),
-          buildTable(model.followupRows, TABLE.followupColumnsTwips, false),
+          ...(model.hasFollowups
+            ? [
+                new Paragraph({
+                  alignment: AlignmentType.LEFT,
+                  keepNext: true,
+                  spacing: { before: 240, after: 120 },
+                  children: [makeRun('Follow-up Items:', { bold: true, underline: true })],
+                }),
+                buildTable(model.followupRows, TABLE.followupColumnsTwips, false),
+              ]
+            : []),
           new Paragraph({
             alignment: AlignmentType.LEFT,
             spacing: { before: 240, after: 0 },

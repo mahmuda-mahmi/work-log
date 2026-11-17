@@ -57,6 +57,7 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
     statusText: string;
   } | null>(null);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [removeAllOpen, setRemoveAllOpen] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -152,6 +153,20 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
       setDeleteTargetId(null);
       void queryClient.invalidateQueries({ queryKey: ['followups', teamId] });
       void queryClient.invalidateQueries({ queryKey: ['report', teamId] });
+    },
+  });
+
+  const removeAllMutation = useMutation({
+    mutationFn: () => followupsApi.removeAll(teamId),
+    onSuccess: (res) => {
+      setRemoveAllOpen(false);
+      setSuccessMsg(`Removed ${res.removedCount} follow-up item(s).`);
+      void queryClient.invalidateQueries({ queryKey: ['followups', teamId] });
+      void queryClient.invalidateQueries({ queryKey: ['report', teamId] });
+    },
+    onError: (err) => {
+      setRemoveAllOpen(false);
+      setErrorMsg(err instanceof ApiError ? err.message : 'Failed to remove all follow-ups');
     },
   });
 
@@ -345,6 +360,18 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
               <Plus className="h-3.5 w-3.5" />
               {showAddForm ? 'Close Form' : 'New Follow-up'}
             </Button>
+            {items.length > 0 && (
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                disabled={removeAllMutation.isPending}
+                onClick={() => setRemoveAllOpen(true)}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Remove All
+              </Button>
+            )}
           </div>
         </CardHeader>
 
@@ -357,7 +384,7 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
             </div>
           ) : items.length === 0 ? (
             <p className="text-sm text-zinc-500">
-              No follow-up items. Finalized reports will display &ldquo;None&rdquo;.
+              No follow-up items. Reports will omit the follow-up table until you add items.
             </p>
           ) : (
             <div className="w-full overflow-x-auto rounded-md border border-zinc-200 bg-white">
@@ -700,6 +727,17 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
         onConfirm={() => {
           if (deleteTargetId) archiveMutation.mutate(deleteTargetId);
         }}
+      />
+
+      <ConfirmDialog
+        open={removeAllOpen}
+        onOpenChange={setRemoveAllOpen}
+        title="Remove All Follow-ups"
+        description={`Archive and remove all ${items.length} follow-up item(s) at once? Reports will not show a follow-up table until new items are added.`}
+        confirmLabel="Remove All"
+        destructive
+        pending={removeAllMutation.isPending}
+        onConfirm={() => removeAllMutation.mutate()}
       />
     </div>
   );

@@ -20,6 +20,7 @@ export interface AuthContext {
   userId: string;
   userName: string;
   userEmail: string;
+  avatarUrl: string | null;
   teamId: string;
   teamName: string;
   teamSlug: string;
@@ -101,6 +102,7 @@ export class SessionGuard implements CanActivate {
       userId: session.userId,
       userName: session.userName,
       userEmail: session.userEmail,
+      avatarUrl: session.avatarUrl,
       teamId: session.teamId ?? '',
       teamName: session.teamName ?? '',
       teamSlug: session.teamSlug ?? '',

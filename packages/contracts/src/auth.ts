@@ -60,6 +60,7 @@ export const AuthSessionSchema = z.object({
     id: z.string().uuid(),
     name: z.string(),
     email: z.string().email(),
+    avatarUrl: z.string().nullable().optional(),
   }),
   team: z
     .object({
@@ -88,6 +89,20 @@ export type ActiveAuthSession = AuthSession & {
   team: NonNullable<AuthSession['team']>;
   member: NonNullable<AuthSession['member']>;
 };
+
+export const UserTeamSummarySchema = z.object({
+  teamId: z.string().uuid(),
+  teamName: z.string(),
+  teamSlug: z.string(),
+  role: MemberRoleSchema,
+  displayName: z.string(),
+});
+export type UserTeamSummary = z.infer<typeof UserTeamSummarySchema>;
+
+export const UpdateAvatarSchema = z.object({
+  avatarUrl: z.string().max(1_500_000).nullable(),
+});
+export type UpdateAvatarInput = z.infer<typeof UpdateAvatarSchema>;
 
 export const RegisterSchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(120),

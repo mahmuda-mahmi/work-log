@@ -108,3 +108,9 @@ export const ARCHIVE_FOLLOWUP_ITEM = `
   SET status = 'archived', updated_by_user_id = $1, version = version + 1
   WHERE team_id = $2 AND id = $3
 `;
+
+export const ARCHIVE_ALL_FOLLOWUPS = `
+  UPDATE followup_items
+  SET status = 'archived', updated_by_user_id = $1, version = version + 1
+  WHERE team_id = $2 AND status <> 'archived'
+`;

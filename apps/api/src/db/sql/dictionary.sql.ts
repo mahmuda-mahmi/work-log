@@ -74,3 +74,30 @@ export const SELECT_CATEGORY_BY_ID = `
   WHERE id = $1 AND team_id = $2
   LIMIT 1
 `;
+
+export const COUNT_WORK_GROUPS_BY_CATEGORY = `
+  SELECT COUNT(*)::int AS cnt
+  FROM work_groups
+  WHERE team_id = $1 AND category_id = $2
+`;
+
+export const COUNT_WORK_GROUPS_BY_TITLE = `
+  SELECT COUNT(*)::int AS cnt
+  FROM work_groups
+  WHERE team_id = $1 AND title_id = $2
+`;
+
+export const DELETE_TITLES_BY_CATEGORY = `
+  DELETE FROM titles
+  WHERE team_id = $1 AND category_id = $2
+`;
+
+export const DELETE_CATEGORY = `
+  DELETE FROM categories
+  WHERE id = $1 AND team_id = $2
+`;
+
+export const DELETE_TITLE = `
+  DELETE FROM titles
+  WHERE id = $1 AND team_id = $2
+`;

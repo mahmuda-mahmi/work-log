@@ -7,6 +7,8 @@ import {
   HttpCode,
   HttpException,
   HttpStatus,
+  Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -25,6 +27,7 @@ import {
   LoginSchema,
   RegisterSchema,
   SubmitJoinRequestSchema,
+  UpdateAvatarSchema,
   type AcceptInviteInput,
   type AuthSession,
   type BootstrapLeadInput,
@@ -35,6 +38,7 @@ import {
   type LoginInput,
   type RegisterInput,
   type SubmitJoinRequestInput,
+  type UpdateAvatarInput,
 } from '@cghq/contracts';
 import type { Request, Response } from 'express';
 import {
@@ -60,9 +64,12 @@ import {
   getRateLimitLock,
   insertSession,
   insertUser,
+  listUserTeams,
   markInviteAccepted,
   markPasswordResetUsed,
   recordRateLimitFailure,
+  setSessionActiveTeam,
+  updateUserAvatar,
   updateUserLoginTimestamp,
   updateUserPasswordAndRevoke,
 } from '../../db/repositories/auth.repo.js';
@@ -342,6 +349,7 @@ export class AuthController {
         id: session.userId,
         name: session.userName,
         email: session.userEmail,
+        avatarUrl: session.avatarUrl,
       },
       team: session.teamId
         ? {
@@ -417,6 +425,7 @@ export class AuthController {
         entityType: 'team',
         entityId: teamId,
       });
+      await setSessionActiveTeam(conn, auth.sessionId, teamId);
     });
 
     const rawToken = req.cookies?.[SESSION_COOKIE_NAME] as string | undefined;
@@ -424,6 +433,50 @@ export class AuthController {
       invalidateSessionCache(sha256Hex(rawToken));
     }
 
+    return { ok: true, teamId };
+  }
+
+  @Patch('avatar')
+  @UseGuards(SessionGuard)
+  async updateAvatar(
+    @Req() req: AuthenticatedRequest,
+    @Body(new ZodValidationPipe(UpdateAvatarSchema)) body: UpdateAvatarInput,
+  ) {
+    const pool = getPool()!;
+    const avatarUrl = body.avatarUrl?.trim() || null;
+    await updateUserAvatar(pool, req.auth!.userId, avatarUrl);
+    const rawToken = req.cookies?.[SESSION_COOKIE_NAME] as string | undefined;
+    if (rawToken) {
+      invalidateSessionCache(sha256Hex(rawToken));
+    }
+    return { avatarUrl };
+  }
+
+  @Get('teams')
+  @UseGuards(SessionGuard)
+  async getMyTeams(@Req() req: AuthenticatedRequest) {
+    const pool = getPool()!;
+    return listUserTeams(pool, req.auth!.userId);
+  }
+
+  @Post('teams/:teamId/switch')
+  @HttpCode(200)
+  @UseGuards(SessionGuard)
+  async switchTeam(@Req() req: AuthenticatedRequest, @Param('teamId') teamId: string) {
+    const pool = getPool()!;
+    const teams = await listUserTeams(pool, req.auth!.userId);
+    const target = teams.find((t) => t.teamId === teamId);
+    if (!target) {
+      throw new BadRequestException({
+        code: 'TEAM_NOT_JOINED',
+        message: 'You are not an active member of that team',
+      });
+    }
+    await setSessionActiveTeam(pool, req.auth!.sessionId, teamId);
+    const rawToken = req.cookies?.[SESSION_COOKIE_NAME] as string | undefined;
+    if (rawToken) {
+      invalidateSessionCache(sha256Hex(rawToken));
+    }
     return { ok: true, teamId };
   }
 
@@ -785,6 +838,7 @@ export class AuthController {
       email?: string;
       email_verified?: boolean;
       name?: string;
+      picture?: string;
     };
 
     if (!profile.email || !profile.email_verified) {
@@ -793,6 +847,7 @@ export class AuthController {
 
     const email = profile.email.trim().toLowerCase();
     const displayName = (profile.name?.trim() || email.split('@')[0] || 'Member').slice(0, 120);
+    const googlePicture = profile.picture?.trim() || null;
     const pool = getPool()!;
 
     let user = await findUserForLogin(pool, email);
@@ -806,8 +861,17 @@ export class AuthController {
           email,
           passwordHash: randomPasswordHash,
         });
+        if (googlePicture) {
+          await updateUserAvatar(conn, userId, googlePicture);
+        }
       });
       user = await findUserForLogin(pool, email);
+    } else if (googlePicture) {
+      // Populate Google photo if user does not have a custom avatar yet
+      await pool.query(
+        `UPDATE users SET avatar_url = $1 WHERE id = $2 AND (avatar_url IS NULL OR avatar_url = '')`,
+        [googlePicture, user.id],
+      );
     }
 
     if (!user || !user.isActive) {

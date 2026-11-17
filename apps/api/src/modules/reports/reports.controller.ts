@@ -946,6 +946,8 @@ export class ReportsController {
         reportDate,
         preparedBy: dto.preparedByName,
         logoBytes: getDefaultLogoBytes(),
+        fontFamily: settings?.documentFontFamily,
+        fontSizePt: settings?.documentFontSizePt,
         entries,
         followups: dto.followups.map((f) => ({
           categoryName: f.categoryName,

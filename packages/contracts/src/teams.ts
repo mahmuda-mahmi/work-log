@@ -2,6 +2,9 @@ import { z } from 'zod';
 import { EmailSchema } from './auth.js';
 import { MemberRoleSchema } from './reports.js';
 
+export const DocumentFontFamilySchema = z.enum(['Liberation Serif', 'Helvetica', 'Courier']);
+export type DocumentFontFamily = z.infer<typeof DocumentFontFamilySchema>;
+
 export const TeamSettingsSchema = z.object({
   id: z.string().uuid(),
   name: z.string().trim().min(1).max(120),
@@ -13,6 +16,8 @@ export const TeamSettingsSchema = z.object({
   membersCanAddDictionary: z.boolean(),
   followupsEnabled: z.boolean(),
   hasLogo: z.boolean(),
+  documentFontFamily: DocumentFontFamilySchema.default('Liberation Serif'),
+  documentFontSizePt: z.number().int().min(9).max(14).default(11),
 });
 export type TeamSettings = z.infer<typeof TeamSettingsSchema>;
 
@@ -24,6 +29,8 @@ export const UpdateTeamSettingsSchema = z.object({
   preparedByDefault: z.string().trim().min(1).max(120).nullable().optional(),
   membersCanAddDictionary: z.boolean().optional(),
   followupsEnabled: z.boolean().optional(),
+  documentFontFamily: DocumentFontFamilySchema.optional(),
+  documentFontSizePt: z.number().int().min(9).max(14).optional(),
 });
 export type UpdateTeamSettingsInput = z.infer<typeof UpdateTeamSettingsSchema>;
 

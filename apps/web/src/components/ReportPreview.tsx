@@ -8,6 +8,8 @@ interface ReportPreviewProps {
   hasLogo: boolean;
   filterMemberId?: string;
   filterUserId?: string;
+  fontFamily?: string;
+  fontSizePt?: number;
 }
 
 function computeRowSpans(rows: DocumentRow[]): number[] {
@@ -36,6 +38,8 @@ export function ReportPreview({
   documentTitle,
   filterMemberId,
   filterUserId,
+  fontFamily = 'Liberation Serif',
+  fontSizePt = 11,
 }: ReportPreviewProps) {
   const [logoVisible, setLogoVisible] = useState(true);
 
@@ -76,8 +80,21 @@ export function ReportPreview({
 
   const mainRowSpans = useMemo(() => computeRowSpans(model.mainRows), [model.mainRows]);
 
+  const cssFontFamily =
+    fontFamily === 'Helvetica'
+      ? 'Arial, Helvetica, sans-serif'
+      : fontFamily === 'Courier'
+        ? "'Courier New', Courier, monospace"
+        : "'Liberation Serif', 'Times New Roman', Georgia, serif";
+
   return (
-    <div className="preview-sheet">
+    <div
+      className="preview-sheet"
+      style={{
+        fontFamily: cssFontFamily,
+        fontSize: `${fontSizePt}pt`,
+      }}
+    >
       <div className="preview-header">
         {logoVisible && (
           <img
@@ -141,39 +158,35 @@ export function ReportPreview({
         </table>
       </div>
 
-      <div className="preview-followup-heading">Follow-up Items:</div>
-      <div className="preview-table-wrap">
-        <table className="preview-table">
-          <thead>
-            <tr>
-              <th className="col-ser">Ser</th>
-              <th className="col-cat">Report Category</th>
-              <th className="col-title">Title</th>
-              <th className="col-status">Status</th>
-              <th className="col-by">Task Completed By</th>
-            </tr>
-          </thead>
-          <tbody>
-            {!model.hasFollowups ? (
-              <tr>
-                <td colSpan={5} className="preview-none">
-                  None
-                </td>
-              </tr>
-            ) : (
-              model.followupRows.map((row, idx) => (
-                <tr key={idx}>
-                  <td className="col-ser">{row.ser}</td>
-                  <td className="col-cat">{row.category}</td>
-                  <td className="col-title">{row.title}</td>
-                  <td className="col-status">{row.status}</td>
-                  <td className="col-by">{row.completedBy}</td>
+      {model.hasFollowups && (
+        <>
+          <div className="preview-followup-heading">Follow-up Items:</div>
+          <div className="preview-table-wrap">
+            <table className="preview-table">
+              <thead>
+                <tr>
+                  <th className="col-ser">Ser</th>
+                  <th className="col-cat">Report Category</th>
+                  <th className="col-title">Title</th>
+                  <th className="col-status">Status</th>
+                  <th className="col-by">Task Completed By</th>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody>
+                {model.followupRows.map((row, idx) => (
+                  <tr key={idx}>
+                    <td className="col-ser">{row.ser}</td>
+                    <td className="col-cat">{row.category}</td>
+                    <td className="col-title">{row.title}</td>
+                    <td className="col-status">{row.status}</td>
+                    <td className="col-by">{row.completedBy}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
 
       <div className="preview-prepared-by">
         <strong>Prepared By:</strong> {model.preparedBy}

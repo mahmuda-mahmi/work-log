@@ -1,13 +1,24 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ActiveAuthSession } from '@cghq/contracts';
-import { Check, Copy, Plus } from 'lucide-react';
+import type { ActiveAuthSession, DocumentFontFamily } from '@cghq/contracts';
+import {
+  Archive,
+  ArchiveRestore,
+  Check,
+  Copy,
+  Moon,
+  Palette,
+  Pencil,
+  Plus,
+  Sun,
+  Trash2,
+} from 'lucide-react';
 import { dictionaryApi, teamsApi } from '../api/client';
 import { Alert } from '../components/ui/alert';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { PromptDialog } from '../components/ui/confirm-dialog';
+import { ConfirmDialog, PromptDialog } from '../components/ui/confirm-dialog';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import {
@@ -17,11 +28,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
+import {
+  applyAppearancePrefs,
+  readAppearancePrefs,
+  THEME_OPTIONS,
+  type ThemeColorId,
+} from '../lib/theme';
 import { cn } from '../lib/utils';
 
 type RenamePromptState =
   | { type: 'category'; id: string; currentName: string }
   | { type: 'title'; id: string; currentName: string }
+  | null;
+
+type DeleteDictTarget =
+  | { type: 'category'; id: string; name: string }
+  | { type: 'title'; id: string; name: string }
   | null;
 
 export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
@@ -60,11 +82,16 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
   const [newTitleName, setNewTitleName] = useState('');
   const [renamePrompt, setRenamePrompt] = useState<RenamePromptState>(null);
+  const [deleteDictTarget, setDeleteDictTarget] = useState<DeleteDictTarget>(null);
+  const [activeTab, setActiveTab] = useState<'general' | 'appearance'>('general');
+  const [appearance, setAppearance] = useState(() => readAppearancePrefs());
 
   const [docTitle, setDocTitle] = useState<string | null>(null);
   const [filePrefix, setFilePrefix] = useState<string | null>(null);
   const [preparedBy, setPreparedBy] = useState<string | null>(null);
   const [profileDisplayName, setProfileDisplayName] = useState<string | null>(null);
+  const [docFontFamily, setDocFontFamily] = useState<DocumentFontFamily | null>(null);
+  const [docFontSizePt, setDocFontSizePt] = useState<number | null>(null);
 
   async function copyToClipboard(text: string, key: string) {
     try {
@@ -114,6 +141,45 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
     onSuccess: async () => {
       setRenamePrompt(null);
       await queryClient.invalidateQueries({ queryKey: ['dictionary', teamId] });
+    },
+    onError: (err: Error) => setStatusMsg(err.message),
+  });
+
+  const deleteCategoryMutation = useMutation({
+    mutationFn: (id: string) => dictionaryApi.deleteCategory(teamId, id),
+    onSuccess: async () => {
+      setDeleteDictTarget(null);
+      setStatusMsg('Category deleted.');
+      await queryClient.invalidateQueries({ queryKey: ['dictionary', teamId] });
+    },
+    onError: (err: Error) => {
+      setDeleteDictTarget(null);
+      setStatusMsg(err.message);
+    },
+  });
+
+  const deleteTitleMutation = useMutation({
+    mutationFn: (id: string) => dictionaryApi.deleteTitle(teamId, id),
+    onSuccess: async () => {
+      setDeleteDictTarget(null);
+      setStatusMsg('Title deleted.');
+      await queryClient.invalidateQueries({ queryKey: ['dictionary', teamId] });
+    },
+    onError: (err: Error) => {
+      setDeleteDictTarget(null);
+      setStatusMsg(err.message);
+    },
+  });
+
+  const saveTypographyMutation = useMutation({
+    mutationFn: () =>
+      teamsApi.updateSettings(teamId, {
+        documentFontFamily: docFontFamily ?? settings?.documentFontFamily ?? 'Liberation Serif',
+        documentFontSizePt: docFontSizePt ?? settings?.documentFontSizePt ?? 11,
+      }),
+    onSuccess: async () => {
+      setStatusMsg('Document typography saved.');
+      await queryClient.invalidateQueries({ queryKey: ['team-settings', teamId] });
     },
     onError: (err: Error) => setStatusMsg(err.message),
   });
@@ -222,11 +288,196 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
 
   const activeCategoryIdForTitle = selectedCategoryId || dictionary[0]?.id || '';
 
+  function updateAppearance(next: { theme?: ThemeColorId; darkMode?: boolean }) {
+    const merged = {
+      theme: next.theme ?? appearance.theme,
+      darkMode: next.darkMode ?? appearance.darkMode,
+    };
+    setAppearance(merged);
+    applyAppearancePrefs(merged);
+  }
+
   return (
     <div className="flex flex-col gap-3.5">
+      <div className="flex flex-wrap items-center gap-2 border-b border-zinc-200 pb-2.5">
+        <Button
+          type="button"
+          size="sm"
+          variant={activeTab === 'general' ? 'default' : 'outline'}
+          onClick={() => setActiveTab('general')}
+        >
+          General &amp; Team
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={activeTab === 'appearance' ? 'default' : 'outline'}
+          onClick={() => setActiveTab('appearance')}
+        >
+          <Palette className="h-3.5 w-3.5" />
+          Appearance
+        </Button>
+      </div>
+
       {statusMsg && <Alert variant="success">{statusMsg}</Alert>}
 
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
+      {activeTab === 'appearance' ? (
+        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
+          <Card className="border-t-2 border-t-primary">
+            <CardHeader className="py-3">
+              <CardTitle>Theme &amp; Dark Mode</CardTitle>
+              <CardDescription>
+                Choose your workspace accent theme (default matches the company logo) and toggle
+                complementary dark mode.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 pt-3">
+              <div className="flex items-center justify-between rounded-lg border border-zinc-200 p-3">
+                <div className="flex items-center gap-2.5">
+                  {appearance.darkMode ? (
+                    <Moon className="h-4 w-4 text-primary" />
+                  ) : (
+                    <Sun className="h-4 w-4 text-primary" />
+                  )}
+                  <div>
+                    <div className="text-sm font-semibold text-zinc-950">Dark Mode</div>
+                    <div className="text-xs text-zinc-500">
+                      High-contrast dark palette tuned for every theme color.
+                    </div>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={appearance.darkMode ? 'default' : 'outline'}
+                  onClick={() => updateAppearance({ darkMode: !appearance.darkMode })}
+                >
+                  {appearance.darkMode ? 'Dark On' : 'Light On'}
+                </Button>
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Color Theme</Label>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {THEME_OPTIONS.map((t) => {
+                    const selected = appearance.theme === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => updateAppearance({ theme: t.id })}
+                        className={cn(
+                          'flex cursor-pointer items-center gap-3 rounded-lg border p-2.5 text-left transition-colors',
+                          selected
+                            ? 'border-primary bg-accent/60 ring-1 ring-primary'
+                            : 'border-zinc-200 bg-white hover:bg-zinc-50',
+                        )}
+                      >
+                        <span
+                          className="h-6 w-6 shrink-0 rounded-full border border-black/10 shadow-xs"
+                          style={{ backgroundColor: t.swatch }}
+                        />
+                        <div className="min-w-0">
+                          <div className="truncate text-xs font-bold text-zinc-950">{t.label}</div>
+                          <div className="truncate text-[11px] text-zinc-500">{t.description}</div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-t-2 border-t-primary">
+            <CardHeader className="py-3">
+              <CardTitle>Document Font &amp; Size</CardTitle>
+              <CardDescription>
+                Customize the font family and body text size used in the live preview, DOCX, and
+                PDF exports.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 pt-3">
+              <div className="grid gap-1.5">
+                <Label htmlFor="doc-font-family">Document Font Family</Label>
+                <Select
+                  value={docFontFamily ?? settings?.documentFontFamily ?? 'Liberation Serif'}
+                  disabled={!isLead}
+                  onValueChange={(val) => setDocFontFamily(val as DocumentFontFamily)}
+                >
+                  <SelectTrigger id="doc-font-family">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Liberation Serif">
+                      Liberation Serif / Times New Roman
+                    </SelectItem>
+                    <SelectItem value="Helvetica">Helvetica / Arial (Sans-serif)</SelectItem>
+                    <SelectItem value="Courier">Courier (Monospace)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid gap-1.5">
+                <Label htmlFor="doc-font-size">Document Font Size</Label>
+                <Select
+                  value={String(docFontSizePt ?? settings?.documentFontSizePt ?? 11)}
+                  disabled={!isLead}
+                  onValueChange={(val) => setDocFontSizePt(Number(val))}
+                >
+                  <SelectTrigger id="doc-font-size">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[9, 10, 11, 12, 13, 14].map((pt) => (
+                      <SelectItem key={pt} value={String(pt)}>
+                        {pt} pt {pt === 11 ? '(Default)' : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div
+                className="rounded-md border border-zinc-200 bg-white p-3 text-black"
+                style={{
+                  fontFamily:
+                    (docFontFamily ?? settings?.documentFontFamily ?? 'Liberation Serif') ===
+                    'Helvetica'
+                      ? 'Arial, Helvetica, sans-serif'
+                      : (docFontFamily ?? settings?.documentFontFamily ?? 'Liberation Serif') ===
+                          'Courier'
+                        ? 'Courier New, Courier, monospace'
+                        : "'Liberation Serif', 'Times New Roman', serif",
+                  fontSize: `${docFontSizePt ?? settings?.documentFontSizePt ?? 11}pt`,
+                }}
+              >
+                <div className="font-bold">Sample Daily Report Text</div>
+                <div>Date: 17 November 2026 — Help for Login &amp; Support Calls.</div>
+              </div>
+
+              {isLead ? (
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={saveTypographyMutation.isPending}
+                    onClick={() => saveTypographyMutation.mutate()}
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                    {saveTypographyMutation.isPending ? 'Saving…' : 'Save Document Typography'}
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-xs text-zinc-500">
+                  Only the Team Lead can change the team&apos;s exported document font settings.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
         {/* Left Column (5 cols) */}
         <div className="flex flex-col gap-4 lg:col-span-5">
           <Card className="border-t-2 border-t-primary">
@@ -667,12 +918,20 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
                         className="grid gap-2.5 rounded-md border border-orange-200 border-l-4 border-l-primary bg-white p-3"
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 pb-2">
-                          <strong className="text-sm text-zinc-950">{cat.name}</strong>
-                          <div className="flex items-center gap-1.5">
+                          <strong
+                            className={cn(
+                              'text-sm text-zinc-950',
+                              !cat.isActive && 'opacity-60 line-through',
+                            )}
+                          >
+                            {cat.name}
+                          </strong>
+                          <div className="flex items-center gap-1">
                             <Button
                               type="button"
                               variant="outline"
-                              size="xs"
+                              size="icon-xs"
+                              title="Edit category"
                               onClick={() =>
                                 setRenamePrompt({
                                   type: 'category',
@@ -681,12 +940,13 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
                                 })
                               }
                             >
-                              Rename
+                              <Pencil className="h-3 w-3" />
                             </Button>
                             <Button
                               type="button"
                               variant="outline"
-                              size="xs"
+                              size="icon-xs"
+                              title={cat.isActive ? 'Archive category' : 'Restore category'}
                               onClick={() =>
                                 renameCategoryMutation.mutate({
                                   id: cat.id,
@@ -694,30 +954,93 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
                                 })
                               }
                             >
-                              {cat.isActive ? 'Archive' : 'Restore'}
+                              {cat.isActive ? (
+                                <Archive className="h-3 w-3" />
+                              ) : (
+                                <ArchiveRestore className="h-3 w-3" />
+                              )}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="icon-xs"
+                              title="Delete category"
+                              onClick={() =>
+                                setDeleteDictTarget({
+                                  type: 'category',
+                                  id: cat.id,
+                                  name: cat.name,
+                                })
+                              }
+                            >
+                              <Trash2 className="h-3 w-3" />
                             </Button>
                           </div>
                         </div>
                         {cat.titles.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5">
+                          <div className="flex flex-wrap gap-2">
                             {cat.titles.map((t) => (
-                              <Button
+                              <div
                                 key={t.id}
-                                type="button"
-                                size="xs"
-                                variant={t.isActive ? 'outline' : 'secondary'}
-                                className={cn(!t.isActive && 'opacity-60 line-through')}
-                                title="Click to rename title"
-                                onClick={() =>
-                                  setRenamePrompt({
-                                    type: 'title',
-                                    id: t.id,
-                                    currentName: t.name,
-                                  })
-                                }
+                                className={cn(
+                                  'inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1 text-xs',
+                                  !t.isActive && 'opacity-60',
+                                )}
                               >
-                                {t.name}
-                              </Button>
+                                <span
+                                  className={cn(
+                                    'font-medium text-zinc-800',
+                                    !t.isActive && 'line-through',
+                                  )}
+                                >
+                                  {t.name}
+                                </span>
+                                <button
+                                  type="button"
+                                  title="Edit title"
+                                  onClick={() =>
+                                    setRenamePrompt({
+                                      type: 'title',
+                                      id: t.id,
+                                      currentName: t.name,
+                                    })
+                                  }
+                                  className="cursor-pointer rounded p-0.5 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-900"
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  title={t.isActive ? 'Archive title' : 'Restore title'}
+                                  onClick={() =>
+                                    renameTitleMutation.mutate({
+                                      id: t.id,
+                                      isActive: !t.isActive,
+                                    })
+                                  }
+                                  className="cursor-pointer rounded p-0.5 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-900"
+                                >
+                                  {t.isActive ? (
+                                    <Archive className="h-3 w-3" />
+                                  ) : (
+                                    <ArchiveRestore className="h-3 w-3" />
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  title="Delete title"
+                                  onClick={() =>
+                                    setDeleteDictTarget({
+                                      type: 'title',
+                                      id: t.id,
+                                      name: t.name,
+                                    })
+                                  }
+                                  className="cursor-pointer rounded p-0.5 text-rose-500 hover:bg-rose-100 hover:text-rose-700"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </button>
+                              </div>
                             ))}
                           </div>
                         )}
@@ -730,6 +1053,7 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
           )}
         </div>
       </div>
+      )}
 
       <PromptDialog
         open={Boolean(renamePrompt)}
@@ -753,6 +1077,26 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
             renameCategoryMutation.mutate({ id: renamePrompt.id, name: trimmed });
           } else {
             renameTitleMutation.mutate({ id: renamePrompt.id, name: trimmed });
+          }
+        }}
+      />
+
+      <ConfirmDialog
+        open={Boolean(deleteDictTarget)}
+        onOpenChange={(open) => {
+          if (!open) setDeleteDictTarget(null);
+        }}
+        title={deleteDictTarget?.type === 'category' ? 'Delete Category' : 'Delete Title'}
+        description={`Permanently delete "${deleteDictTarget?.name ?? ''}"? If it is used in existing reports, archive it instead.`}
+        confirmLabel="Delete"
+        destructive
+        pending={deleteCategoryMutation.isPending || deleteTitleMutation.isPending}
+        onConfirm={() => {
+          if (!deleteDictTarget) return;
+          if (deleteDictTarget.type === 'category') {
+            deleteCategoryMutation.mutate(deleteDictTarget.id);
+          } else {
+            deleteTitleMutation.mutate(deleteDictTarget.id);
           }
         }}
       />

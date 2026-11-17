@@ -72,29 +72,38 @@ export function LoginScreen() {
             </p>
           </div>
 
-          <div className="mb-4 grid grid-cols-2 gap-1.5 rounded-md bg-zinc-100 p-1">
-            <Button
+          <div className="relative mb-4 grid grid-cols-2 rounded-lg bg-zinc-100 p-1">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute top-1 bottom-1 left-1 w-[calc(50%-4px)] rounded-md bg-zinc-950 shadow-sm transition-transform duration-300 ease-out"
+              style={{
+                transform: mode === 'register' ? 'translateX(calc(100% + 0px))' : 'translateX(0)',
+              }}
+            />
+            <button
               type="button"
-              size="sm"
-              variant={mode === 'login' ? 'dark' : 'ghost'}
               onClick={() => {
                 setMode('login');
                 setErrorMsg(null);
               }}
+              className={`relative z-10 h-8 cursor-pointer rounded-md text-xs font-semibold transition-colors duration-200 ${
+                mode === 'login' ? 'text-white' : 'text-zinc-600 hover:text-zinc-950'
+              }`}
             >
               Sign In
-            </Button>
-            <Button
+            </button>
+            <button
               type="button"
-              size="sm"
-              variant={mode === 'register' ? 'dark' : 'ghost'}
               onClick={() => {
                 setMode('register');
                 setErrorMsg(null);
               }}
+              className={`relative z-10 h-8 cursor-pointer rounded-md text-xs font-semibold transition-colors duration-200 ${
+                mode === 'register' ? 'text-white' : 'text-zinc-600 hover:text-zinc-950'
+              }`}
             >
               Create Account
-            </Button>
+            </button>
           </div>
 
           {errorMsg && (
@@ -105,7 +114,8 @@ export function LoginScreen() {
 
           {mode === 'register' ? (
             <form
-              className="grid gap-3.5"
+              key="register-form"
+              className="auth-form-animate grid gap-3.5"
               onSubmit={(e) => {
                 e.preventDefault();
                 setErrorMsg(null);
@@ -161,7 +171,8 @@ export function LoginScreen() {
             </form>
           ) : (
             <form
-              className="grid gap-3.5"
+              key="login-form"
+              className="auth-form-animate grid gap-3.5"
               onSubmit={(e) => {
                 e.preventDefault();
                 setErrorMsg(null);

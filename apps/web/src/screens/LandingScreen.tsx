@@ -1,11 +1,12 @@
 import { useEffect } from 'react';
 import type { AuthSession } from '@cghq/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, CheckCircle2, FileDown, Layers, ListChecks, LogOut, Plus } from 'lucide-react';
+import { ArrowRight, CheckCircle2, FileDown, Layers, ListChecks, Plus } from 'lucide-react';
 import { Link } from 'react-router';
 import { authApi } from '../api/client';
+import { ProfileMenu } from '../components/ProfileMenu';
 import { Badge } from '../components/ui/badge';
-import { Button, buttonVariants } from '../components/ui/button';
+import { buttonVariants } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 
 const SESSION_CACHE_KEY = 'cghq:session';
@@ -96,7 +97,7 @@ export function LandingScreen() {
               />
             </div>
             <div className="flex flex-col">
-              <span className="text-sm font-bold tracking-tight text-white">CGHQ Work Log</span>
+              <span className="text-sm font-bold tracking-tight text-white">Work Log</span>
               <span className="text-[11px] text-zinc-400">
                 {isSignedIn && session
                   ? session.team && session.member
@@ -108,18 +109,12 @@ export function LandingScreen() {
           </div>
 
           <div className="flex items-center gap-2">
-            {isSignedIn ? (
-              <Button
-                type="button"
-                variant="dark"
-                size="sm"
-                className="border-zinc-700 bg-zinc-900 text-white hover:bg-zinc-800"
-                disabled={logoutMutation.isPending}
-                onClick={() => logoutMutation.mutate()}
-              >
-                <LogOut className="h-3.5 w-3.5" />
-                {logoutMutation.isPending ? 'Signing out…' : 'Sign Out'}
-              </Button>
+            {isSignedIn && session ? (
+              <ProfileMenu
+                session={session}
+                onLogout={() => logoutMutation.mutate()}
+                logoutPending={logoutMutation.isPending}
+              />
             ) : (
               <Link
                 to="/login"
@@ -149,7 +144,7 @@ export function LandingScreen() {
               <div className="grid gap-4">
                 <div className="flex items-center gap-2">
                   <Badge variant="default" size="sm">
-                    Solution Art · CGHQ
+                    Solution Art · Work Log
                   </Badge>
                   <Badge variant="dark" size="sm">
                     Daily Work Report

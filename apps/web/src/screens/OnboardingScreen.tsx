@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import type { AuthSession } from '@cghq/contracts';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, LogOut, PlusCircle, RefreshCw, Users } from 'lucide-react';
+import { CheckCircle2, PlusCircle, RefreshCw, Users } from 'lucide-react';
+import { useNavigate } from 'react-router';
 import { authApi } from '../api/client';
+import { ProfileMenu } from '../components/ProfileMenu';
 import { Alert } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
@@ -20,6 +22,7 @@ export function OnboardingScreen({
   onLogout,
   logoutPending,
 }: OnboardingScreenProps) {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [teamName, setTeamName] = useState('');
   const [teamSlug, setTeamSlug] = useState('');
@@ -39,6 +42,7 @@ export function OnboardingScreen({
     onSuccess: async () => {
       setErrorMsg(null);
       await queryClient.invalidateQueries({ queryKey: ['me'] });
+      navigate('/today');
     },
     onError: (err: Error) => setErrorMsg(err.message),
   });
@@ -67,24 +71,18 @@ export function OnboardingScreen({
               />
             </div>
             <div className="flex flex-col">
-              <span className="text-sm font-bold tracking-tight text-white">CGHQ Work Log</span>
+              <span className="text-sm font-bold tracking-tight text-white">Work Log</span>
               <span className="text-xs text-zinc-400">
                 {session.user.name} · {session.user.email}
               </span>
             </div>
           </div>
 
-          <Button
-            type="button"
-            variant="dark"
-            size="sm"
-            className="border-zinc-700 bg-zinc-900 text-white hover:border-zinc-600 hover:bg-zinc-800"
-            disabled={logoutPending}
-            onClick={onLogout}
-          >
-            <LogOut className="h-3.5 w-3.5" />
-            Sign Out
-          </Button>
+          <ProfileMenu
+            session={session}
+            onLogout={onLogout}
+            logoutPending={logoutPending}
+          />
         </div>
       </header>
 
@@ -107,7 +105,8 @@ export function OnboardingScreen({
                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                 <span>
                   Join request sent to <strong>{joinedTeamName}</strong>. Waiting for the Team Lead
-                  to approve your access.
+                  to approve your access—this page will automatically open your workspace once
+                  approved.
                 </span>
               </div>
               <Button

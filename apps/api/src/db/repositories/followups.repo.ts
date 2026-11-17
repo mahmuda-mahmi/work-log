@@ -1,6 +1,7 @@
 import type { FollowupItemDto, FollowupStatus } from '@cghq/contracts';
 import type { DbClient } from '../pool.js';
 import {
+  ARCHIVE_ALL_FOLLOWUPS,
   ARCHIVE_FOLLOWUP_ITEM,
   COUNT_FOLLOWUPS_BY_TEAM,
   INSERT_FOLLOWUP_ITEM,
@@ -244,4 +245,13 @@ export async function archiveFollowupItem(
 ): Promise<boolean> {
   const res = await conn.query(ARCHIVE_FOLLOWUP_ITEM, [actorUserId, teamId, followupId]);
   return (res.rowCount ?? 0) === 1;
+}
+
+export async function archiveAllFollowups(
+  conn: DbClient,
+  teamId: string,
+  actorUserId: string,
+): Promise<number> {
+  const res = await conn.query(ARCHIVE_ALL_FOLLOWUPS, [actorUserId, teamId]);
+  return res.rowCount ?? 0;
 }

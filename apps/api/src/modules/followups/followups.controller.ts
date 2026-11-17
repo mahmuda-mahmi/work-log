@@ -34,6 +34,7 @@ import { getPool, withTransaction } from '../../db/pool.js';
 import { appendAuditEvent } from '../../db/repositories/audit.repo.js';
 import { findOrCreateCategoryAndTitle } from '../../db/repositories/dictionary.repo.js';
 import {
+  archiveAllFollowups,
   archiveFollowupItem,
   findExistingActiveFollowup,
   findFollowupById,
@@ -257,6 +258,26 @@ export class FollowupsController {
       throw new NotFoundException({ code: 'FOLLOWUP_NOT_FOUND', message: 'Follow-up not found' });
     }
     return { ok: true };
+  }
+
+  @Delete()
+  async removeAll(@Param('teamId') teamId: string, @Req() req: AuthenticatedRequest) {
+    const pool = getPool()!;
+    const removedCount = await withTransaction(pool, async (conn) => {
+      const count = await archiveAllFollowups(conn, teamId, req.auth!.userId);
+      if (count > 0) {
+        await appendAuditEvent(conn, {
+          teamId,
+          actorUserId: req.auth!.userId,
+          action: 'followup.removed_all',
+          entityType: 'followup_item',
+          entityId: teamId,
+          metadata: { count },
+        });
+      }
+      return count;
+    });
+    return { ok: true, removedCount };
   }
 
   @Post(':followupId/move-to-daily')

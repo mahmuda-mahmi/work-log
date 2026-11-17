@@ -95,6 +95,8 @@ export class TeamsController {
         body.preparedByDefault !== undefined ? body.preparedByDefault : current.preparedByDefault,
       membersCanAddDictionary: body.membersCanAddDictionary ?? current.membersCanAddDictionary,
       followupsEnabled: body.followupsEnabled ?? current.followupsEnabled,
+      documentFontFamily: body.documentFontFamily ?? current.documentFontFamily,
+      documentFontSizePt: body.documentFontSizePt ?? current.documentFontSizePt,
     };
 
     await withTransaction(pool, async (conn) => {

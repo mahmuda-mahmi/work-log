@@ -30,6 +30,8 @@ type TeamSettingsRow = {
   members_can_add_dictionary: boolean;
   followups_enabled: boolean;
   logo_asset_id: string | null;
+  document_font_family: 'Liberation Serif' | 'Helvetica' | 'Courier';
+  document_font_size_pt: number;
 };
 
 type MemberRow = {
@@ -113,6 +115,8 @@ export async function findTeamSettings(conn: DbClient, teamId: string): Promise<
     membersCanAddDictionary: Boolean(r.members_can_add_dictionary),
     followupsEnabled: Boolean(r.followups_enabled),
     hasLogo: r.logo_asset_id !== null,
+    documentFontFamily: r.document_font_family ?? 'Liberation Serif',
+    documentFontSizePt: Number(r.document_font_size_pt ?? 11),
   };
 }
 
@@ -129,6 +133,8 @@ export async function updateTeamSettings(
     settings.preparedByDefault,
     settings.membersCanAddDictionary,
     settings.followupsEnabled,
+    settings.documentFontFamily,
+    settings.documentFontSizePt,
     teamId,
   ]);
 }

@@ -74,8 +74,8 @@ describe('@cghq/document Phase 1 Format Proof', () => {
     assert.equal(model.mainRows[1]!.groupMerge, 'continue');
     assert.equal(model.mainRows[1]!.completedBy, 'Alex');
 
-    assert.equal(model.followupRows.length, 1);
-    assert.equal(model.followupRows[0]!.status, 'None');
+    assert.equal(model.followupRows.length, 0);
+    assert.equal(model.hasFollowups, false);
 
     const docxBuf = await renderDocx(model);
     const pdfBuf = await renderPdf(model);
@@ -90,8 +90,8 @@ describe('@cghq/document Phase 1 Format Proof', () => {
     assert.ok(docXml.includes('05 November 2026'), 'Zero-padded date missing in DOCX');
     assert.ok(docXml.includes('Times New Roman'), 'Times New Roman font missing in DOCX');
     assert.ok(docXml.includes('w:vMerge'), 'Vertical merge missing in DOCX');
-    assert.equal((docXml.match(/<w:tbl>/g) ?? []).length, 2, 'DOCX must have exactly 2 tables');
-    assert.ok(hdrXml.includes('CGHQ Daily Report'), 'Repeating header title missing');
+    assert.equal((docXml.match(/<w:tbl>/g) ?? []).length, 1, 'DOCX must omit follow-up table when empty');
+    assert.ok(hdrXml.includes('Work Log Daily Report'), 'Repeating header title missing');
 
     // Structural PDF checks
     const pdf = await PDFDocument.load(pdfBuf);

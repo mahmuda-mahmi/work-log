@@ -40,6 +40,7 @@ export const SELECT_ACTIVE_SESSION = `
     u.id AS user_id,
     u.name AS user_name,
     u.email AS user_email,
+    u.avatar_url,
     t.id AS team_id,
     t.name AS team_name,
     t.slug AS team_slug,
@@ -67,7 +68,7 @@ export const SELECT_ACTIVE_SESSION = `
     AND s.expires_at > NOW()
     AND s.session_version = u.session_version
     AND u.is_active = TRUE
-  ORDER BY tm.created_at DESC NULLS LAST
+  ORDER BY (tm.team_id = s.active_team_id) DESC NULLS LAST, tm.created_at DESC NULLS LAST
   LIMIT 1
 `;
 
@@ -146,4 +147,29 @@ export const MARK_PASSWORD_RESET_USED = `
   UPDATE password_resets
   SET used_at = NOW()
   WHERE id = $1 AND used_at IS NULL
+`;
+
+export const UPDATE_USER_AVATAR = `
+  UPDATE users
+  SET avatar_url = $1
+  WHERE id = $2
+`;
+
+export const SELECT_USER_TEAMS = `
+  SELECT
+    t.id AS team_id,
+    t.name AS team_name,
+    t.slug AS team_slug,
+    tm.role,
+    tm.display_name
+  FROM team_members tm
+  INNER JOIN teams t ON t.id = tm.team_id
+  WHERE tm.user_id = $1 AND tm.is_active = TRUE
+  ORDER BY tm.created_at ASC
+`;
+
+export const UPDATE_SESSION_ACTIVE_TEAM = `
+  UPDATE sessions
+  SET active_team_id = $1
+  WHERE id = $2
 `;
