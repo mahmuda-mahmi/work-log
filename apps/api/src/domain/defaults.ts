@@ -14,6 +14,7 @@ import {
   countWorkGroupsByReport,
   insertWorkEntry,
   insertWorkGroupAtPosition,
+  listEmptyCommunicationGroupIds,
 } from '../db/repositories/reports.repo.js';
 
 export const DEFAULT_REPORT_GROUPS: ReadonlyArray<{
@@ -177,6 +178,31 @@ export async function ensureDefaultReportGroups(
 
   const count = await countWorkGroupsByReport(pool, reportId);
   if (count > 0) {
+    const emptyCommIds = await listEmptyCommunicationGroupIds(pool, reportId);
+    if (emptyCommIds.length > 0) {
+      await withTransaction(pool, async (conn) => {
+        for (const groupId of emptyCommIds) {
+          await insertWorkEntry(conn, {
+            id: uuidv7(),
+            groupId,
+            statusText: 'Officer: Nil',
+            completedByMemberId: null,
+            completedByLabel: null,
+            position: 1000,
+            createdByUserId: null,
+          });
+          await insertWorkEntry(conn, {
+            id: uuidv7(),
+            groupId,
+            statusText: 'Sailor: Nil',
+            completedByMemberId: null,
+            completedByLabel: null,
+            position: 2000,
+            createdByUserId: null,
+          });
+        }
+      });
+    }
     seededReportGroups.add(reportId);
     return;
   }

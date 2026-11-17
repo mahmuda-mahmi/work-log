@@ -12,6 +12,8 @@ import type {
 } from '@cghq/contracts';
 import {
   ArrowDown,
+  ArrowLeft,
+  ArrowRight,
   ArrowUp,
   Calendar,
   Check,
@@ -91,7 +93,10 @@ function moveItem<T>(items: T[], index: number, direction: -1 | 1): T[] {
   return copy;
 }
 
-function groupEntriesByMember(entries: WorkEntryDto[], topMemberId: string): WorkEntryDto[] {
+function orderEntriesByMemberSequence(
+  entries: WorkEntryDto[],
+  memberOrder: string[],
+): WorkEntryDto[] {
   const buckets = new Map<string, WorkEntryDto[]>();
   for (const entry of entries) {
     const key = entry.completedByMemberId ?? '__unassigned__';
@@ -100,9 +105,12 @@ function groupEntriesByMember(entries: WorkEntryDto[], topMemberId: string): Wor
     buckets.set(key, list);
   }
   const result: WorkEntryDto[] = [];
-  if (buckets.has(topMemberId)) {
-    result.push(...buckets.get(topMemberId)!);
-    buckets.delete(topMemberId);
+  for (const memberId of memberOrder) {
+    const list = buckets.get(memberId);
+    if (list) {
+      result.push(...list);
+      buckets.delete(memberId);
+    }
   }
   const unassigned = buckets.get('__unassigned__');
   buckets.delete('__unassigned__');
@@ -1132,9 +1140,14 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                           Add
                                         </Button>
                                         {(() => {
+                                          const baseEntries =
+                                            group.categoryName.trim().toLowerCase() ===
+                                            'communication'
+                                              ? sortCommunicationItems(group.entries)
+                                              : group.entries;
                                           const groupMembers = Array.from(
                                             new Map(
-                                              group.entries
+                                              baseEntries
                                                 .filter(
                                                   (e) =>
                                                     e.completedByMemberId && e.completedByDisplay,
@@ -1145,46 +1158,76 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                                 ]),
                                             ).entries(),
                                           );
-                                          if (group.entries.length <= 1 || groupMembers.length < 2) {
+                                          if (baseEntries.length <= 1 || groupMembers.length < 2) {
                                             return null;
                                           }
-                                          const firstMemberId =
-                                            group.entries[0]?.completedByMemberId ?? '';
+                                          const memberIdsOrder = groupMembers.map(([mId]) => mId);
                                           return (
-                                            <div className="no-print flex items-center gap-1.5">
+                                            <div className="no-print flex flex-wrap items-center gap-1.5">
                                               <span className="text-[11px] font-medium text-zinc-500">
-                                                Top member:
+                                                Member order:
                                               </span>
-                                              <Select
-                                                value={firstMemberId}
-                                                disabled={reorderEntriesMutation.isPending}
-                                                onValueChange={(topMemberId) => {
-                                                  const baseEntries =
-                                                    group.categoryName.trim().toLowerCase() ===
-                                                    'communication'
-                                                      ? sortCommunicationItems(group.entries)
-                                                      : group.entries;
-                                                  const grouped = groupEntriesByMember(
-                                                    baseEntries,
-                                                    topMemberId,
-                                                  );
-                                                  reorderEntriesMutation.mutate({
-                                                    groupId: group.id,
-                                                    ids: grouped.map((item) => item.id),
-                                                  });
-                                                }}
-                                              >
-                                                <SelectTrigger className="h-7 w-[150px] bg-white text-xs">
-                                                  <SelectValue placeholder="Order by member…" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                  {groupMembers.map(([mId, mName]) => (
-                                                    <SelectItem key={mId} value={mId}>
-                                                      {mName}
-                                                    </SelectItem>
-                                                  ))}
-                                                </SelectContent>
-                                              </Select>
+                                              {groupMembers.map(([mId, mName], mIdx) => (
+                                                <div
+                                                  key={mId}
+                                                  className="inline-flex items-center gap-0.5 rounded-md border border-zinc-200 bg-white px-1.5 py-0.5 text-xs text-zinc-800 shadow-2xs"
+                                                >
+                                                  <button
+                                                    type="button"
+                                                    title={`Move ${mName} earlier`}
+                                                    disabled={
+                                                      mIdx === 0 || reorderEntriesMutation.isPending
+                                                    }
+                                                    onClick={() => {
+                                                      const nextOrder = moveItem(
+                                                        memberIdsOrder,
+                                                        mIdx,
+                                                        -1,
+                                                      );
+                                                      const ordered = orderEntriesByMemberSequence(
+                                                        baseEntries,
+                                                        nextOrder,
+                                                      );
+                                                      reorderEntriesMutation.mutate({
+                                                        groupId: group.id,
+                                                        ids: ordered.map((item) => item.id),
+                                                      });
+                                                    }}
+                                                    className="rounded p-0.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-30"
+                                                  >
+                                                    <ArrowLeft className="h-3 w-3" />
+                                                  </button>
+                                                  <span className="px-1 font-medium">
+                                                    {mIdx + 1}. {mName}
+                                                  </span>
+                                                  <button
+                                                    type="button"
+                                                    title={`Move ${mName} later`}
+                                                    disabled={
+                                                      mIdx === groupMembers.length - 1 ||
+                                                      reorderEntriesMutation.isPending
+                                                    }
+                                                    onClick={() => {
+                                                      const nextOrder = moveItem(
+                                                        memberIdsOrder,
+                                                        mIdx,
+                                                        1,
+                                                      );
+                                                      const ordered = orderEntriesByMemberSequence(
+                                                        baseEntries,
+                                                        nextOrder,
+                                                      );
+                                                      reorderEntriesMutation.mutate({
+                                                        groupId: group.id,
+                                                        ids: ordered.map((item) => item.id),
+                                                      });
+                                                    }}
+                                                    className="rounded p-0.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-30"
+                                                  >
+                                                    <ArrowRight className="h-3 w-3" />
+                                                  </button>
+                                                </div>
+                                              ))}
                                             </div>
                                           );
                                         })()}
@@ -1313,7 +1356,7 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                   {quickAdd.categoryName.trim().toLowerCase() ===
                                     'communication' && (
                                     <Select
-                                      className="w-[125px] shrink-0"
+                                      className="w-[148px] shrink-0"
                                       value={quickAdd.communicationType}
                                       onValueChange={(val) =>
                                         setQuickAdd({ ...quickAdd, communicationType: val })

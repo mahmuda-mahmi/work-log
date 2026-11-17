@@ -20,6 +20,7 @@ import {
   INSERT_WORK_GROUP,
   SELECT_DAILY_REPORT_BY_DATE,
   SELECT_DAILY_REPORT_FOR_UPDATE,
+  SELECT_EMPTY_COMMUNICATION_GROUPS_BY_REPORT,
   SELECT_FROZEN_FOLLOWUPS_FOR_REPORT,
   SELECT_GROUP_BY_REPORT_CAT_TITLE,
   SELECT_LIVE_FOLLOWUPS_FOR_DATE,
@@ -403,6 +404,16 @@ export async function updateWorkGroupNumbering(
 export async function countWorkGroupsByReport(conn: DbClient, reportId: string): Promise<number> {
   const res = await conn.query<{ cnt: number }>(COUNT_WORK_GROUPS_BY_REPORT, [reportId]);
   return Number(res.rows[0]?.cnt ?? 0);
+}
+
+export async function listEmptyCommunicationGroupIds(
+  conn: DbClient,
+  reportId: string,
+): Promise<string[]> {
+  const res = await conn.query<{ id: string }>(SELECT_EMPTY_COMMUNICATION_GROUPS_BY_REPORT, [
+    reportId,
+  ]);
+  return res.rows.map((r) => r.id);
 }
 
 export async function insertWorkGroupAtPosition(

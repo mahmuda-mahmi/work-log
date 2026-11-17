@@ -531,7 +531,7 @@ export function EntryComposer({
               <div className={isCommunication ? 'flex items-start gap-2' : 'grid'}>
                 {isCommunication && (
                   <Select
-                    className="w-[125px] shrink-0"
+                    className="w-[148px] shrink-0"
                     value={communicationType}
                     onValueChange={setCommunicationType}
                     disabled={disabled || createMutation.isPending}

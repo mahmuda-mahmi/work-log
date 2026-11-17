@@ -55,6 +55,18 @@ export const SELECT_WORK_GROUPS_BY_REPORT = `
   ORDER BY wg.position ASC, wg.created_at ASC, wg.id ASC
 `;
 
+export const SELECT_EMPTY_COMMUNICATION_GROUPS_BY_REPORT = `
+  SELECT wg.id
+  FROM work_groups wg
+  INNER JOIN categories c ON c.id = wg.category_id
+  WHERE wg.report_id = $1
+    AND LOWER(TRIM(c.name)) = 'communication'
+    AND NOT EXISTS (
+      SELECT 1 FROM work_entries we
+      WHERE we.group_id = wg.id AND we.deleted_at IS NULL
+    )
+`;
+
 export const SELECT_WORK_ENTRIES_BY_REPORT = `
   SELECT
     we.id,
