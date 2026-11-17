@@ -361,7 +361,11 @@ export class ReportsController {
           message: 'Report was finalized and cannot be edited',
         });
       }
-      if (auth.role !== 'lead' && found.entry.createdByUserId !== auth.userId) {
+      if (
+        auth.role !== 'lead' &&
+        found.entry.createdByUserId !== null &&
+        found.entry.createdByUserId !== auth.userId
+      ) {
         throw new ForbiddenException({
           code: 'FORBIDDEN_ENTRY_EDIT',
           message: 'You can only edit entries you created',

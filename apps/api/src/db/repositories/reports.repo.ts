@@ -292,7 +292,7 @@ export async function insertWorkEntry(
     completedByMemberId: string | null;
     completedByLabel: string | null;
     position: number;
-    createdByUserId: string;
+    createdByUserId: string | null;
   },
 ): Promise<void> {
   await conn.query(INSERT_WORK_ENTRY, [

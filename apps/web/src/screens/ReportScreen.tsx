@@ -91,30 +91,28 @@ function moveItem<T>(items: T[], index: number, direction: -1 | 1): T[] {
   return copy;
 }
 
-function moveSelectedItems<T extends { id: string }>(
-  items: T[],
-  selectedIds: Set<string>,
-  direction: -1 | 1,
-): T[] {
-  const copy = [...items];
-  if (direction === -1) {
-    for (let i = 1; i < copy.length; i += 1) {
-      if (selectedIds.has(copy[i]!.id) && !selectedIds.has(copy[i - 1]!.id)) {
-        const tmp = copy[i - 1]!;
-        copy[i - 1] = copy[i]!;
-        copy[i] = tmp;
-      }
-    }
-  } else {
-    for (let i = copy.length - 2; i >= 0; i -= 1) {
-      if (selectedIds.has(copy[i]!.id) && !selectedIds.has(copy[i + 1]!.id)) {
-        const tmp = copy[i + 1]!;
-        copy[i + 1] = copy[i]!;
-        copy[i] = tmp;
-      }
-    }
+function groupEntriesByMember(entries: WorkEntryDto[], topMemberId: string): WorkEntryDto[] {
+  const buckets = new Map<string, WorkEntryDto[]>();
+  for (const entry of entries) {
+    const key = entry.completedByMemberId ?? '__unassigned__';
+    const list = buckets.get(key) ?? [];
+    list.push(entry);
+    buckets.set(key, list);
   }
-  return copy;
+  const result: WorkEntryDto[] = [];
+  if (buckets.has(topMemberId)) {
+    result.push(...buckets.get(topMemberId)!);
+    buckets.delete(topMemberId);
+  }
+  const unassigned = buckets.get('__unassigned__');
+  buckets.delete('__unassigned__');
+  for (const list of buckets.values()) {
+    result.push(...list);
+  }
+  if (unassigned) {
+    result.push(...unassigned);
+  }
+  return result;
 }
 
 interface WorkspaceBundle {
@@ -155,27 +153,6 @@ export function ReportScreen({ session }: ReportScreenProps) {
   const [quickAdd, setQuickAdd] = useState<QuickAddState | null>(null);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
   const [finalizePromptOpen, setFinalizePromptOpen] = useState(false);
-  const [selectedEntryIds, setSelectedEntryIds] = useState<Set<string>>(() => new Set());
-
-  function toggleEntrySelection(entryId: string) {
-    setSelectedEntryIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(entryId)) {
-        next.delete(entryId);
-      } else {
-        next.add(entryId);
-      }
-      return next;
-    });
-  }
-
-  function clearGroupSelection(entryIds: string[]) {
-    setSelectedEntryIds((prev) => {
-      const next = new Set(prev);
-      for (const id of entryIds) next.delete(id);
-      return next;
-    });
-  }
 
   const workspaceQuery = useQuery({
     queryKey: ['report', teamId, 'workspace', dateKey],
@@ -476,7 +453,11 @@ export function ReportScreen({ session }: ReportScreenProps) {
 
   function canMutateEntry(entry: WorkEntryDto): boolean {
     if (isFinalized) return false;
-    return session.member.role === 'lead' || entry.createdByUserId === session.user.id;
+    return (
+      session.member.role === 'lead' ||
+      entry.createdByUserId === null ||
+      entry.createdByUserId === session.user.id
+    );
   }
 
   if (workspaceQuery.isLoading && !report) {
@@ -857,103 +838,10 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                 <col style={{ width: '30%' }} />
                               </colgroup>
                               <tbody>
-                                {(() => {
-                                  const orderedEntries =
-                                    group.categoryName.trim().toLowerCase() === 'communication'
-                                      ? sortCommunicationItems(group.entries)
-                                      : group.entries;
-                                  const selectedInGroup = orderedEntries.filter((e) =>
-                                    selectedEntryIds.has(e.id),
-                                  );
-                                  const canBulkMoveUp =
-                                    selectedInGroup.length > 0 &&
-                                    orderedEntries.some(
-                                      (e, idx) =>
-                                        idx > 0 &&
-                                        selectedEntryIds.has(e.id) &&
-                                        !selectedEntryIds.has(orderedEntries[idx - 1]!.id),
-                                    );
-                                  const canBulkMoveDown =
-                                    selectedInGroup.length > 0 &&
-                                    orderedEntries.some(
-                                      (e, idx) =>
-                                        idx < orderedEntries.length - 1 &&
-                                        selectedEntryIds.has(e.id) &&
-                                        !selectedEntryIds.has(orderedEntries[idx + 1]!.id),
-                                    );
-
-                                  return (
-                                    <>
-                                      {!isFinalized && selectedInGroup.length > 0 && (
-                                        <tr className="no-print border-b border-orange-200 bg-orange-50/70">
-                                          <td colSpan={2} className="px-2.5 py-1.5">
-                                            <div className="flex flex-wrap items-center justify-between gap-2">
-                                              <span className="text-xs font-semibold text-orange-800">
-                                                {selectedInGroup.length} selected
-                                              </span>
-                                              <div className="flex items-center gap-1.5">
-                                                <Button
-                                                  type="button"
-                                                  variant="outline"
-                                                  size="xs"
-                                                  disabled={
-                                                    !canBulkMoveUp ||
-                                                    reorderEntriesMutation.isPending
-                                                  }
-                                                  onClick={() =>
-                                                    reorderEntriesMutation.mutate({
-                                                      groupId: group.id,
-                                                      ids: moveSelectedItems(
-                                                        orderedEntries,
-                                                        selectedEntryIds,
-                                                        -1,
-                                                      ).map((item) => item.id),
-                                                    })
-                                                  }
-                                                >
-                                                  <ArrowUp className="h-3 w-3" />
-                                                  Move Up
-                                                </Button>
-                                                <Button
-                                                  type="button"
-                                                  variant="outline"
-                                                  size="xs"
-                                                  disabled={
-                                                    !canBulkMoveDown ||
-                                                    reorderEntriesMutation.isPending
-                                                  }
-                                                  onClick={() =>
-                                                    reorderEntriesMutation.mutate({
-                                                      groupId: group.id,
-                                                      ids: moveSelectedItems(
-                                                        orderedEntries,
-                                                        selectedEntryIds,
-                                                        1,
-                                                      ).map((item) => item.id),
-                                                    })
-                                                  }
-                                                >
-                                                  <ArrowDown className="h-3 w-3" />
-                                                  Move Down
-                                                </Button>
-                                                <Button
-                                                  type="button"
-                                                  variant="ghost"
-                                                  size="xs"
-                                                  onClick={() =>
-                                                    clearGroupSelection(
-                                                      orderedEntries.map((e) => e.id),
-                                                    )
-                                                  }
-                                                >
-                                                  Clear
-                                                </Button>
-                                              </div>
-                                            </div>
-                                          </td>
-                                        </tr>
-                                      )}
-                                      {orderedEntries.map((entry, eIdx) => {
+                                {(group.categoryName.trim().toLowerCase() === 'communication'
+                                  ? sortCommunicationItems(group.entries)
+                                  : group.entries
+                                ).map((entry, eIdx) => {
                                   const isEditingThis = editingEntry?.entryId === entry.id;
                                   const editable = canMutateEntry(entry);
 
@@ -1109,16 +997,6 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                         </div>
                                         {!isFinalized && (
                                           <div className="mt-2 flex flex-wrap items-center gap-1">
-                                            {group.entries.length > 1 && (
-                                              <input
-                                                type="checkbox"
-                                                aria-label="Select entry for bulk move"
-                                                title="Select to move multiple entries at once"
-                                                className="mr-1 h-3.5 w-3.5 cursor-pointer rounded border-zinc-300 accent-orange-500"
-                                                checked={selectedEntryIds.has(entry.id)}
-                                                onChange={() => toggleEntrySelection(entry.id)}
-                                              />
-                                            )}
                                             <Button
                                               type="button"
                                               variant="outline"
@@ -1225,36 +1103,92 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                     </tr>
                                   );
                                 })}
-                                    </>
-                                  );
-                                })()}
                                 {!isFinalized && (
                                   <tr>
                                     <td
                                       colSpan={2}
                                       className="border-t border-zinc-200 bg-zinc-50 px-2.5 py-1.5"
                                     >
-                                      <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="xs"
-                                        title={`Add status to Ser ${gIdx + 1}`}
-                                        onClick={() =>
-                                          setQuickAdd({
-                                            groupId: group.id,
-                                            categoryName: group.categoryName,
-                                            titleName: group.titleName,
-                                            communicationType: '',
-                                            statusText: '',
-                                            completedByMemberIds: session.member.id
-                                              ? [session.member.id]
-                                              : [],
-                                          })
-                                        }
-                                      >
-                                        <Plus className="h-3 w-3" />
-                                        Add
-                                      </Button>
+                                      <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="xs"
+                                          title={`Add status to Ser ${gIdx + 1}`}
+                                          onClick={() =>
+                                            setQuickAdd({
+                                              groupId: group.id,
+                                              categoryName: group.categoryName,
+                                              titleName: group.titleName,
+                                              communicationType: '',
+                                              statusText: '',
+                                              completedByMemberIds: session.member.id
+                                                ? [session.member.id]
+                                                : [],
+                                            })
+                                          }
+                                        >
+                                          <Plus className="h-3 w-3" />
+                                          Add
+                                        </Button>
+                                        {(() => {
+                                          const groupMembers = Array.from(
+                                            new Map(
+                                              group.entries
+                                                .filter(
+                                                  (e) =>
+                                                    e.completedByMemberId && e.completedByDisplay,
+                                                )
+                                                .map((e) => [
+                                                  e.completedByMemberId!,
+                                                  e.completedByDisplay,
+                                                ]),
+                                            ).entries(),
+                                          );
+                                          if (group.entries.length <= 1 || groupMembers.length < 2) {
+                                            return null;
+                                          }
+                                          const firstMemberId =
+                                            group.entries[0]?.completedByMemberId ?? '';
+                                          return (
+                                            <div className="no-print flex items-center gap-1.5">
+                                              <span className="text-[11px] font-medium text-zinc-500">
+                                                Top member:
+                                              </span>
+                                              <Select
+                                                value={firstMemberId}
+                                                disabled={reorderEntriesMutation.isPending}
+                                                onValueChange={(topMemberId) => {
+                                                  const baseEntries =
+                                                    group.categoryName.trim().toLowerCase() ===
+                                                    'communication'
+                                                      ? sortCommunicationItems(group.entries)
+                                                      : group.entries;
+                                                  const grouped = groupEntriesByMember(
+                                                    baseEntries,
+                                                    topMemberId,
+                                                  );
+                                                  reorderEntriesMutation.mutate({
+                                                    groupId: group.id,
+                                                    ids: grouped.map((item) => item.id),
+                                                  });
+                                                }}
+                                              >
+                                                <SelectTrigger className="h-7 w-[150px] bg-white text-xs">
+                                                  <SelectValue placeholder="Order by member…" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                  {groupMembers.map(([mId, mName]) => (
+                                                    <SelectItem key={mId} value={mId}>
+                                                      {mName}
+                                                    </SelectItem>
+                                                  ))}
+                                                </SelectContent>
+                                              </Select>
+                                            </div>
+                                          );
+                                        })()}
+                                      </div>
                                     </td>
                                   </tr>
                                 )}

@@ -12,6 +12,7 @@ import {
 } from '../db/repositories/followups.repo.js';
 import {
   countWorkGroupsByReport,
+  insertWorkEntry,
   insertWorkGroupAtPosition,
 } from '../db/repositories/reports.repo.js';
 
@@ -189,8 +190,9 @@ export async function ensureDefaultReportGroups(
         grp.categoryName,
         grp.titleName,
       );
+      const groupId = uuidv7();
       await insertWorkGroupAtPosition(conn, {
-        id: uuidv7(),
+        id: groupId,
         reportId,
         categoryId,
         titleId,
@@ -198,6 +200,27 @@ export async function ensureDefaultReportGroups(
         numberingMode: grp.numberingMode,
         actorUserId,
       });
+
+      if (grp.categoryName === 'Communication') {
+        await insertWorkEntry(conn, {
+          id: uuidv7(),
+          groupId,
+          statusText: 'Officer: Nil',
+          completedByMemberId: null,
+          completedByLabel: null,
+          position: 1000,
+          createdByUserId: null,
+        });
+        await insertWorkEntry(conn, {
+          id: uuidv7(),
+          groupId,
+          statusText: 'Sailor: Nil',
+          completedByMemberId: null,
+          completedByLabel: null,
+          position: 2000,
+          createdByUserId: null,
+        });
+      }
     }
   });
   seededReportGroups.add(reportId);
