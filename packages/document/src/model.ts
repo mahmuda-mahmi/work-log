@@ -65,6 +65,28 @@ function capitalizeFirst(value: string): string {
 }
 
 /**
+ * Returns true when a Communication status explicitly states there was no communication
+ * (e.g., "Officer: Nil" or "Sailor: Nil"), in which case Task Completed By stays blank.
+ */
+export function isNilCommunicationStatus(statusText: string): boolean {
+  return /^(officer|sailor)\s*:\s*nil\.?$/i.test(statusText.trim());
+}
+
+/**
+ * Ensures Communication entries always place Officer rows above Sailor rows
+ * while preserving relative order within each group.
+ */
+export function sortCommunicationItems<T extends { statusText: string }>(items: readonly T[]): T[] {
+  const rank = (statusText: string): number => {
+    const trimmed = statusText.trim().toLowerCase();
+    if (/^officer\s*:/.test(trimmed)) return 0;
+    if (/^sailor\s*:/.test(trimmed)) return 2;
+    return 1;
+  };
+  return [...items].sort((a, b) => rank(a.statusText) - rank(b.statusText));
+}
+
+/**
  * Builds the deterministic DocumentModel consumed by both DOCX and PDF renderers.
  * Implements PRD FR-7 (grouping & Ser), Q1 (zero-padded date), Q2 (individual Completed By),
  * and Q4 (empty follow-up "None" row).
@@ -105,15 +127,20 @@ export function buildDocumentModel(input: ReportDocumentInput): DocumentModel {
     if (group.items.length === 0) continue;
     serCounter += 1;
     const serStr = String(serCounter);
-    const isSingle = group.items.length === 1;
+    const orderedItems =
+      group.category.trim().toLowerCase() === 'communication'
+        ? sortCommunicationItems(group.items)
+        : group.items;
+    const isSingle = orderedItems.length === 1;
 
-    group.items.forEach((item, idx) => {
+    orderedItems.forEach((item, idx) => {
+      const status = item.statusText.trim();
       mainRows.push({
         ser: idx === 0 ? serStr : '',
         category: idx === 0 ? group.category : '',
         title: idx === 0 ? group.title : '',
-        status: item.statusText.trim(),
-        completedBy: item.completedBy.trim(),
+        status,
+        completedBy: isNilCommunicationStatus(status) ? '' : item.completedBy.trim(),
         groupMerge: isSingle ? 'none' : idx === 0 ? 'restart' : 'continue',
         statusPrefix: undefined,
       });

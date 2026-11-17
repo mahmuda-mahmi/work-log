@@ -1,6 +1,7 @@
 import { Fragment, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { isNilCommunicationStatus, sortCommunicationItems } from '@cghq/document/model';
 import type {
   ActiveAuthSession,
   DailyReportDto,
@@ -90,6 +91,32 @@ function moveItem<T>(items: T[], index: number, direction: -1 | 1): T[] {
   return copy;
 }
 
+function moveSelectedItems<T extends { id: string }>(
+  items: T[],
+  selectedIds: Set<string>,
+  direction: -1 | 1,
+): T[] {
+  const copy = [...items];
+  if (direction === -1) {
+    for (let i = 1; i < copy.length; i += 1) {
+      if (selectedIds.has(copy[i]!.id) && !selectedIds.has(copy[i - 1]!.id)) {
+        const tmp = copy[i - 1]!;
+        copy[i - 1] = copy[i]!;
+        copy[i] = tmp;
+      }
+    }
+  } else {
+    for (let i = copy.length - 2; i >= 0; i -= 1) {
+      if (selectedIds.has(copy[i]!.id) && !selectedIds.has(copy[i + 1]!.id)) {
+        const tmp = copy[i + 1]!;
+        copy[i + 1] = copy[i]!;
+        copy[i] = tmp;
+      }
+    }
+  }
+  return copy;
+}
+
 interface WorkspaceBundle {
   report: DailyReportDto;
   dictionary: DictionaryCategory[];
@@ -128,6 +155,27 @@ export function ReportScreen({ session }: ReportScreenProps) {
   const [quickAdd, setQuickAdd] = useState<QuickAddState | null>(null);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
   const [finalizePromptOpen, setFinalizePromptOpen] = useState(false);
+  const [selectedEntryIds, setSelectedEntryIds] = useState<Set<string>>(() => new Set());
+
+  function toggleEntrySelection(entryId: string) {
+    setSelectedEntryIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(entryId)) {
+        next.delete(entryId);
+      } else {
+        next.add(entryId);
+      }
+      return next;
+    });
+  }
+
+  function clearGroupSelection(entryIds: string[]) {
+    setSelectedEntryIds((prev) => {
+      const next = new Set(prev);
+      for (const id of entryIds) next.delete(id);
+      return next;
+    });
+  }
 
   const workspaceQuery = useQuery({
     queryKey: ['report', teamId, 'workspace', dateKey],
@@ -803,7 +851,103 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                 <col style={{ width: '30%' }} />
                               </colgroup>
                               <tbody>
-                                {group.entries.map((entry, eIdx) => {
+                                {(() => {
+                                  const orderedEntries =
+                                    group.categoryName.trim().toLowerCase() === 'communication'
+                                      ? sortCommunicationItems(group.entries)
+                                      : group.entries;
+                                  const selectedInGroup = orderedEntries.filter((e) =>
+                                    selectedEntryIds.has(e.id),
+                                  );
+                                  const canBulkMoveUp =
+                                    selectedInGroup.length > 0 &&
+                                    orderedEntries.some(
+                                      (e, idx) =>
+                                        idx > 0 &&
+                                        selectedEntryIds.has(e.id) &&
+                                        !selectedEntryIds.has(orderedEntries[idx - 1]!.id),
+                                    );
+                                  const canBulkMoveDown =
+                                    selectedInGroup.length > 0 &&
+                                    orderedEntries.some(
+                                      (e, idx) =>
+                                        idx < orderedEntries.length - 1 &&
+                                        selectedEntryIds.has(e.id) &&
+                                        !selectedEntryIds.has(orderedEntries[idx + 1]!.id),
+                                    );
+
+                                  return (
+                                    <>
+                                      {!isFinalized && selectedInGroup.length > 0 && (
+                                        <tr className="no-print border-b border-orange-200 bg-orange-50/70">
+                                          <td colSpan={2} className="px-2.5 py-1.5">
+                                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                              <span className="text-xs font-semibold text-orange-800">
+                                                {selectedInGroup.length} selected
+                                              </span>
+                                              <div className="flex items-center gap-1.5">
+                                                <Button
+                                                  type="button"
+                                                  variant="outline"
+                                                  size="xs"
+                                                  disabled={
+                                                    !canBulkMoveUp ||
+                                                    reorderEntriesMutation.isPending
+                                                  }
+                                                  onClick={() =>
+                                                    reorderEntriesMutation.mutate({
+                                                      groupId: group.id,
+                                                      ids: moveSelectedItems(
+                                                        orderedEntries,
+                                                        selectedEntryIds,
+                                                        -1,
+                                                      ).map((item) => item.id),
+                                                    })
+                                                  }
+                                                >
+                                                  <ArrowUp className="h-3 w-3" />
+                                                  Move Up
+                                                </Button>
+                                                <Button
+                                                  type="button"
+                                                  variant="outline"
+                                                  size="xs"
+                                                  disabled={
+                                                    !canBulkMoveDown ||
+                                                    reorderEntriesMutation.isPending
+                                                  }
+                                                  onClick={() =>
+                                                    reorderEntriesMutation.mutate({
+                                                      groupId: group.id,
+                                                      ids: moveSelectedItems(
+                                                        orderedEntries,
+                                                        selectedEntryIds,
+                                                        1,
+                                                      ).map((item) => item.id),
+                                                    })
+                                                  }
+                                                >
+                                                  <ArrowDown className="h-3 w-3" />
+                                                  Move Down
+                                                </Button>
+                                                <Button
+                                                  type="button"
+                                                  variant="ghost"
+                                                  size="xs"
+                                                  onClick={() =>
+                                                    clearGroupSelection(
+                                                      orderedEntries.map((e) => e.id),
+                                                    )
+                                                  }
+                                                >
+                                                  Clear
+                                                </Button>
+                                              </div>
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      )}
+                                      {orderedEntries.map((entry, eIdx) => {
                                   const isEditingThis = editingEntry?.entryId === entry.id;
                                   const editable = canMutateEntry(entry);
 
@@ -959,6 +1103,16 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                         </div>
                                         {!isFinalized && (
                                           <div className="mt-2 flex flex-wrap items-center gap-1">
+                                            {group.entries.length > 1 && (
+                                              <input
+                                                type="checkbox"
+                                                aria-label="Select entry for bulk move"
+                                                title="Select to move multiple entries at once"
+                                                className="mr-1 h-3.5 w-3.5 cursor-pointer rounded border-zinc-300 accent-orange-500"
+                                                checked={selectedEntryIds.has(entry.id)}
+                                                onChange={() => toggleEntrySelection(entry.id)}
+                                              />
+                                            )}
                                             <Button
                                               type="button"
                                               variant="outline"
@@ -970,9 +1124,14 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                               onClick={() =>
                                                 reorderEntriesMutation.mutate({
                                                   groupId: group.id,
-                                                  ids: moveItem(group.entries, eIdx, -1).map(
-                                                    (item) => item.id,
-                                                  ),
+                                                  ids: moveItem(
+                                                    group.categoryName.trim().toLowerCase() ===
+                                                      'communication'
+                                                      ? sortCommunicationItems(group.entries)
+                                                      : group.entries,
+                                                    eIdx,
+                                                    -1,
+                                                  ).map((item) => item.id),
                                                 })
                                               }
                                             >
@@ -990,9 +1149,14 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                               onClick={() =>
                                                 reorderEntriesMutation.mutate({
                                                   groupId: group.id,
-                                                  ids: moveItem(group.entries, eIdx, 1).map(
-                                                    (item) => item.id,
-                                                  ),
+                                                  ids: moveItem(
+                                                    group.categoryName.trim().toLowerCase() ===
+                                                      'communication'
+                                                      ? sortCommunicationItems(group.entries)
+                                                      : group.entries,
+                                                    eIdx,
+                                                    1,
+                                                  ).map((item) => item.id),
                                                 })
                                               }
                                             >
@@ -1045,7 +1209,8 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                         )}
                                       </td>
                                       <td className="border-l border-zinc-200 p-2.5 align-top">
-                                        {entry.completedByDisplay ? (
+                                        {!isNilCommunicationStatus(entry.statusText) &&
+                                        entry.completedByDisplay ? (
                                           <Badge variant="secondary" size="sm" className="normal-case">
                                             {entry.completedByDisplay}
                                           </Badge>
@@ -1054,6 +1219,9 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                     </tr>
                                   );
                                 })}
+                                    </>
+                                  );
+                                })()}
                                 {!isFinalized && (
                                   <tr>
                                     <td

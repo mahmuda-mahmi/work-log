@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { DailyReportDto, DictionaryCategory, MemberSummary, WorkEntryDto } from '@cghq/contracts';
+import { isNilCommunicationStatus } from '@cghq/document/model';
 import { findUnsupportedLatinChars } from '@cghq/document/date';
 import { List, Plus } from 'lucide-react';
 import { ApiError, reportsApi } from '../api/client.js';
@@ -63,6 +64,7 @@ export function EntryComposer({
   reportDate,
   dictionary,
   members,
+  currentMemberId,
   tableSections = [],
   disabled = false,
 }: EntryComposerProps) {
@@ -131,7 +133,9 @@ export function EntryComposer({
   const [isCustomTitle, setIsCustomTitle] = useState(false);
   const [communicationType, setCommunicationType] = useState<string>('');
   const [statusText, setStatusText] = useState('');
-  const [completedByMemberIds, setCompletedByMemberIds] = useState<string[]>([]);
+  const [completedByMemberIds, setCompletedByMemberIds] = useState<string[]>(() =>
+    currentMemberId ? [currentMemberId] : [],
+  );
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const isCommunication = categoryName.trim().toLowerCase() === 'communication';
@@ -150,8 +154,8 @@ export function EntryComposer({
     setCategoryName(lastPair?.categoryName ?? '');
     setTitleName(lastPair?.titleName ?? '');
     setStatusText('');
-    setCompletedByMemberIds([]);
-  }, [draftKey, lastPairKey]);
+    setCompletedByMemberIds(currentMemberId ? [currentMemberId] : []);
+  }, [draftKey, lastPairKey, currentMemberId]);
 
   useEffect(() => {
     if (activeCategories.length === 0 || isCustomCategory) return;
@@ -287,7 +291,7 @@ export function EntryComposer({
       setIsCustomTitle(false);
       setCommunicationType('');
       setStatusText('');
-      setCompletedByMemberIds([]);
+      setCompletedByMemberIds(currentMemberId ? [currentMemberId] : []);
       try {
         window.localStorage.removeItem(draftKey);
       } catch {
@@ -330,14 +334,20 @@ export function EntryComposer({
       setErrorMsg('Report Category, Title, and Status are required.');
       return;
     }
+    const hasCommPrefix = /^(officer|sailor)\s*:/i.test(trimmedStatus);
     const formattedStatus =
-      isCommunication && communicationType ? `${communicationType}: ${trimmedStatus}` : trimmedStatus;
+      isCommunication && communicationType && !hasCommPrefix
+        ? `${communicationType}: ${trimmedStatus}`
+        : trimmedStatus;
+    const effectiveMemberIds = isNilCommunicationStatus(formattedStatus)
+      ? []
+      : completedByMemberIds;
     createMutation.mutate({
       cat,
       title,
       formattedStatus,
       rawStatus: statusText,
-      memberIds: completedByMemberIds,
+      memberIds: effectiveMemberIds,
     });
   }
 

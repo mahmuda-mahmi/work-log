@@ -386,6 +386,9 @@ export async function renderPdf(model: DocumentModel): Promise<Buffer> {
   // Table 1: Daily Work Status
   renderTable(model.mainRows, TABLE.mainColumnsTwips, true);
 
+  // Add breathing room between Daily Work table and Follow-up Items
+  cursorY -= 16;
+
   // Table 2: Follow-up Items
   renderTable(model.followupRows, TABLE.followupColumnsTwips, false, 'Follow-up Items:');
 
