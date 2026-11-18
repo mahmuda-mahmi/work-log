@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ActiveAuthSession, FollowupItemDto, FollowupStatus } from '@cghq/contracts';
-import { ArrowUpRight, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpRight, Pencil, Plus, Trash2 } from 'lucide-react';
 import { ApiError, dictionaryApi, followupsApi, teamsApi } from '../api/client.js';
 import { Alert } from '../components/ui/alert.js';
 import { Badge } from '../components/ui/badge.js';
@@ -185,8 +185,30 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
     },
   });
 
+  const reorderMutation = useMutation({
+    mutationFn: (ids: string[]) => followupsApi.reorder(teamId, { ids }),
+    onSuccess: () => {
+      setErrorMsg(null);
+      void queryClient.invalidateQueries({ queryKey: ['followups', teamId] });
+      void queryClient.invalidateQueries({ queryKey: ['report', teamId] });
+    },
+    onError: (err) => {
+      setErrorMsg(err instanceof ApiError ? err.message : 'Failed to reorder follow-ups');
+    },
+  });
+
   const activeMembers = (membersQuery.data ?? []).filter((m) => m.isActive);
   const items = followupsQuery.data ?? [];
+  const activeItems = items.filter((item) => item.status !== 'archived');
+
+  function moveFollowupItem<T>(list: T[], index: number, delta: -1 | 1): T[] {
+    const nextIdx = index + delta;
+    if (nextIdx < 0 || nextIdx >= list.length) return list;
+    const copy = [...list];
+    const [picked] = copy.splice(index, 1);
+    copy.splice(nextIdx, 0, picked!);
+    return copy;
+  }
 
   function startEdit(item: FollowupItemDto) {
     setErrorMsg(null);
@@ -632,12 +654,55 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
                       );
                     }
 
+                    const activeIdx =
+                      item.status !== 'archived'
+                        ? activeItems.findIndex((x) => x.id === item.id)
+                        : -1;
+
                     return (
                       <tr key={item.id} className="border-b border-zinc-200 last:border-b-0">
                         <td className="border-r border-zinc-200 p-2.5 text-center align-top">
                           <span className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-primary-border bg-accent text-xs font-extrabold text-primary-text">
                             {idx + 1}
                           </span>
+                          {item.status !== 'archived' && (
+                            <div className="mt-1.5 flex items-center justify-center gap-1">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon-xs"
+                                className="h-6 w-6"
+                                title="Move follow-up up"
+                                disabled={activeIdx <= 0 || reorderMutation.isPending}
+                                onClick={() =>
+                                  reorderMutation.mutate(
+                                    moveFollowupItem(activeItems, activeIdx, -1).map((x) => x.id),
+                                  )
+                                }
+                              >
+                                <ArrowUp className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon-xs"
+                                className="h-6 w-6"
+                                title="Move follow-up down"
+                                disabled={
+                                  activeIdx === -1 ||
+                                  activeIdx >= activeItems.length - 1 ||
+                                  reorderMutation.isPending
+                                }
+                                onClick={() =>
+                                  reorderMutation.mutate(
+                                    moveFollowupItem(activeItems, activeIdx, 1).map((x) => x.id),
+                                  )
+                                }
+                              >
+                                <ArrowDown className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          )}
                         </td>
                         <td className="border-r border-zinc-200 p-2.5 font-bold text-zinc-950 align-top">
                           {item.categoryName}
