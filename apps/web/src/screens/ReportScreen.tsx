@@ -19,6 +19,7 @@ import {
   Check,
   Download,
   Forward,
+  GripVertical,
   Lock,
   Pencil,
   Plus,
@@ -218,6 +219,11 @@ export function ReportScreen({ session }: ReportScreenProps) {
     queryFn: () => frequentStatusesApi.list(teamId),
   });
   const [quickAddStatusFocused, setQuickAddStatusFocused] = useState(false);
+  const [dragMember, setDragMember] = useState<{ groupId: string; memberId: string } | null>(null);
+  const [dragOverMember, setDragOverMember] = useState<{
+    groupId: string;
+    memberId: string;
+  } | null>(null);
 
   const report = workspaceQuery.data?.report;
   const activeDate = routeDate ?? report?.reportDate ?? '';
@@ -1198,13 +1204,92 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                           return (
                                             <div className="no-print flex flex-wrap items-center gap-1.5">
                                               <span className="text-[11px] font-medium text-zinc-500">
-                                                Member order:
+                                                Member order (drag to reorder):
                                               </span>
-                                              {groupMembers.map(([mId, mName], mIdx) => (
+                                              {groupMembers.map(([mId, mName], mIdx) => {
+                                                const isDragging =
+                                                  dragMember?.groupId === group.id &&
+                                                  dragMember.memberId === mId;
+                                                const isDragTarget =
+                                                  dragOverMember?.groupId === group.id &&
+                                                  dragOverMember.memberId === mId &&
+                                                  dragMember?.memberId !== mId;
+                                                return (
                                                 <div
                                                   key={mId}
-                                                  className="inline-flex items-center gap-0.5 rounded-md border border-zinc-200 bg-white px-1.5 py-0.5 text-xs text-zinc-800 shadow-2xs"
+                                                  draggable={!reorderEntriesMutation.isPending}
+                                                  onDragStart={(e) => {
+                                                    setDragMember({ groupId: group.id, memberId: mId });
+                                                    e.dataTransfer.effectAllowed = 'move';
+                                                    e.dataTransfer.setData('text/plain', mId);
+                                                  }}
+                                                  onDragOver={(e) => {
+                                                    if (
+                                                      dragMember?.groupId === group.id &&
+                                                      dragMember.memberId !== mId
+                                                    ) {
+                                                      e.preventDefault();
+                                                      e.dataTransfer.dropEffect = 'move';
+                                                      if (
+                                                        dragOverMember?.groupId !== group.id ||
+                                                        dragOverMember.memberId !== mId
+                                                      ) {
+                                                        setDragOverMember({
+                                                          groupId: group.id,
+                                                          memberId: mId,
+                                                        });
+                                                      }
+                                                    }
+                                                  }}
+                                                  onDragLeave={() => {
+                                                    if (
+                                                      dragOverMember?.groupId === group.id &&
+                                                      dragOverMember.memberId === mId
+                                                    ) {
+                                                      setDragOverMember(null);
+                                                    }
+                                                  }}
+                                                  onDrop={(e) => {
+                                                    e.preventDefault();
+                                                    const draggedId = dragMember?.memberId;
+                                                    const fromGroup = dragMember?.groupId;
+                                                    setDragMember(null);
+                                                    setDragOverMember(null);
+                                                    if (
+                                                      fromGroup !== group.id ||
+                                                      !draggedId ||
+                                                      draggedId === mId
+                                                    ) {
+                                                      return;
+                                                    }
+                                                    const fromIdx = memberIdsOrder.indexOf(draggedId);
+                                                    const toIdx = memberIdsOrder.indexOf(mId);
+                                                    if (fromIdx === -1 || toIdx === -1) return;
+                                                    const nextOrder = [...memberIdsOrder];
+                                                    const [moved] = nextOrder.splice(fromIdx, 1);
+                                                    nextOrder.splice(toIdx, 0, moved!);
+                                                    const ordered = orderEntriesByMemberSequence(
+                                                      baseEntries,
+                                                      nextOrder,
+                                                    );
+                                                    reorderEntriesMutation.mutate({
+                                                      groupId: group.id,
+                                                      ids: ordered.map((item) => item.id),
+                                                    });
+                                                  }}
+                                                  onDragEnd={() => {
+                                                    setDragMember(null);
+                                                    setDragOverMember(null);
+                                                  }}
+                                                  className={cn(
+                                                    'inline-flex cursor-grab items-center gap-0.5 rounded-md border bg-white px-1.5 py-0.5 text-xs text-zinc-800 shadow-2xs transition-colors active:cursor-grabbing',
+                                                    isDragTarget
+                                                      ? 'border-primary bg-accent ring-1 ring-primary'
+                                                      : 'border-zinc-200',
+                                                    isDragging && 'opacity-50',
+                                                  )}
                                                 >
+                                                  <GripVertical className="h-3 w-3 shrink-0 text-zinc-400" />
                                                   <button
                                                     type="button"
                                                     title={`Move ${mName} earlier`}
@@ -1230,7 +1315,7 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                                   >
                                                     <ArrowLeft className="h-3 w-3" />
                                                   </button>
-                                                  <span className="px-1 font-medium">
+                                                  <span className="px-1 font-medium select-none">
                                                     {mIdx + 1}. {mName}
                                                   </span>
                                                   <button
@@ -1260,7 +1345,8 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                                     <ArrowRight className="h-3 w-3" />
                                                   </button>
                                                 </div>
-                                              ))}
+                                                );
+                                              })}
                                             </div>
                                           );
                                         })()}
