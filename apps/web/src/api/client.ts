@@ -64,6 +64,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
       res.status === 401 &&
       path !== '/api/auth/me' &&
       path !== '/api/auth/login' &&
+      path !== '/api/auth/change-password' &&
       typeof window !== 'undefined' &&
       !window.location.pathname.startsWith('/login') &&
       !window.location.pathname.startsWith('/invite/') &&

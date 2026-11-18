@@ -19,6 +19,7 @@ import {
   UPDATE_SESSION_ACTIVE_TEAM,
   UPDATE_USER_AVATAR,
   UPDATE_USER_LOGIN_TIMESTAMP,
+  UPDATE_USER_PASSWORD,
   UPDATE_USER_PASSWORD_AND_REVOKE,
   UPSERT_RATE_LIMIT_FAILURE,
 } from '../sql/auth.sql.js';
@@ -35,6 +36,7 @@ type UserLoginRow = {
 };
 type ActiveSessionRow = {
   session_id: string;
+  auth_method: 'password' | 'google' | null;
   last_active_at: Date | string;
   expires_at: Date | string;
   user_id: string;
@@ -113,6 +115,14 @@ export async function updateUserLoginTimestamp(conn: DbClient, userId: string): 
   await conn.query(UPDATE_USER_LOGIN_TIMESTAMP, [userId]);
 }
 
+export async function updateUserPassword(
+  conn: DbClient,
+  userId: string,
+  passwordHash: string,
+): Promise<void> {
+  await conn.query(UPDATE_USER_PASSWORD, [passwordHash, userId]);
+}
+
 export async function updateUserPasswordAndRevoke(
   conn: DbClient,
   userId: string,
@@ -130,6 +140,7 @@ export async function insertSession(
     tokenHash: string;
     sessionVersion: number;
     ttlDays: number;
+    authMethod?: 'password' | 'google';
   },
 ): Promise<void> {
   await conn.query(INSERT_SESSION, [
@@ -138,6 +149,7 @@ export async function insertSession(
     params.tokenHash,
     params.sessionVersion,
     params.ttlDays,
+    params.authMethod ?? 'password',
   ]);
 }
 
@@ -147,6 +159,7 @@ export async function findActiveSessionByTokenHash(conn: DbClient, tokenHash: st
   if (!r) return null;
   return {
     sessionId: r.session_id,
+    authMethod: (r.auth_method === 'google' ? 'google' : 'password') as 'password' | 'google',
     lastActiveAt: r.last_active_at,
     expiresAt: r.expires_at,
     userId: r.user_id,

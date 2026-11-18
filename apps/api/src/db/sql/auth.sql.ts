@@ -21,6 +21,12 @@ export const UPDATE_USER_LOGIN_TIMESTAMP = `
   WHERE id = $1
 `;
 
+export const UPDATE_USER_PASSWORD = `
+  UPDATE users
+  SET password_hash = $1, has_password = TRUE
+  WHERE id = $2
+`;
+
 export const UPDATE_USER_PASSWORD_AND_REVOKE = `
   UPDATE users
   SET password_hash = $1, session_version = session_version + 1, has_password = TRUE
@@ -28,13 +34,14 @@ export const UPDATE_USER_PASSWORD_AND_REVOKE = `
 `;
 
 export const INSERT_SESSION = `
-  INSERT INTO sessions (id, user_id, token_hash, session_version, last_active_at, expires_at)
-  VALUES ($1, $2, $3, $4, NOW(), NOW() + ($5 * INTERVAL '1 day'))
+  INSERT INTO sessions (id, user_id, token_hash, session_version, auth_method, last_active_at, expires_at)
+  VALUES ($1, $2, $3, $4, $6, NOW(), NOW() + ($5 * INTERVAL '1 day'))
 `;
 
 export const SELECT_ACTIVE_SESSION = `
   SELECT
     s.id AS session_id,
+    s.auth_method,
     s.last_active_at,
     s.expires_at,
     u.id AS user_id,

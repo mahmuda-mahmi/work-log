@@ -71,6 +71,7 @@ import {
   setSessionActiveTeam,
   updateUserAvatar,
   updateUserLoginTimestamp,
+  updateUserPassword,
   updateUserPasswordAndRevoke,
 } from '../../db/repositories/auth.repo.js';
 import { insertTeam, insertTeamMember } from '../../db/repositories/teams.repo.js';
@@ -359,6 +360,7 @@ export class AuthController {
         email: session.userEmail,
         avatarUrl: session.avatarUrl,
         hasPassword: session.hasPassword,
+        authMethod: session.authMethod,
       },
       team: session.teamId
         ? {
@@ -707,24 +709,26 @@ export class AuthController {
   async changePassword(
     @Req() req: AuthenticatedRequest,
     @Body(new ZodValidationPipe(ChangePasswordSchema)) body: ChangePasswordInput,
-    @Res({ passthrough: true }) res: Response,
   ) {
     const pool = getPool()!;
     const auth = req.auth!;
+    const rawToken = req.cookies?.[SESSION_COOKIE_NAME] as string | undefined;
+    const activeSess = rawToken ? await findActiveSessionByTokenHash(pool, sha256Hex(rawToken)) : null;
     const user = await findUserForLogin(pool, auth.userEmail);
     if (!user) {
-      throw new UnauthorizedException({
-        code: 'INVALID_CREDENTIALS',
+      throw new BadRequestException({
+        code: 'USER_NOT_FOUND',
         message: 'User account not found',
       });
     }
-    if (user.hasPassword) {
+    const requireCurrentPassword = user.hasPassword && activeSess?.authMethod !== 'google';
+    if (requireCurrentPassword) {
       if (
         !body.currentPassword ||
         !(await verifyPassword(user.passwordHash, body.currentPassword))
       ) {
-        throw new UnauthorizedException({
-          code: 'INVALID_CREDENTIALS',
+        throw new BadRequestException({
+          code: 'INVALID_CURRENT_PASSWORD',
           message: 'Current password is incorrect',
         });
       }
@@ -732,10 +736,9 @@ export class AuthController {
 
     const newHash = await hashPassword(body.newPassword);
     await withTransaction(pool, async (conn) => {
-      await updateUserPasswordAndRevoke(conn, auth.userId, newHash);
+      await updateUserPassword(conn, auth.userId, newHash);
     });
 
-    res.clearCookie(SESSION_COOKIE_NAME, { path: '/' });
     return { ok: true };
   }
 
@@ -914,6 +917,7 @@ export class AuthController {
           tokenHash,
           sessionVersion: user.sessionVersion,
           ttlDays: SESSION_TTL_DAYS,
+          authMethod: 'google',
         });
         await updateUserLoginTimestamp(conn, user.id);
       });
@@ -954,6 +958,7 @@ export class AuthController {
         tokenHash,
         sessionVersion: user.sessionVersion,
         ttlDays: SESSION_TTL_DAYS,
+        authMethod: 'google',
       });
       await updateUserLoginTimestamp(conn, user.id);
     });

@@ -138,21 +138,23 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [pwError, setPwError] = useState<string | null>(null);
+  const needsCurrentPassword =
+    session.user.hasPassword !== false && session.user.authMethod !== 'google';
 
   const changePasswordMutation = useMutation({
     mutationFn: () =>
       authApi.changePassword({
-        currentPassword: session.user.hasPassword === false ? '' : currentPassword,
+        currentPassword: needsCurrentPassword ? currentPassword : '',
         newPassword,
       }),
-    onSuccess: () => {
-      try {
-        window.localStorage.removeItem('cghq:session');
-      } catch {
-        // Ignore
-      }
-      queryClient.clear();
-      navigate('/login');
+    onSuccess: async () => {
+      setCurrentPassword('');
+      setNewPassword('');
+      setPwError(null);
+      setStatusMsg(
+        'Password saved! You can now sign in with your email & password as well as Continue with Google.',
+      );
+      await queryClient.invalidateQueries({ queryKey: ['me'] });
     },
     onError: (err: Error) => setPwError(err.message),
   });
@@ -692,13 +694,13 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
               <div className="flex items-center gap-2">
                 <KeyRound className="h-4 w-4 text-primary" />
                 <CardTitle>
-                  {session.user.hasPassword === false ? 'Set App Password' : 'Change Password'}
+                  {!needsCurrentPassword ? 'Set App Password' : 'Change Password'}
                 </CardTitle>
               </div>
               <CardDescription>
-                {session.user.hasPassword === false
-                  ? 'Your account was created with Google Sign-In. Set an app password to also sign in with email & password.'
-                  : 'Update your Work Log account password. You will be asked to sign in again afterward.'}
+                {!needsCurrentPassword
+                  ? 'Set a Work Log password so you can also sign in with email & password in addition to Google.'
+                  : 'Update your Work Log account password.'}
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3 pt-3">
@@ -711,7 +713,7 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
                   changePasswordMutation.mutate();
                 }}
               >
-                {session.user.hasPassword !== false && (
+                {needsCurrentPassword && (
                   <div className="grid gap-1.5">
                     <Label htmlFor="set-cur-pw">Current Password</Label>
                     <Input

@@ -62,6 +62,7 @@ export const AuthSessionSchema = z.object({
     email: z.string().email(),
     avatarUrl: z.string().nullable().optional(),
     hasPassword: z.boolean().optional(),
+    authMethod: z.enum(['password', 'google']).optional(),
   }),
   team: z
     .object({

@@ -70,27 +70,29 @@ export function ProfileMenu({ session, onLogout, logoutPending = false }: Profil
   const [teamsList, setTeamsList] = useState<UserTeamSummary[]>([]);
   const [loadingTeams, setLoadingTeams] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [pwSuccessMsg, setPwSuccessMsg] = useState<string | null>(null);
+  const needsCurrentPassword =
+    session.user.hasPassword !== false && session.user.authMethod !== 'google';
 
   const changePasswordMutation = useMutation({
     mutationFn: () =>
       authApi.changePassword({
-        currentPassword: session.user.hasPassword === false ? '' : currentPassword,
+        currentPassword: needsCurrentPassword ? currentPassword : '',
         newPassword,
       }),
     onSuccess: async () => {
-      setPasswordModalOpen(false);
       setCurrentPassword('');
       setNewPassword('');
       setErrorMsg(null);
-      try {
-        window.localStorage.removeItem('cghq:session');
-      } catch {
-        // Ignore
-      }
-      queryClient.clear();
-      navigate('/login');
+      setPwSuccessMsg(
+        'Password saved! You can now sign in with your email & password as well as Continue with Google.',
+      );
+      await queryClient.invalidateQueries({ queryKey: ['me'] });
     },
-    onError: (err: Error) => setErrorMsg(err.message),
+    onError: (err: Error) => {
+      setPwSuccessMsg(null);
+      setErrorMsg(err.message);
+    },
   });
 
   useEffect(() => {
@@ -214,6 +216,7 @@ export function ProfileMenu({ session, onLogout, logoutPending = false }: Profil
                 onClick={() => {
                   setMenuOpen(false);
                   setErrorMsg(null);
+                  setPwSuccessMsg(null);
                   setCurrentPassword('');
                   setNewPassword('');
                   setPasswordModalOpen(true);
@@ -221,7 +224,7 @@ export function ProfileMenu({ session, onLogout, logoutPending = false }: Profil
                 className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 hover:text-zinc-950"
               >
                 <KeyRound className="h-3.5 w-3.5 text-zinc-500" />
-                {session.user.hasPassword === false ? 'Set App Password' : 'Change Password'}
+                {!needsCurrentPassword ? 'Set App Password' : 'Change Password'}
               </button>
 
               <button
@@ -432,18 +435,23 @@ export function ProfileMenu({ session, onLogout, logoutPending = false }: Profil
             <div className="flex items-center gap-2">
               <KeyRound className="h-4 w-4 text-primary" />
               <h3 className="text-base font-bold text-zinc-950">
-                {session.user.hasPassword === false ? 'Set App Password' : 'Change Password'}
+                {!needsCurrentPassword ? 'Set App Password' : 'Change Password'}
               </h3>
             </div>
             <p className="mt-1 text-xs text-zinc-500">
-              {session.user.hasPassword === false
-                ? 'Set a Work Log password so you can sign in with email & password in addition to Google. You will be asked to sign in again afterward.'
-                : 'Update your Work Log password. You will be asked to sign in again afterward.'}
+              {!needsCurrentPassword
+                ? 'Set a Work Log password so you can sign in with email & password in addition to Google.'
+                : 'Update your Work Log password.'}
             </p>
 
             {errorMsg && (
               <Alert variant="destructive" className="mt-3">
                 {errorMsg}
+              </Alert>
+            )}
+            {pwSuccessMsg && (
+              <Alert variant="success" className="mt-3">
+                {pwSuccessMsg}
               </Alert>
             )}
 
@@ -452,10 +460,11 @@ export function ProfileMenu({ session, onLogout, logoutPending = false }: Profil
               onSubmit={(e) => {
                 e.preventDefault();
                 setErrorMsg(null);
+                setPwSuccessMsg(null);
                 changePasswordMutation.mutate();
               }}
             >
-              {session.user.hasPassword !== false && (
+              {needsCurrentPassword && (
                 <div className="grid gap-1.5">
                   <Label htmlFor="pm-cur-pw">Current Password</Label>
                   <Input
