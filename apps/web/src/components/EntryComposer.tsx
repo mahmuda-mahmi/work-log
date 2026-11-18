@@ -73,6 +73,7 @@ export function EntryComposer({
     queryKey: ['frequent-statuses', teamId],
     queryFn: () => frequentStatusesApi.list(teamId),
   });
+  const [statusFocused, setStatusFocused] = useState(false);
   const draftKey = `cghq:draft:${teamId}:${reportDate}`;
   const lastPairKey = `cghq:lastPair:${teamId}`;
 
@@ -531,7 +532,7 @@ export function EntryComposer({
               )}
             </div>
 
-            <div className="grid gap-1.5 md:col-span-2 lg:col-span-1">
+            <div className="relative grid gap-1.5 md:col-span-2 lg:col-span-1">
               <Label htmlFor="composer-status">Status</Label>
               <div className={isCommunication ? 'flex items-start gap-2' : 'grid'}>
                 {isCommunication && (
@@ -555,6 +556,11 @@ export function EntryComposer({
                   rows={1}
                   className="h-9 min-h-[36px] min-w-0 flex-1 resize-y py-1.5"
                   value={statusText}
+                  onFocus={() => setStatusFocused(true)}
+                  onBlur={() => setStatusFocused(false)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') setStatusFocused(false);
+                  }}
                   onChange={(e) => setStatusText(e.target.value)}
                   placeholder={
                     isCommunication
@@ -565,21 +571,27 @@ export function EntryComposer({
                   required
                 />
               </div>
-              {frequentStatuses.length > 0 && (
-                <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                  <span className="text-[11px] font-semibold text-zinc-500">Suggestions:</span>
-                  {frequentStatuses.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      disabled={disabled || createMutation.isPending}
-                      onClick={() => setStatusText(item.statusText)}
-                      className="cursor-pointer rounded-md border border-primary-border bg-accent px-2 py-0.5 text-left text-xs font-medium text-accent-foreground transition-colors hover:bg-primary hover:text-white disabled:opacity-50"
-                      title="Click to paste into status box"
-                    >
-                      {item.statusText}
-                    </button>
-                  ))}
+              {statusFocused && frequentStatuses.length > 0 && !disabled && (
+                <div className="absolute top-full left-0 right-0 z-30 mt-1 rounded-lg border border-zinc-200 bg-white p-2 shadow-lg">
+                  <div className="mb-1.5 px-1 text-[11px] font-semibold text-zinc-500">
+                    Frequently Used Statuses
+                  </div>
+                  <div className="flex max-h-44 flex-col gap-1 overflow-y-auto">
+                    {frequentStatuses.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          setStatusText(item.statusText);
+                          setStatusFocused(false);
+                        }}
+                        className="w-full cursor-pointer rounded-md border border-transparent px-2.5 py-1.5 text-left text-xs font-medium text-zinc-900 transition-colors hover:border-primary-border hover:bg-accent hover:text-accent-foreground"
+                      >
+                        {item.statusText}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
