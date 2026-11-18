@@ -50,7 +50,7 @@ export const CompletePasswordResetSchema = z.object({
 export type CompletePasswordResetInput = z.infer<typeof CompletePasswordResetSchema>;
 
 export const ChangePasswordSchema = z.object({
-  currentPassword: z.string().min(1).max(128),
+  currentPassword: z.string().max(128).optional().default(''),
   newPassword: PasswordSchema,
 });
 export type ChangePasswordInput = z.infer<typeof ChangePasswordSchema>;
@@ -61,6 +61,7 @@ export const AuthSessionSchema = z.object({
     name: z.string(),
     email: z.string().email(),
     avatarUrl: z.string().nullable().optional(),
+    hasPassword: z.boolean().optional(),
   }),
   team: z
     .object({

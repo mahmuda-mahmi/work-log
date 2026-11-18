@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { Component, lazy, Suspense, useEffect, type ReactNode } from 'react';
 import type { ActiveAuthSession, AuthSession } from '@cghq/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router';
@@ -8,31 +8,76 @@ import { PageCardSkeleton, WorkspaceShellSkeleton } from './components/Workspace
 import { Badge } from './components/ui/badge';
 import { Button } from './components/ui/button';
 import { cn } from './lib/utils';
+import { FollowupsScreen } from './screens/FollowupsScreen';
+import { HistoryScreen } from './screens/HistoryScreen';
 import { LandingScreen } from './screens/LandingScreen';
+import { LoginScreen } from './screens/LoginScreen';
 import { OnboardingScreen } from './screens/OnboardingScreen';
 import { ReportScreen } from './screens/ReportScreen';
+import { SettingsScreen } from './screens/SettingsScreen';
 
-const FollowupsScreen = lazy(() =>
-  import('./screens/FollowupsScreen').then((m) => ({ default: m.FollowupsScreen })),
-);
-const HistoryScreen = lazy(() =>
-  import('./screens/HistoryScreen').then((m) => ({ default: m.HistoryScreen })),
-);
 const InviteAcceptScreen = lazy(() =>
   import('./screens/InviteAcceptScreen').then((m) => ({ default: m.InviteAcceptScreen })),
 );
 const JoinTeamScreen = lazy(() =>
   import('./screens/JoinTeamScreen').then((m) => ({ default: m.JoinTeamScreen })),
 );
-const LoginScreen = lazy(() =>
-  import('./screens/LoginScreen').then((m) => ({ default: m.LoginScreen })),
-);
 const ResetPasswordScreen = lazy(() =>
   import('./screens/ResetPasswordScreen').then((m) => ({ default: m.ResetPasswordScreen })),
 );
-const SettingsScreen = lazy(() =>
-  import('./screens/SettingsScreen').then((m) => ({ default: m.SettingsScreen })),
-);
+
+class RouteErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean; message: string }
+> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, message: '' };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, message: error?.message || 'Unexpected page error' };
+  }
+
+  componentDidCatch(error: Error) {
+    const msg = error?.message || '';
+    const isChunkError =
+      msg.includes('Failed to fetch dynamically imported module') ||
+      msg.includes('Loading chunk') ||
+      msg.includes('Importing a module script failed');
+    if (isChunkError && typeof window !== 'undefined') {
+      try {
+        const key = 'cghq:chunkReloaded';
+        if (!window.sessionStorage.getItem(key)) {
+          window.sessionStorage.setItem(key, '1');
+          window.location.reload();
+        }
+      } catch {
+        // Ignore storage error
+      }
+    }
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="mx-auto my-10 max-w-md rounded-xl border border-zinc-200 bg-white p-6 text-center shadow-sm">
+          <h2 className="text-base font-bold text-zinc-950">Something went wrong loading this page</h2>
+          <p className="mt-1.5 text-xs text-zinc-500">{this.state.message}</p>
+          <Button
+            type="button"
+            size="sm"
+            className="mt-4"
+            onClick={() => window.location.reload()}
+          >
+            Reload Page
+          </Button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const SESSION_CACHE_KEY = 'cghq:session';
 
@@ -205,15 +250,17 @@ function AuthenticatedShell() {
 
 export function App() {
   return (
-    <Suspense fallback={<WorkspaceShellSkeleton />}>
-      <Routes>
-        <Route path="/" element={<LandingScreen />} />
-        <Route path="/login" element={<LoginScreen />} />
-        <Route path="/invite/:token" element={<InviteAcceptScreen />} />
-        <Route path="/join/:token" element={<JoinTeamScreen />} />
-        <Route path="/reset-password/:token" element={<ResetPasswordScreen />} />
-        <Route path="/*" element={<AuthenticatedShell />} />
-      </Routes>
-    </Suspense>
+    <RouteErrorBoundary>
+      <Suspense fallback={<WorkspaceShellSkeleton />}>
+        <Routes>
+          <Route path="/" element={<LandingScreen />} />
+          <Route path="/login" element={<LoginScreen />} />
+          <Route path="/invite/:token" element={<InviteAcceptScreen />} />
+          <Route path="/join/:token" element={<JoinTeamScreen />} />
+          <Route path="/reset-password/:token" element={<ResetPasswordScreen />} />
+          <Route path="/*" element={<AuthenticatedShell />} />
+        </Routes>
+      </Suspense>
+    </RouteErrorBoundary>
   );
 }

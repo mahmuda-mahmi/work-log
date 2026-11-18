@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AuthSession, UserTeamSummary } from '@cghq/contracts';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Camera, Check, LogOut, Plus, RefreshCw, Trash2, Users } from 'lucide-react';
+import { Camera, Check, KeyRound, LogOut, Plus, RefreshCw, Trash2, Users } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { authApi } from '../api/client';
 import { cn } from '../lib/utils';
 import { Alert } from './ui/alert';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
 
 interface ProfileMenuProps {
   session: AuthSession;
@@ -62,9 +64,34 @@ export function ProfileMenu({ session, onLogout, logoutPending = false }: Profil
   const [menuOpen, setMenuOpen] = useState(false);
   const [photoModalOpen, setPhotoModalOpen] = useState(false);
   const [switchModalOpen, setSwitchModalOpen] = useState(false);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [teamsList, setTeamsList] = useState<UserTeamSummary[]>([]);
   const [loadingTeams, setLoadingTeams] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const changePasswordMutation = useMutation({
+    mutationFn: () =>
+      authApi.changePassword({
+        currentPassword: session.user.hasPassword === false ? '' : currentPassword,
+        newPassword,
+      }),
+    onSuccess: async () => {
+      setPasswordModalOpen(false);
+      setCurrentPassword('');
+      setNewPassword('');
+      setErrorMsg(null);
+      try {
+        window.localStorage.removeItem('cghq:session');
+      } catch {
+        // Ignore
+      }
+      queryClient.clear();
+      navigate('/login');
+    },
+    onError: (err: Error) => setErrorMsg(err.message),
+  });
 
   useEffect(() => {
     function handleOutside(e: MouseEvent) {
@@ -180,6 +207,21 @@ export function ProfileMenu({ session, onLogout, logoutPending = false }: Profil
               >
                 <Camera className="h-3.5 w-3.5 text-zinc-500" />
                 Change Profile Picture
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setErrorMsg(null);
+                  setCurrentPassword('');
+                  setNewPassword('');
+                  setPasswordModalOpen(true);
+                }}
+                className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 hover:text-zinc-950"
+              >
+                <KeyRound className="h-3.5 w-3.5 text-zinc-500" />
+                {session.user.hasPassword === false ? 'Set App Password' : 'Change Password'}
               </button>
 
               <button
@@ -379,6 +421,78 @@ export function ProfileMenu({ session, onLogout, logoutPending = false }: Profil
                 Cancel
               </Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Set / Change App Password Modal */}
+      {passwordModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-5 text-zinc-900 shadow-xl">
+            <div className="flex items-center gap-2">
+              <KeyRound className="h-4 w-4 text-primary" />
+              <h3 className="text-base font-bold text-zinc-950">
+                {session.user.hasPassword === false ? 'Set App Password' : 'Change Password'}
+              </h3>
+            </div>
+            <p className="mt-1 text-xs text-zinc-500">
+              {session.user.hasPassword === false
+                ? 'Set a Work Log password so you can sign in with email & password in addition to Google. You will be asked to sign in again afterward.'
+                : 'Update your Work Log password. You will be asked to sign in again afterward.'}
+            </p>
+
+            {errorMsg && (
+              <Alert variant="destructive" className="mt-3">
+                {errorMsg}
+              </Alert>
+            )}
+
+            <form
+              className="mt-4 grid gap-3"
+              onSubmit={(e) => {
+                e.preventDefault();
+                setErrorMsg(null);
+                changePasswordMutation.mutate();
+              }}
+            >
+              {session.user.hasPassword !== false && (
+                <div className="grid gap-1.5">
+                  <Label htmlFor="pm-cur-pw">Current Password</Label>
+                  <Input
+                    id="pm-cur-pw"
+                    type="password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    required
+                  />
+                </div>
+              )}
+              <div className="grid gap-1.5">
+                <Label htmlFor="pm-new-pw">New Password (min 8 chars)</Label>
+                <Input
+                  id="pm-new-pw"
+                  type="password"
+                  minLength={8}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="mt-1 flex items-center justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={changePasswordMutation.isPending}
+                  onClick={() => setPasswordModalOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" size="sm" disabled={changePasswordMutation.isPending}>
+                  {changePasswordMutation.isPending ? 'Saving…' : 'Save Password'}
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       )}

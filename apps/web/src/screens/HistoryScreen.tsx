@@ -64,6 +64,22 @@ export function HistoryScreen({ session }: HistoryScreenProps) {
                 <Skeleton key={i} className="h-11 w-full" />
               ))}
             </div>
+          ) : historyQuery.isError ? (
+            <Alert variant="destructive" className="flex items-center justify-between gap-3">
+              <span>
+                {historyQuery.error instanceof Error
+                  ? historyQuery.error.message
+                  : 'Failed to load report history.'}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                onClick={() => void historyQuery.refetch()}
+              >
+                Retry
+              </Button>
+            </Alert>
           ) : rows.length === 0 ? (
             <p className="text-sm text-zinc-500">No daily reports created yet.</p>
           ) : (

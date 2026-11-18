@@ -4,15 +4,15 @@ export const COUNT_USERS = `
 `;
 
 export const SELECT_USER_FOR_LOGIN = `
-  SELECT id, name, email, password_hash, is_active, session_version
+  SELECT id, name, email, password_hash, is_active, session_version, has_password
   FROM users
   WHERE LOWER(email) = LOWER($1)
   LIMIT 1
 `;
 
 export const INSERT_USER = `
-  INSERT INTO users (id, name, email, password_hash, is_active, session_version)
-  VALUES ($1, $2, $3, $4, TRUE, 0)
+  INSERT INTO users (id, name, email, password_hash, is_active, session_version, has_password)
+  VALUES ($1, $2, $3, $4, TRUE, 0, $5)
 `;
 
 export const UPDATE_USER_LOGIN_TIMESTAMP = `
@@ -23,7 +23,7 @@ export const UPDATE_USER_LOGIN_TIMESTAMP = `
 
 export const UPDATE_USER_PASSWORD_AND_REVOKE = `
   UPDATE users
-  SET password_hash = $1, session_version = session_version + 1
+  SET password_hash = $1, session_version = session_version + 1, has_password = TRUE
   WHERE id = $2
 `;
 
@@ -41,6 +41,7 @@ export const SELECT_ACTIVE_SESSION = `
     u.name AS user_name,
     u.email AS user_email,
     u.avatar_url,
+    u.has_password,
     t.id AS team_id,
     t.name AS team_name,
     t.slug AS team_slug,

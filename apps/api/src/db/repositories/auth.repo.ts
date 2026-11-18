@@ -31,6 +31,7 @@ type UserLoginRow = {
   password_hash: string;
   is_active: boolean;
   session_version: number;
+  has_password: boolean;
 };
 type ActiveSessionRow = {
   session_id: string;
@@ -40,6 +41,7 @@ type ActiveSessionRow = {
   user_name: string;
   user_email: string;
   avatar_url: string | null;
+  has_password: boolean;
   team_id: string | null;
   team_name: string | null;
   team_slug: string | null;
@@ -90,14 +92,21 @@ export async function findUserForLogin(conn: DbClient, email: string) {
     passwordHash: r.password_hash,
     isActive: Boolean(r.is_active),
     sessionVersion: r.session_version,
+    hasPassword: Boolean(r.has_password),
   };
 }
 
 export async function insertUser(
   conn: DbClient,
-  params: { id: string; name: string; email: string; passwordHash: string },
+  params: { id: string; name: string; email: string; passwordHash: string; hasPassword?: boolean },
 ): Promise<void> {
-  await conn.query(INSERT_USER, [params.id, params.name, params.email, params.passwordHash]);
+  await conn.query(INSERT_USER, [
+    params.id,
+    params.name,
+    params.email,
+    params.passwordHash,
+    params.hasPassword ?? true,
+  ]);
 }
 
 export async function updateUserLoginTimestamp(conn: DbClient, userId: string): Promise<void> {
@@ -144,6 +153,7 @@ export async function findActiveSessionByTokenHash(conn: DbClient, tokenHash: st
     userName: r.user_name,
     userEmail: r.user_email,
     avatarUrl: r.avatar_url,
+    hasPassword: Boolean(r.has_password),
     teamId: r.team_id,
     teamName: r.team_name,
     teamSlug: r.team_slug,

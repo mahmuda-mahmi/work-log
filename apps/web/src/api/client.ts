@@ -2,6 +2,7 @@ import type {
   AcceptInviteInput,
   AuthSession,
   BootstrapLeadInput,
+  ChangePasswordInput,
   CompletePasswordResetInput,
   CreateEntryInput,
   CreateFollowupInput,
@@ -138,6 +139,11 @@ export const authApi = {
     }),
   completeReset: (body: CompletePasswordResetInput) =>
     apiFetch<{ ok: boolean }>('/api/auth/password-resets/complete', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  changePassword: (body: ChangePasswordInput) =>
+    apiFetch<{ ok: boolean }>('/api/auth/change-password', {
       method: 'POST',
       body: JSON.stringify(body),
     }),

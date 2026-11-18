@@ -232,6 +232,10 @@ export function LoginScreen() {
               >
                 Continue with Google
               </a>
+              <p className="text-center text-[11px] text-zinc-500">
+                Signed up with Google? Use <strong>Continue with Google</strong> (your Gmail
+                password won&apos;t work here unless you set an app password in Profile).
+              </p>
             </div>
           )}
         </CardContent>

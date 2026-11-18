@@ -228,6 +228,14 @@ export class AuthController {
     }
 
     const user = await findUserForLogin(pool, body.email);
+    if (user && user.isActive && !user.hasPassword) {
+      throw new UnauthorizedException({
+        code: 'GOOGLE_ACCOUNT_NO_PASSWORD',
+        message:
+          'This account was created with Google Sign-In and has no app password yet. Click "Continue with Google" below to sign in (you can set an app password in your Profile menu).',
+      });
+    }
+
     const valid = user && user.isActive ? await verifyPassword(user.passwordHash, body.password) : false;
 
     if (!user || !valid) {
@@ -350,6 +358,7 @@ export class AuthController {
         name: session.userName,
         email: session.userEmail,
         avatarUrl: session.avatarUrl,
+        hasPassword: session.hasPassword,
       },
       team: session.teamId
         ? {
@@ -703,11 +712,22 @@ export class AuthController {
     const pool = getPool()!;
     const auth = req.auth!;
     const user = await findUserForLogin(pool, auth.userEmail);
-    if (!user || !(await verifyPassword(user.passwordHash, body.currentPassword))) {
+    if (!user) {
       throw new UnauthorizedException({
         code: 'INVALID_CREDENTIALS',
-        message: 'Current password is incorrect',
+        message: 'User account not found',
       });
+    }
+    if (user.hasPassword) {
+      if (
+        !body.currentPassword ||
+        !(await verifyPassword(user.passwordHash, body.currentPassword))
+      ) {
+        throw new UnauthorizedException({
+          code: 'INVALID_CREDENTIALS',
+          message: 'Current password is incorrect',
+        });
+      }
     }
 
     const newHash = await hashPassword(body.newPassword);
@@ -860,6 +880,7 @@ export class AuthController {
           name: displayName,
           email,
           passwordHash: randomPasswordHash,
+          hasPassword: false,
         });
         if (googlePicture) {
           await updateUserAvatar(conn, userId, googlePicture);
