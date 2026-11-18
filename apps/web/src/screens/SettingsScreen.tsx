@@ -154,7 +154,10 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
     onSuccess: async () => {
       setDeleteDictTarget(null);
       setStatusMsg('Category deleted.');
-      await queryClient.invalidateQueries({ queryKey: ['dictionary', teamId] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['dictionary', teamId] }),
+        queryClient.invalidateQueries({ queryKey: ['report', teamId] }),
+      ]);
     },
     onError: (err: Error) => {
       setDeleteDictTarget(null);
@@ -167,7 +170,10 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
     onSuccess: async () => {
       setDeleteDictTarget(null);
       setStatusMsg('Title deleted.');
-      await queryClient.invalidateQueries({ queryKey: ['dictionary', teamId] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['dictionary', teamId] }),
+        queryClient.invalidateQueries({ queryKey: ['report', teamId] }),
+      ]);
     },
     onError: (err: Error) => {
       setDeleteDictTarget(null);

@@ -25,6 +25,7 @@ import {
   TeamLeadGuard,
   TeamScopeGuard,
 } from '../../common/auth.guard.js';
+import { uuidv7 } from '../../common/uuid.js';
 import { ZodValidationPipe } from '../../common/zod-validation.pipe.js';
 import { getPool, withTransaction } from '../../db/pool.js';
 import { appendAuditEvent } from '../../db/repositories/audit.repo.js';
@@ -37,6 +38,7 @@ import {
   updateCategory,
   updateTitle,
 } from '../../db/repositories/dictionary.repo.js';
+import { findOrCreateWorkGroup } from '../../db/repositories/reports.repo.js';
 import { ensureDefaultDictionary } from '../../domain/defaults.js';
 
 @Controller('teams/:teamId/dictionary')
@@ -94,6 +96,27 @@ export class DictionaryController {
         entityId: title.id,
         metadata: { categoryId, name: title.name },
       });
+
+      const activeReport = await conn.query<{ id: string }>(
+        `SELECT id FROM daily_reports WHERE team_id = $1 AND status <> 'finalized' ORDER BY report_date DESC LIMIT 1`,
+        [teamId],
+      );
+      if (activeReport.rows[0]) {
+        const catRes = await conn.query<{ name: string }>(
+          `SELECT name FROM categories WHERE id = $1 AND team_id = $2 LIMIT 1`,
+          [categoryId, teamId],
+        );
+        const catName = catRes.rows[0]?.name?.trim().toLowerCase() ?? '';
+        await findOrCreateWorkGroup(conn, {
+          groupId: uuidv7(),
+          reportId: activeReport.rows[0].id,
+          categoryId,
+          titleId: title.id,
+          numberingMode: catName === 'support' ? 'numbered' : 'plain',
+          createdByUserId: req.auth!.userId,
+        });
+      }
+
       return title;
     });
     return created;

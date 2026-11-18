@@ -75,16 +75,16 @@ export const SELECT_CATEGORY_BY_ID = `
   LIMIT 1
 `;
 
-export const COUNT_WORK_GROUPS_BY_CATEGORY = `
-  SELECT COUNT(*)::int AS cnt
-  FROM work_groups
-  WHERE team_id = $1 AND category_id = $2
+export const DELETE_WORK_GROUPS_BY_CATEGORY = `
+  DELETE FROM work_groups wg
+  USING daily_reports dr
+  WHERE wg.report_id = dr.id AND dr.team_id = $1 AND wg.category_id = $2
 `;
 
-export const COUNT_WORK_GROUPS_BY_TITLE = `
-  SELECT COUNT(*)::int AS cnt
-  FROM work_groups
-  WHERE team_id = $1 AND title_id = $2
+export const DELETE_WORK_GROUPS_BY_TITLE = `
+  DELETE FROM work_groups wg
+  USING daily_reports dr
+  WHERE wg.report_id = dr.id AND dr.team_id = $1 AND wg.title_id = $2
 `;
 
 export const DELETE_TITLES_BY_CATEGORY = `

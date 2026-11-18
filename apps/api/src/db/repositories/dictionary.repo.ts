@@ -4,11 +4,11 @@ import { uuidv7 } from '../../common/uuid.js';
 import type { DbClient } from '../pool.js';
 import {
   COUNT_CATEGORY_BY_LOWER_NAME,
-  COUNT_WORK_GROUPS_BY_CATEGORY,
-  COUNT_WORK_GROUPS_BY_TITLE,
   DELETE_CATEGORY,
   DELETE_TITLE,
   DELETE_TITLES_BY_CATEGORY,
+  DELETE_WORK_GROUPS_BY_CATEGORY,
+  DELETE_WORK_GROUPS_BY_TITLE,
   INSERT_CATEGORY,
   INSERT_TITLE,
   SELECT_CATEGORIES_BY_TEAM,
@@ -205,13 +205,7 @@ export async function deleteCategoryIfUnused(
   teamId: string,
   categoryId: string,
 ): Promise<'deleted' | 'in_use' | 'not_found'> {
-  const usedRes = await conn.query<{ cnt: number }>(COUNT_WORK_GROUPS_BY_CATEGORY, [
-    teamId,
-    categoryId,
-  ]);
-  if (Number(usedRes.rows[0]?.cnt ?? 0) > 0) {
-    return 'in_use';
-  }
+  await conn.query(DELETE_WORK_GROUPS_BY_CATEGORY, [teamId, categoryId]);
   await conn.query(DELETE_TITLES_BY_CATEGORY, [teamId, categoryId]);
   const delRes = await conn.query(DELETE_CATEGORY, [categoryId, teamId]);
   return (delRes.rowCount ?? 0) > 0 ? 'deleted' : 'not_found';
@@ -222,10 +216,7 @@ export async function deleteTitleIfUnused(
   teamId: string,
   titleId: string,
 ): Promise<'deleted' | 'in_use' | 'not_found'> {
-  const usedRes = await conn.query<{ cnt: number }>(COUNT_WORK_GROUPS_BY_TITLE, [teamId, titleId]);
-  if (Number(usedRes.rows[0]?.cnt ?? 0) > 0) {
-    return 'in_use';
-  }
+  await conn.query(DELETE_WORK_GROUPS_BY_TITLE, [teamId, titleId]);
   const delRes = await conn.query(DELETE_TITLE, [titleId, teamId]);
   return (delRes.rowCount ?? 0) > 0 ? 'deleted' : 'not_found';
 }
