@@ -1191,11 +1191,14 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
                     No frequently used statuses saved yet.
                   </p>
                 ) : (
-                  <div className="grid gap-2">
+                  <div className="flex flex-wrap gap-2">
                     {frequentStatuses.map((item) => (
                       <div
                         key={item.id}
-                        className="flex items-center justify-between gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2"
+                        className={cn(
+                          'inline-flex max-w-full items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs shadow-xs',
+                          editingFreq?.id === item.id && 'w-full p-2',
+                        )}
                       >
                         {editingFreq?.id === item.id ? (
                           <form
@@ -1236,32 +1239,28 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
                           </form>
                         ) : (
                           <>
-                            <span className="min-w-0 flex-1 whitespace-pre-wrap break-words text-xs font-medium text-zinc-900">
+                            <span className="break-words font-medium text-zinc-900">
                               {item.statusText}
                             </span>
-                            <div className="flex shrink-0 items-center gap-1">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-xs"
-                                title="Edit template"
-                                onClick={() =>
-                                  setEditingFreq({ id: item.id, statusText: item.statusText })
-                                }
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-xs"
-                                title="Delete template"
-                                disabled={deleteFrequentStatusMutation.isPending}
-                                onClick={() => deleteFrequentStatusMutation.mutate(item.id)}
-                              >
-                                <Trash2 className="h-3.5 w-3.5 text-rose-500" />
-                              </Button>
-                            </div>
+                            <button
+                              type="button"
+                              title="Edit template"
+                              onClick={() =>
+                                setEditingFreq({ id: item.id, statusText: item.statusText })
+                              }
+                              className="cursor-pointer rounded p-0.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </button>
+                            <button
+                              type="button"
+                              title="Delete template"
+                              disabled={deleteFrequentStatusMutation.isPending}
+                              onClick={() => deleteFrequentStatusMutation.mutate(item.id)}
+                              className="cursor-pointer rounded p-0.5 text-rose-500 hover:bg-rose-100 hover:text-rose-700 disabled:opacity-50"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
                           </>
                         )}
                       </div>

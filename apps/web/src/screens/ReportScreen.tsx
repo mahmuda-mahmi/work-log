@@ -1425,29 +1425,28 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                   />
                                 </div>
                                 {quickAddStatusFocused && frequentStatuses.length > 0 && (
-                                  <div className="absolute top-full left-0 right-0 z-30 mt-1 rounded-lg border border-zinc-200 bg-white p-2 shadow-lg">
-                                    <div className="mb-1.5 px-1 text-[11px] font-semibold text-zinc-500">
-                                      Frequently Used Statuses
-                                    </div>
-                                    <div className="flex max-h-44 flex-col gap-1 overflow-y-auto">
-                                      {frequentStatuses.map((item) => (
-                                        <button
-                                          key={item.id}
-                                          type="button"
-                                          onMouseDown={(e) => e.preventDefault()}
-                                          onClick={() => {
-                                            setQuickAdd({
-                                              ...quickAdd,
-                                              statusText: item.statusText,
-                                            });
-                                            setQuickAddStatusFocused(false);
-                                          }}
-                                          className="w-full cursor-pointer rounded-md border border-transparent px-2.5 py-1.5 text-left text-xs font-medium text-zinc-900 transition-colors hover:border-primary-border hover:bg-accent hover:text-accent-foreground"
-                                        >
-                                          {item.statusText}
-                                        </button>
-                                      ))}
-                                    </div>
+                                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                                    <span className="text-[11px] font-semibold text-zinc-500">
+                                      Frequently Used:
+                                    </span>
+                                    {frequentStatuses.map((item) => (
+                                      <button
+                                        key={item.id}
+                                        type="button"
+                                        onMouseDown={(e) => e.preventDefault()}
+                                        onClick={() => {
+                                          setQuickAdd({
+                                            ...quickAdd,
+                                            statusText: item.statusText,
+                                          });
+                                          setQuickAddStatusFocused(false);
+                                        }}
+                                        className="cursor-pointer rounded-md border border-primary-border bg-accent px-2.5 py-1 text-left text-xs font-medium text-accent-foreground transition-colors hover:bg-primary hover:text-white"
+                                        title="Click to paste into status box"
+                                      >
+                                        {item.statusText}
+                                      </button>
+                                    ))}
                                   </div>
                                 )}
                               </div>
