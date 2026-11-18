@@ -167,7 +167,7 @@ function measureRow(
 }
 
 /**
- * Renders a DocumentModel into a deterministic PDF Buffer using pdf-lib + Liberation Serif.
+ * Renders a DocumentModel into a deterministic PDF Buffer using Times New Roman (Base14 Times-Roman).
  */
 export async function renderPdf(model: DocumentModel): Promise<Buffer> {
   const pdfDoc = await PDFDocument.create();
@@ -175,22 +175,9 @@ export async function renderPdf(model: DocumentModel): Promise<Buffer> {
   pdfDoc.setSubject('Daily Work Report');
   pdfDoc.setCreator('CGHQ Team Work Report');
 
-  const regularFontName =
-    model.fontFamily === 'Helvetica'
-      ? StandardFonts.Helvetica
-      : model.fontFamily === 'Courier'
-        ? StandardFonts.Courier
-        : StandardFonts.TimesRoman;
-  const boldFontName =
-    model.fontFamily === 'Helvetica'
-      ? StandardFonts.HelveticaBold
-      : model.fontFamily === 'Courier'
-        ? StandardFonts.CourierBold
-        : StandardFonts.TimesRomanBold;
-
-  const bodyFontPt = model.fontSizePt || FONT.bodyPt;
-  const regularFont = await pdfDoc.embedFont(regularFontName);
-  const boldFont = await pdfDoc.embedFont(boldFontName);
+  const bodyFontPt = FONT.bodyPt;
+  const regularFont = await pdfDoc.embedFont(StandardFonts.TimesRoman);
+  const boldFont = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
 
   let embeddedLogo: PDFImage | null = null;
   if (model.logoBytes) {

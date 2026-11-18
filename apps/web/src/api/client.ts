@@ -201,6 +201,14 @@ export const teamsApi = {
       method: 'PUT',
       body: JSON.stringify({ fileName, base64 }),
     }),
+  leaveTeam: (teamId: string, newLeadMemberId?: string) =>
+    apiFetch<{ ok: boolean; nextTeamId: string | null; remainingCount: number }>(
+      `/api/teams/${teamId}/leave`,
+      {
+        method: 'POST',
+        body: JSON.stringify(newLeadMemberId ? { newLeadMemberId } : {}),
+      },
+    ),
 };
 
 export const frequentStatusesApi = {

@@ -1,3 +1,4 @@
+import { RENDERER_VERSION } from '@cghq/document';
 import type {
   ExportFormat,
   ReportExportInfo,
@@ -35,6 +36,7 @@ type SnapshotRow = {
   id: string;
   report_id: string;
   revision: number;
+  renderer_version: string | null;
   payload: string | Record<string, unknown>;
   content_hash: string;
   created_at: Date | string;
@@ -128,6 +130,7 @@ export async function insertReportSnapshot(
     input.payloadJson,
     input.contentHash,
     input.actorUserId,
+    RENDERER_VERSION,
   ]);
 }
 
@@ -139,6 +142,7 @@ export async function findLatestSnapshotForReport(conn: DbClient, reportId: stri
     id: row.id,
     reportId: row.report_id,
     revision: row.revision,
+    rendererVersion: row.renderer_version ?? '1.0.0',
     payload:
       typeof row.payload === 'string'
         ? (JSON.parse(row.payload) as Record<string, unknown>)

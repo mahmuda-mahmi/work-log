@@ -2,7 +2,7 @@
  * Layout & typography tokens derived from docs/EXPORT-SPEC.md.
  * 1 pt = 20 twips. 1 in = 1440 twips = 72 pt = 914400 EMU.
  */
-export const RENDERER_VERSION = '1.0.0';
+export const RENDERER_VERSION = '1.1.0';
 
 export const TWIPS_PER_PT = 20;
 export const EMU_PER_IN = 914400;

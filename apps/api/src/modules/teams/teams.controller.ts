@@ -17,12 +17,14 @@ import {
 import {
   CreateFrequentStatusSchema,
   CreateInviteSchema,
+  LeaveTeamSchema,
   UpdateFrequentStatusSchema,
   UpdateMemberProfileSchema,
   UpdateMemberRoleSchema,
   UpdateTeamSettingsSchema,
   type CreateFrequentStatusInput,
   type CreateInviteInput,
+  type LeaveTeamInput,
   type UpdateFrequentStatusInput,
   type UpdateMemberProfileInput,
   type UpdateMemberRoleInput,
@@ -42,7 +44,7 @@ import { uuidv7 } from '../../common/uuid.js';
 import { ZodValidationPipe } from '../../common/zod-validation.pipe.js';
 import { getPool, withTransaction } from '../../db/pool.js';
 import { appendAuditEvent } from '../../db/repositories/audit.repo.js';
-import { deleteSessionsByUserId } from '../../db/repositories/auth.repo.js';
+import { deleteSessionsByUserId, listUserTeams } from '../../db/repositories/auth.repo.js';
 import {
   deleteFrequentStatus,
   getNextFrequentStatusPosition,
@@ -106,8 +108,8 @@ export class TeamsController {
         body.preparedByDefault !== undefined ? body.preparedByDefault : current.preparedByDefault,
       membersCanAddDictionary: body.membersCanAddDictionary ?? current.membersCanAddDictionary,
       followupsEnabled: body.followupsEnabled ?? current.followupsEnabled,
-      documentFontFamily: body.documentFontFamily ?? current.documentFontFamily,
-      documentFontSizePt: body.documentFontSizePt ?? current.documentFontSizePt,
+      documentFontFamily: 'Times New Roman' as const,
+      documentFontSizePt: 14,
     };
 
     await withTransaction(pool, async (conn) => {
@@ -394,6 +396,67 @@ export class TeamsController {
     });
 
     return { ok: true };
+  }
+
+  @Post('leave')
+  async leaveTeam(
+    @Param('teamId') teamId: string,
+    @Req() req: AuthenticatedRequest,
+    @Body(new ZodValidationPipe(LeaveTeamSchema)) body: LeaveTeamInput,
+  ) {
+    const pool = getPool()!;
+    return withTransaction(pool, async (conn) => {
+      const members = await listTeamMembers(conn, teamId);
+      const activeMembers = members.filter((m) => m.isActive);
+      const caller = activeMembers.find(
+        (m) => m.id === req.auth!.memberId || m.userId === req.auth!.userId,
+      );
+      if (!caller) {
+        throw new NotFoundException({ code: 'MEMBER_NOT_FOUND', message: 'Active member not found' });
+      }
+
+      const otherMembers = activeMembers.filter((m) => m.id !== caller.id);
+      if (caller.role === 'lead' && otherMembers.length > 0) {
+        const successor = body.newLeadMemberId
+          ? otherMembers.find((m) => m.id === body.newLeadMemberId)
+          : undefined;
+        if (!successor) {
+          throw new BadRequestException({
+            code: 'NEW_LEAD_REQUIRED',
+            message: 'Assign another member as Team Lead before leaving this team.',
+          });
+        }
+        if (successor.role !== 'lead') {
+          await updateMemberRole(conn, teamId, successor.id, 'lead');
+          await appendAuditEvent(conn, {
+            teamId,
+            actorUserId: req.auth!.userId,
+            action: 'member.role_changed',
+            entityType: 'team_member',
+            entityId: successor.id,
+            metadata: { from: successor.role, to: 'lead', reason: 'leader_left_assignment' },
+          });
+        }
+      }
+
+      await deactivateTeamMember(conn, teamId, caller.id);
+      await appendAuditEvent(conn, {
+        teamId,
+        actorUserId: req.auth!.userId,
+        action: 'member.left',
+        entityType: 'team_member',
+        entityId: caller.id,
+      });
+
+      const remainingTeams = await listUserTeams(conn, req.auth!.userId);
+      const nextTeamId = remainingTeams[0]?.teamId ?? null;
+      await conn.query(
+        `UPDATE sessions SET active_team_id = $1 WHERE user_id = $2 AND active_team_id = $3`,
+        [nextTeamId, req.auth!.userId, teamId],
+      );
+
+      return { ok: true, nextTeamId, remainingCount: remainingTeams.length };
+    });
   }
 
   @Post('members/:memberId/password-reset')

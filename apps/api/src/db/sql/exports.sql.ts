@@ -49,7 +49,7 @@ export const INSERT_REPORT_SNAPSHOT = `
     content_hash,
     created_by_user_id
   )
-  VALUES ($1, $2, $3, 1, '1.0.0', $4::jsonb, $5, $6)
+  VALUES ($1, $2, $3, 1, $7, $4::jsonb, $5, $6)
 `;
 
 export const SELECT_LATEST_SNAPSHOT_FOR_REPORT = `
@@ -57,6 +57,7 @@ export const SELECT_LATEST_SNAPSHOT_FOR_REPORT = `
     id,
     report_id,
     revision,
+    renderer_version,
     payload,
     content_hash,
     created_at

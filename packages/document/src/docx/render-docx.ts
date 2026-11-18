@@ -239,6 +239,16 @@ export async function renderDocx(model: DocumentModel): Promise<Buffer> {
     subject: 'Daily Work Report',
     creator: 'CGHQ Team Work Report',
     description: `Daily report for ${model.formattedDate}`,
+    styles: {
+      default: {
+        document: {
+          run: {
+            font: FONT.docxFamily,
+            size: FONT.bodyHalfPt,
+          },
+        },
+      },
+    },
     numbering: {
       config: [
         {

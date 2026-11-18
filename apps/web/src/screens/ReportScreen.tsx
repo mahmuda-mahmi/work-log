@@ -32,7 +32,6 @@ import {
   dictionaryApi,
   frequentStatusesApi,
   reportsApi,
-  teamsApi,
 } from '../api/client.js';
 import { EntryComposer } from '../components/EntryComposer.js';
 import { ReportPreview } from '../components/ReportPreview.js';
@@ -196,11 +195,6 @@ export function ReportScreen({ session }: ReportScreenProps) {
 
   const dictionary = workspaceQuery.data?.dictionary ?? [];
   const members = workspaceQuery.data?.members ?? [];
-
-  const settingsQuery = useQuery({
-    queryKey: ['team-settings', teamId],
-    queryFn: () => teamsApi.getSettings(teamId),
-  });
 
   const activeCategories = useMemo(
     () =>
@@ -1631,8 +1625,6 @@ export function ReportScreen({ session }: ReportScreenProps) {
           hasLogo={session.team.hasLogo}
           filterMemberId={isFinalized ? undefined : session.member.id}
           filterUserId={isFinalized ? undefined : session.user.id}
-          fontFamily={settingsQuery.data?.documentFontFamily}
-          fontSizePt={settingsQuery.data?.documentFontSizePt}
         />
       </div>
 

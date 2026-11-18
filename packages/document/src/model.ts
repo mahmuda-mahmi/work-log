@@ -1,8 +1,8 @@
 import { formatReportDate } from './date.js';
-import { HEADER, PAGE, TABLE } from './tokens.js';
+import { FONT, HEADER, PAGE, TABLE } from './tokens.js';
 
 export type NumberingMode = 'numbered' | 'plain';
-export type DocumentFontFamily = 'Liberation Serif' | 'Helvetica' | 'Courier';
+export type DocumentFontFamily = 'Times New Roman';
 
 export interface ReportEntryInput {
   categoryName: string;
@@ -170,8 +170,8 @@ export function buildDocumentModel(input: ReportDocumentInput): DocumentModel {
     mainRows,
     followupRows,
     hasFollowups: input.followups.length > 0,
-    fontFamily: input.fontFamily ?? 'Liberation Serif',
-    fontSizePt: input.fontSizePt ?? 11,
+    fontFamily: 'Times New Roman',
+    fontSizePt: FONT.bodyPt,
     page: PAGE,
     header: HEADER,
     table: TABLE,

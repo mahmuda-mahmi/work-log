@@ -891,6 +891,7 @@ export class ReportsController {
     }
 
     const {
+      RENDERER_VERSION,
       buildDocumentModel,
       buildExportFileName,
       getDefaultLogoBytes,
@@ -912,9 +913,10 @@ export class ReportsController {
 
     const hasBlobToken = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
     const existingExport = await findExportBySnapshotAndFormat(pool, snapshot.id, format);
+    const snapshotRendererCurrent = snapshot.rendererVersion === RENDERER_VERSION;
 
     let fileBytes: Buffer | null = null;
-    if (existingExport && hasBlobToken) {
+    if (existingExport && hasBlobToken && snapshotRendererCurrent) {
       try {
         const blobResult = await blobGet(existingExport.storageKey, { access: 'private' });
         if (blobResult && blobResult.stream) {
@@ -946,8 +948,6 @@ export class ReportsController {
         reportDate,
         preparedBy: dto.preparedByName,
         logoBytes: getDefaultLogoBytes(),
-        fontFamily: settings?.documentFontFamily,
-        fontSizePt: settings?.documentFontSizePt,
         entries,
         followups: dto.followups.map((f) => ({
           categoryName: f.categoryName,
@@ -959,16 +959,19 @@ export class ReportsController {
 
       fileBytes = format === 'pdf' ? await renderPdf(model) : await renderDocx(model);
 
+      const storageKey =
+        existingExport?.storageKey ??
+        `teams/${teamId}/reports/${reportDate}/rev-${snapshot.revision}/${fileName}`;
+      if (hasBlobToken) {
+        await blobPut(storageKey, fileBytes, {
+          access: 'private',
+          contentType,
+          addRandomSuffix: false,
+          allowOverwrite: true,
+        });
+      }
+
       if (!existingExport) {
-        const storageKey = `teams/${teamId}/reports/${reportDate}/rev-${snapshot.revision}/${fileName}`;
-        if (hasBlobToken) {
-          await blobPut(storageKey, fileBytes, {
-            access: 'private',
-            contentType,
-            addRandomSuffix: false,
-            allowOverwrite: true,
-          });
-        }
         await insertReportExport(pool, {
           id: uuidv7(),
           reportId: report.id,

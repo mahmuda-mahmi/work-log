@@ -1,7 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ActiveAuthSession, DocumentFontFamily } from '@cghq/contracts';
+import type { ActiveAuthSession } from '@cghq/contracts';
 import {
   Archive,
   ArchiveRestore,
@@ -9,6 +9,7 @@ import {
   Copy,
   FolderKanban,
   KeyRound,
+  LogOut,
   Moon,
   Palette,
   Pencil,
@@ -211,8 +212,9 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
   const [filePrefix, setFilePrefix] = useState<string | null>(null);
   const [preparedBy, setPreparedBy] = useState<string | null>(null);
   const [profileDisplayName, setProfileDisplayName] = useState<string | null>(null);
-  const [docFontFamily, setDocFontFamily] = useState<DocumentFontFamily | null>(null);
-  const [docFontSizePt, setDocFontSizePt] = useState<number | null>(null);
+  const [leaveModalOpen, setLeaveModalOpen] = useState(false);
+  const [successorLeadMemberId, setSuccessorLeadMemberId] = useState('');
+  const [leaveError, setLeaveError] = useState<string | null>(null);
 
   async function copyToClipboard(text: string, key: string) {
     try {
@@ -296,19 +298,6 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
       setDeleteDictTarget(null);
       setStatusMsg(err.message);
     },
-  });
-
-  const saveTypographyMutation = useMutation({
-    mutationFn: () =>
-      teamsApi.updateSettings(teamId, {
-        documentFontFamily: docFontFamily ?? settings?.documentFontFamily ?? 'Liberation Serif',
-        documentFontSizePt: docFontSizePt ?? settings?.documentFontSizePt ?? 11,
-      }),
-    onSuccess: async () => {
-      setStatusMsg('Document typography saved.');
-      await queryClient.invalidateQueries({ queryKey: ['team-settings', teamId] });
-    },
-    onError: (err: Error) => setStatusMsg(err.message),
   });
 
   const createCategoryMutation = useMutation({
@@ -425,20 +414,34 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
     },
   });
 
-  const logoMutation = useMutation({
-    mutationFn: async (file: File) => {
-      const buf = await file.arrayBuffer();
-      const bytes = new Uint8Array(buf);
-      let binary = '';
-      for (const b of bytes) binary += String.fromCharCode(b);
-      return teamsApi.uploadLogo(teamId, file.name, btoa(binary));
-    },
-    onSuccess: async () => {
-      setStatusMsg('Logo updated.');
-      await queryClient.invalidateQueries({ queryKey: ['team-settings', teamId] });
+  const otherActiveMembers = useMemo(
+    () => members.filter((m) => m.isActive && m.id !== session.member.id),
+    [members, session.member.id],
+  );
+
+  const leaveTeamMutation = useMutation({
+    mutationFn: () =>
+      teamsApi.leaveTeam(
+        teamId,
+        isLead && otherActiveMembers.length > 0 ? successorLeadMemberId || undefined : undefined,
+      ),
+    onSuccess: async (res) => {
+      setLeaveModalOpen(false);
+      setLeaveError(null);
+      setSuccessorLeadMemberId('');
+      try {
+        window.localStorage.removeItem('cghq:session');
+      } catch {
+        // Ignore
+      }
+      queryClient.removeQueries({ queryKey: ['team-settings', teamId] });
+      queryClient.removeQueries({ queryKey: ['team-members', teamId] });
+      queryClient.removeQueries({ queryKey: ['report', teamId] });
       await queryClient.invalidateQueries({ queryKey: ['me'] });
+      await queryClient.invalidateQueries({ queryKey: ['my-teams'] });
+      navigate(res.remainingCount > 1 ? '/' : '/today');
     },
-    onError: (err: Error) => setStatusMsg(err.message),
+    onError: (err: Error) => setLeaveError(err.message),
   });
 
   const activeCategoryIdForTitle = selectedCategoryId || dictionary[0]?.id || '';
@@ -499,7 +502,7 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
       {statusMsg && <Alert variant="success">{statusMsg}</Alert>}
 
       {activeTab === 'appearance' && (
-        <div key="tab-appearance" className="auth-form-animate grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
+        <div key="tab-appearance" className="auth-form-animate max-w-3xl">
           <Card className="border-t-2 border-t-primary">
             <CardHeader className="py-3">
               <CardTitle>Theme &amp; Dark Mode</CardTitle>
@@ -563,93 +566,6 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
                   })}
                 </div>
               </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-t-2 border-t-primary">
-            <CardHeader className="py-3">
-              <CardTitle>Document Font &amp; Size</CardTitle>
-              <CardDescription>
-                Customize the font family and body text size used in the live preview, DOCX, and
-                PDF exports.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4 pt-3">
-              <div className="grid gap-1.5">
-                <Label htmlFor="doc-font-family">Document Font Family</Label>
-                <Select
-                  value={docFontFamily ?? settings?.documentFontFamily ?? 'Liberation Serif'}
-                  disabled={!isLead}
-                  onValueChange={(val) => setDocFontFamily(val as DocumentFontFamily)}
-                >
-                  <SelectTrigger id="doc-font-family">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Liberation Serif">
-                      Liberation Serif / Times New Roman
-                    </SelectItem>
-                    <SelectItem value="Helvetica">Helvetica / Arial (Sans-serif)</SelectItem>
-                    <SelectItem value="Courier">Courier (Monospace)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid gap-1.5">
-                <Label htmlFor="doc-font-size">Document Font Size</Label>
-                <Select
-                  value={String(docFontSizePt ?? settings?.documentFontSizePt ?? 11)}
-                  disabled={!isLead}
-                  onValueChange={(val) => setDocFontSizePt(Number(val))}
-                >
-                  <SelectTrigger id="doc-font-size">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {[9, 10, 11, 12, 13, 14].map((pt) => (
-                      <SelectItem key={pt} value={String(pt)}>
-                        {pt} pt {pt === 11 ? '(Default)' : ''}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div
-                className="rounded-md border border-zinc-200 bg-white p-3 text-zinc-950"
-                style={{
-                  fontFamily:
-                    (docFontFamily ?? settings?.documentFontFamily ?? 'Liberation Serif') ===
-                    'Helvetica'
-                      ? 'Arial, Helvetica, sans-serif'
-                      : (docFontFamily ?? settings?.documentFontFamily ?? 'Liberation Serif') ===
-                          'Courier'
-                        ? 'Courier New, Courier, monospace'
-                        : "'Liberation Serif', 'Times New Roman', serif",
-                  fontSize: `${docFontSizePt ?? settings?.documentFontSizePt ?? 11}pt`,
-                }}
-              >
-                <div className="font-bold">Sample Daily Report Text</div>
-                <div>Date: 17 November 2026 — Help for Login &amp; Support Calls.</div>
-              </div>
-
-              {isLead ? (
-                <div className="flex justify-end">
-                  <Button
-                    type="button"
-                    size="sm"
-                    disabled={saveTypographyMutation.isPending}
-                    onClick={() => saveTypographyMutation.mutate()}
-                  >
-                    <Check className="h-3.5 w-3.5" />
-                    {saveTypographyMutation.isPending ? 'Saving…' : 'Save Document Typography'}
-                  </Button>
-                </div>
-              ) : (
-                <p className="text-xs text-zinc-500">
-                  Only the Team Lead can change the team&apos;s exported document font settings.
-                </p>
-              )}
             </CardContent>
           </Card>
         </div>
@@ -781,7 +697,7 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
           <div className="flex flex-col gap-4 lg:col-span-5">
             <Card className="border-t-2 border-t-primary">
             <CardHeader className="py-3">
-              <CardTitle>Team Settings &amp; Branding</CardTitle>
+              <CardTitle>Team Settings</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4 pt-3">
               {settings && (
@@ -828,24 +744,6 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
                     </div>
                   )}
                 </form>
-              )}
-
-              {isLead && (
-                <div className="grid gap-1.5 border-t border-zinc-100 pt-3">
-                  <Label htmlFor="set-team-logo">
-                    Team Logo (PNG/JPEG, max 1 MB, max 1000 px)
-                  </Label>
-                  <Input
-                    id="set-team-logo"
-                    type="file"
-                    accept="image/png,image/jpeg"
-                    className="h-auto py-1.5"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) logoMutation.mutate(file);
-                    }}
-                  />
-                </div>
               )}
             </CardContent>
           </Card>
@@ -1068,6 +966,32 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
                   </div>
                 </div>
               )}
+
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 pt-3">
+                <div>
+                  <div className="text-xs font-bold uppercase tracking-wide text-zinc-700">
+                    Leave Team
+                  </div>
+                  <p className="mt-0.5 text-xs text-zinc-500">
+                    {isLead && otherActiveMembers.length > 0
+                      ? 'Assign another teammate as Team Lead before leaving this team.'
+                      : 'Leave this team workspace while keeping your account and other teams.'}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => {
+                    setLeaveError(null);
+                    setSuccessorLeadMemberId('');
+                    setLeaveModalOpen(true);
+                  }}
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                  Leave Team
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -1185,9 +1109,9 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
                   click any suggestion to paste it into the status box and customize it.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="grid gap-3 pt-3">
+              <CardContent className="grid gap-4 pt-3">
                 <form
-                  className="grid gap-2.5"
+                  className="grid gap-2.5 rounded-lg border border-zinc-200 bg-zinc-50 p-3"
                   onSubmit={(e) => {
                     e.preventDefault();
                     const trimmed = newFrequentStatus.trim();
@@ -1216,46 +1140,49 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
                   </div>
 
                   {dailyTitleOptions.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-[11px] font-semibold text-zinc-500">
-                        Show on rows:
+                    <div className="grid gap-1.5 border-t border-zinc-200/70 pt-2">
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+                        Show on rows
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => setNewFreqTitleIds([])}
-                        className={cn(
-                          'cursor-pointer rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors',
-                          newFreqTitleIds.length === 0
-                            ? 'border-primary bg-primary text-white'
-                            : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50',
-                        )}
-                      >
-                        All Rows
-                      </button>
-                      {dailyTitleOptions.map((opt) => {
-                        const selected = newFreqTitleIds.includes(opt.id);
-                        return (
-                          <button
-                            key={opt.id}
-                            type="button"
-                            onClick={() =>
-                              setNewFreqTitleIds((prev) =>
-                                prev.includes(opt.id)
-                                  ? prev.filter((id) => id !== opt.id)
-                                  : [...prev, opt.id],
-                              )
-                            }
-                            className={cn(
-                              'cursor-pointer rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors',
-                              selected
-                                ? 'border-primary bg-accent text-accent-foreground'
-                                : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50',
-                            )}
-                          >
-                            {opt.label}
-                          </button>
-                        );
-                      })}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setNewFreqTitleIds([])}
+                          className={cn(
+                            'cursor-pointer rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors',
+                            newFreqTitleIds.length === 0
+                              ? 'border-primary bg-primary text-white'
+                              : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100',
+                          )}
+                        >
+                          All Rows
+                        </button>
+                        {dailyTitleOptions.map((opt) => {
+                          const selected = newFreqTitleIds.includes(opt.id);
+                          return (
+                            <button
+                              key={opt.id}
+                              type="button"
+                              title={opt.label}
+                              onClick={() =>
+                                setNewFreqTitleIds((prev) =>
+                                  prev.includes(opt.id)
+                                    ? prev.filter((id) => id !== opt.id)
+                                    : [...prev, opt.id],
+                                )
+                              }
+                              className={cn(
+                                'cursor-pointer rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors',
+                                selected
+                                  ? 'border-primary bg-accent text-accent-foreground'
+                                  : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100',
+                              )}
+                            >
+                              {opt.shortLabel}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                 </form>
@@ -1265,143 +1192,171 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
                     No frequently used statuses saved yet.
                   </p>
                 ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {frequentStatuses.map((item) => {
-                      const rowNames =
-                        item.titleIds.length === 0
-                          ? ['All rows']
-                          : item.titleIds
-                              .map((tid) => dailyTitleOptions.find((o) => o.id === tid)?.shortLabel)
-                              .filter((x): x is string => Boolean(x));
-                      return (
-                      <div
-                        key={item.id}
-                        className={cn(
-                          'inline-flex max-w-full items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs shadow-xs',
-                          editingFreq?.id === item.id && 'w-full p-2.5',
-                        )}
-                      >
-                        {editingFreq?.id === item.id ? (
-                          <form
-                            className="grid flex-1 gap-2"
-                            onSubmit={(e) => {
-                              e.preventDefault();
-                              const trimmed = editingFreq.statusText.trim();
-                              if (!trimmed) return;
-                              updateFrequentStatusMutation.mutate({
-                                id: item.id,
-                                statusText: trimmed,
-                                titleIds: editingFreq.titleIds,
-                              });
-                            }}
-                          >
-                            <div className="flex items-center gap-2">
-                              <Input
-                                value={editingFreq.statusText}
-                                onChange={(e) =>
-                                  setEditingFreq({ ...editingFreq, statusText: e.target.value })
-                                }
-                                maxLength={2000}
-                                autoFocus
-                              />
-                              <Button
-                                type="submit"
-                                size="xs"
-                                disabled={updateFrequentStatusMutation.isPending}
+                  <div className="grid gap-3">
+                    {(() => {
+                      const groups = new Map<
+                        string,
+                        { label: string; items: typeof frequentStatuses }
+                      >();
+                      for (const item of frequentStatuses) {
+                        const ids = [...(item.titleIds ?? [])].sort();
+                        const key = ids.length === 0 ? '__all__' : ids.join(',');
+                        let grp = groups.get(key);
+                        if (!grp) {
+                          const label =
+                            ids.length === 0
+                              ? 'All Rows'
+                              : ids
+                                  .map(
+                                    (tid) =>
+                                      dailyTitleOptions.find((o) => o.id === tid)?.label ??
+                                      'Selected Row',
+                                  )
+                                  .join(' + ');
+                          grp = { label, items: [] };
+                          groups.set(key, grp);
+                        }
+                        grp.items.push(item);
+                      }
+                      return Array.from(groups.entries()).map(([key, grp]) => (
+                        <div key={key} className="grid gap-1.5">
+                          <div className="text-[11px] font-bold uppercase tracking-wide text-zinc-500">
+                            {grp.label} ({grp.items.length})
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {grp.items.map((item) => (
+                              <div
+                                key={item.id}
+                                className={cn(
+                                  'inline-flex max-w-full items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs shadow-2xs',
+                                  editingFreq?.id === item.id && 'w-full p-2.5',
+                                )}
                               >
-                                Save
-                              </Button>
-                              <Button
-                                type="button"
-                                size="xs"
-                                variant="ghost"
-                                onClick={() => setEditingFreq(null)}
-                              >
-                                Cancel
-                              </Button>
-                            </div>
-                            {dailyTitleOptions.length > 0 && (
-                              <div className="flex flex-wrap items-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setEditingFreq({ ...editingFreq, titleIds: [] })
-                                  }
-                                  className={cn(
-                                    'cursor-pointer rounded border px-1.5 py-0.5 text-[10px] font-medium transition-colors',
-                                    editingFreq.titleIds.length === 0
-                                      ? 'border-primary bg-primary text-white'
-                                      : 'border-zinc-200 bg-white text-zinc-700',
-                                  )}
-                                >
-                                  All Rows
-                                </button>
-                                {dailyTitleOptions.map((opt) => {
-                                  const sel = editingFreq.titleIds.includes(opt.id);
-                                  return (
+                                {editingFreq?.id === item.id ? (
+                                  <form
+                                    className="grid flex-1 gap-2"
+                                    onSubmit={(e) => {
+                                      e.preventDefault();
+                                      const trimmed = editingFreq.statusText.trim();
+                                      if (!trimmed) return;
+                                      updateFrequentStatusMutation.mutate({
+                                        id: item.id,
+                                        statusText: trimmed,
+                                        titleIds: editingFreq.titleIds,
+                                      });
+                                    }}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <Input
+                                        value={editingFreq.statusText}
+                                        onChange={(e) =>
+                                          setEditingFreq({
+                                            ...editingFreq,
+                                            statusText: e.target.value,
+                                          })
+                                        }
+                                        maxLength={2000}
+                                        autoFocus
+                                      />
+                                      <Button
+                                        type="submit"
+                                        size="xs"
+                                        disabled={updateFrequentStatusMutation.isPending}
+                                      >
+                                        Save
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        size="xs"
+                                        variant="ghost"
+                                        onClick={() => setEditingFreq(null)}
+                                      >
+                                        Cancel
+                                      </Button>
+                                    </div>
+                                    {dailyTitleOptions.length > 0 && (
+                                      <div className="flex flex-wrap items-center gap-1">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setEditingFreq({ ...editingFreq, titleIds: [] })
+                                          }
+                                          className={cn(
+                                            'cursor-pointer rounded border px-1.5 py-0.5 text-[10px] font-medium transition-colors',
+                                            editingFreq.titleIds.length === 0
+                                              ? 'border-primary bg-primary text-white'
+                                              : 'border-zinc-200 bg-white text-zinc-700',
+                                          )}
+                                        >
+                                          All Rows
+                                        </button>
+                                        {dailyTitleOptions.map((opt) => {
+                                          const sel = editingFreq.titleIds.includes(opt.id);
+                                          return (
+                                            <button
+                                              key={opt.id}
+                                              type="button"
+                                              title={opt.label}
+                                              onClick={() =>
+                                                setEditingFreq({
+                                                  ...editingFreq,
+                                                  titleIds: sel
+                                                    ? editingFreq.titleIds.filter(
+                                                        (id) => id !== opt.id,
+                                                      )
+                                                    : [...editingFreq.titleIds, opt.id],
+                                                })
+                                              }
+                                              className={cn(
+                                                'cursor-pointer rounded border px-1.5 py-0.5 text-[10px] font-medium transition-colors',
+                                                sel
+                                                  ? 'border-primary bg-accent text-accent-foreground'
+                                                  : 'border-zinc-200 bg-white text-zinc-700',
+                                              )}
+                                            >
+                                              {opt.shortLabel}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </form>
+                                ) : (
+                                  <>
+                                    <span className="break-words font-medium text-zinc-900">
+                                      {item.statusText}
+                                    </span>
                                     <button
-                                      key={opt.id}
                                       type="button"
+                                      title="Edit template"
                                       onClick={() =>
                                         setEditingFreq({
-                                          ...editingFreq,
-                                          titleIds: sel
-                                            ? editingFreq.titleIds.filter((id) => id !== opt.id)
-                                            : [...editingFreq.titleIds, opt.id],
+                                          id: item.id,
+                                          statusText: item.statusText,
+                                          titleIds: item.titleIds ?? [],
                                         })
                                       }
-                                      className={cn(
-                                        'cursor-pointer rounded border px-1.5 py-0.5 text-[10px] font-medium transition-colors',
-                                        sel
-                                          ? 'border-primary bg-accent text-accent-foreground'
-                                          : 'border-zinc-200 bg-white text-zinc-700',
-                                      )}
+                                      className="cursor-pointer rounded p-0.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
                                     >
-                                      {opt.label}
+                                      <Pencil className="h-3 w-3" />
                                     </button>
-                                  );
-                                })}
+                                    <button
+                                      type="button"
+                                      title="Delete template"
+                                      disabled={deleteFrequentStatusMutation.isPending}
+                                      onClick={() => deleteFrequentStatusMutation.mutate(item.id)}
+                                      className="cursor-pointer rounded p-0.5 text-rose-500 hover:bg-rose-100 hover:text-rose-700 disabled:opacity-50"
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </button>
+                                  </>
+                                )}
                               </div>
-                            )}
-                          </form>
-                        ) : (
-                          <>
-                            <span className="break-words font-medium text-zinc-900">
-                              {item.statusText}
-                            </span>
-                            {rowNames.length > 0 && (
-                              <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600">
-                                {rowNames.join(', ')}
-                              </span>
-                            )}
-                            <button
-                              type="button"
-                              title="Edit template"
-                              onClick={() =>
-                                setEditingFreq({
-                                  id: item.id,
-                                  statusText: item.statusText,
-                                  titleIds: item.titleIds ?? [],
-                                })
-                              }
-                              className="cursor-pointer rounded p-0.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
-                            >
-                              <Pencil className="h-3 w-3" />
-                            </button>
-                            <button
-                              type="button"
-                              title="Delete template"
-                              disabled={deleteFrequentStatusMutation.isPending}
-                              onClick={() => deleteFrequentStatusMutation.mutate(item.id)}
-                              className="cursor-pointer rounded p-0.5 text-rose-500 hover:bg-rose-100 hover:text-rose-700 disabled:opacity-50"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                      );
-                    })}
+                            ))}
+                          </div>
+                        </div>
+                      ));
+                    })()}
                   </div>
                 )}
               </CardContent>
@@ -1646,6 +1601,82 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
           if (removeMemberTarget) deactivateMutation.mutate(removeMemberTarget.id);
         }}
       />
+
+      {leaveModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-5 text-zinc-900 shadow-xl">
+            <div className="flex items-center gap-2">
+              <LogOut className="h-4 w-4 text-rose-600" />
+              <h3 className="text-base font-bold text-zinc-950">Leave {session.team.name}</h3>
+            </div>
+            <p className="mt-1.5 text-xs text-zinc-600">
+              {isLead && otherActiveMembers.length > 0
+                ? 'Because you are leaving as a Team Lead, select another member to take over as Team Lead first.'
+                : otherActiveMembers.length === 0
+                  ? 'You are the only active member left in this team. Are you sure you want to leave?'
+                  : `Are you sure you want to leave ${session.team.name}? You can rejoin later if invited or with a Team Code.`}
+            </p>
+
+            {leaveError && (
+              <Alert variant="destructive" className="mt-3">
+                {leaveError}
+              </Alert>
+            )}
+
+            {isLead && otherActiveMembers.length > 0 && (
+              <div className="mt-4 grid gap-1.5">
+                <Label htmlFor="leave-successor">Assign New Team Lead</Label>
+                <Select
+                  value={successorLeadMemberId}
+                  onValueChange={setSuccessorLeadMemberId}
+                >
+                  <SelectTrigger id="leave-successor">
+                    <SelectValue placeholder="Choose a member to promote as Lead" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {otherActiveMembers.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        {m.displayName} ({m.email})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={leaveTeamMutation.isPending}
+                onClick={() => setLeaveModalOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                disabled={
+                  leaveTeamMutation.isPending ||
+                  (isLead && otherActiveMembers.length > 0 && !successorLeadMemberId)
+                }
+                onClick={() => {
+                  setLeaveError(null);
+                  leaveTeamMutation.mutate();
+                }}
+              >
+                {leaveTeamMutation.isPending
+                  ? 'Leaving…'
+                  : isLead && otherActiveMembers.length > 0
+                    ? 'Assign Lead & Leave'
+                    : 'Leave Team'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

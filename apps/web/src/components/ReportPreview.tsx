@@ -8,8 +8,6 @@ interface ReportPreviewProps {
   hasLogo: boolean;
   filterMemberId?: string;
   filterUserId?: string;
-  fontFamily?: string;
-  fontSizePt?: number;
 }
 
 function computeRowSpans(rows: DocumentRow[]): number[] {
@@ -38,8 +36,6 @@ export function ReportPreview({
   documentTitle,
   filterMemberId,
   filterUserId,
-  fontFamily = 'Liberation Serif',
-  fontSizePt = 11,
 }: ReportPreviewProps) {
   const [logoVisible, setLogoVisible] = useState(true);
 
@@ -80,19 +76,12 @@ export function ReportPreview({
 
   const mainRowSpans = useMemo(() => computeRowSpans(model.mainRows), [model.mainRows]);
 
-  const cssFontFamily =
-    fontFamily === 'Helvetica'
-      ? 'Arial, Helvetica, sans-serif'
-      : fontFamily === 'Courier'
-        ? "'Courier New', Courier, monospace"
-        : "'Liberation Serif', 'Times New Roman', Georgia, serif";
-
   return (
     <div
       className="preview-sheet"
       style={{
-        fontFamily: cssFontFamily,
-        fontSize: `${fontSizePt}pt`,
+        fontFamily: "'Times New Roman', Times, serif",
+        fontSize: '14px',
       }}
     >
       <div className="preview-header">

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { EmailSchema } from './auth.js';
 import { MemberRoleSchema } from './reports.js';
 
-export const DocumentFontFamilySchema = z.enum(['Liberation Serif', 'Helvetica', 'Courier']);
+export const DocumentFontFamilySchema = z.enum(['Times New Roman']);
 export type DocumentFontFamily = z.infer<typeof DocumentFontFamilySchema>;
 
 export const TeamSettingsSchema = z.object({
@@ -16,8 +16,8 @@ export const TeamSettingsSchema = z.object({
   membersCanAddDictionary: z.boolean(),
   followupsEnabled: z.boolean(),
   hasLogo: z.boolean(),
-  documentFontFamily: DocumentFontFamilySchema.default('Liberation Serif'),
-  documentFontSizePt: z.number().int().min(9).max(14).default(11),
+  documentFontFamily: DocumentFontFamilySchema.default('Times New Roman'),
+  documentFontSizePt: z.number().int().min(14).max(14).default(14),
 });
 export type TeamSettings = z.infer<typeof TeamSettingsSchema>;
 
@@ -30,9 +30,14 @@ export const UpdateTeamSettingsSchema = z.object({
   membersCanAddDictionary: z.boolean().optional(),
   followupsEnabled: z.boolean().optional(),
   documentFontFamily: DocumentFontFamilySchema.optional(),
-  documentFontSizePt: z.number().int().min(9).max(14).optional(),
+  documentFontSizePt: z.number().int().min(14).max(14).optional(),
 });
 export type UpdateTeamSettingsInput = z.infer<typeof UpdateTeamSettingsSchema>;
+
+export const LeaveTeamSchema = z.object({
+  newLeadMemberId: z.string().uuid().optional(),
+});
+export type LeaveTeamInput = z.infer<typeof LeaveTeamSchema>;
 
 export const CreateInviteSchema = z.object({
   email: EmailSchema.optional(),
