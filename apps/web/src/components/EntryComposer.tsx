@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DailyReportDto, DictionaryCategory, MemberSummary, WorkEntryDto } from '@cghq/contracts';
 import { isNilCommunicationStatus } from '@cghq/document/model';
 import { findUnsupportedLatinChars } from '@cghq/document/date';
 import { List, Plus } from 'lucide-react';
-import { ApiError, reportsApi } from '../api/client.js';
+import { ApiError, frequentStatusesApi, reportsApi } from '../api/client.js';
 import { Alert } from './ui/alert.js';
 import { Badge } from './ui/badge.js';
 import { Button } from './ui/button.js';
@@ -69,6 +69,10 @@ export function EntryComposer({
   disabled = false,
 }: EntryComposerProps) {
   const queryClient = useQueryClient();
+  const { data: frequentStatuses = [] } = useQuery({
+    queryKey: ['frequent-statuses', teamId],
+    queryFn: () => frequentStatusesApi.list(teamId),
+  });
   const draftKey = `cghq:draft:${teamId}:${reportDate}`;
   const lastPairKey = `cghq:lastPair:${teamId}`;
 
@@ -561,6 +565,23 @@ export function EntryComposer({
                   required
                 />
               </div>
+              {frequentStatuses.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                  <span className="text-[11px] font-semibold text-zinc-500">Suggestions:</span>
+                  {frequentStatuses.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      disabled={disabled || createMutation.isPending}
+                      onClick={() => setStatusText(item.statusText)}
+                      className="cursor-pointer rounded-md border border-primary-border bg-accent px-2 py-0.5 text-left text-xs font-medium text-accent-foreground transition-colors hover:bg-primary hover:text-white disabled:opacity-50"
+                      title="Click to paste into status box"
+                    >
+                      {item.statusText}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <Button

@@ -29,6 +29,7 @@ import {
 import {
   ApiError,
   dictionaryApi,
+  frequentStatusesApi,
   reportsApi,
   teamsApi,
 } from '../api/client.js';
@@ -211,6 +212,11 @@ export function ReportScreen({ session }: ReportScreenProps) {
         .filter((c) => c.titles.length > 0),
     [dictionary],
   );
+
+  const { data: frequentStatuses = [] } = useQuery({
+    queryKey: ['frequent-statuses', teamId],
+    queryFn: () => frequentStatusesApi.list(teamId),
+  });
 
   const report = workspaceQuery.data?.report;
   const activeDate = routeDate ?? report?.reportDate ?? '';
@@ -1412,6 +1418,26 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                     }
                                   />
                                 </div>
+                                {frequentStatuses.length > 0 && (
+                                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                                    <span className="text-[11px] font-semibold text-zinc-500">
+                                      Suggestions:
+                                    </span>
+                                    {frequentStatuses.map((item) => (
+                                      <button
+                                        key={item.id}
+                                        type="button"
+                                        onClick={() =>
+                                          setQuickAdd({ ...quickAdd, statusText: item.statusText })
+                                        }
+                                        className="cursor-pointer rounded-md border border-primary-border bg-accent px-2 py-0.5 text-left text-xs font-medium text-accent-foreground transition-colors hover:bg-primary hover:text-white"
+                                        title="Click to paste into status box"
+                                      >
+                                        {item.statusText}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                               <div className="grid gap-1.5">
                                 <Label>Task Completed By (optional)</Label>

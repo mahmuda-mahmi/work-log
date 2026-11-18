@@ -212,3 +212,20 @@ export const ReportExportInfoSchema = z.object({
   createdAt: z.string(),
 });
 export type ReportExportInfo = z.infer<typeof ReportExportInfoSchema>;
+
+export const FrequentStatusDtoSchema = z.object({
+  id: z.string().uuid(),
+  statusText: z.string(),
+  position: z.number().int(),
+});
+export type FrequentStatusDto = z.infer<typeof FrequentStatusDtoSchema>;
+
+export const CreateFrequentStatusSchema = z.object({
+  statusText: z.string().trim().min(1, 'Status text is required').max(2000),
+});
+export type CreateFrequentStatusInput = z.infer<typeof CreateFrequentStatusSchema>;
+
+export const UpdateFrequentStatusSchema = z.object({
+  statusText: z.string().trim().min(1, 'Status text is required').max(2000),
+});
+export type UpdateFrequentStatusInput = z.infer<typeof UpdateFrequentStatusSchema>;

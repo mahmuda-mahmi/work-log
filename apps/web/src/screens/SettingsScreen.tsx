@@ -13,7 +13,7 @@ import {
   Sun,
   Trash2,
 } from 'lucide-react';
-import { dictionaryApi, teamsApi } from '../api/client';
+import { dictionaryApi, frequentStatusesApi, teamsApi } from '../api/client';
 import { Alert } from '../components/ui/alert';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -71,6 +71,41 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
     queryKey: ['join-requests', teamId],
     queryFn: () => teamsApi.listJoinRequests(teamId),
     enabled: isLead,
+  });
+
+  const { data: frequentStatuses = [] } = useQuery({
+    queryKey: ['frequent-statuses', teamId],
+    queryFn: () => frequentStatusesApi.list(teamId),
+  });
+
+  const [newFrequentStatus, setNewFrequentStatus] = useState('');
+  const [editingFreq, setEditingFreq] = useState<{ id: string; statusText: string } | null>(null);
+
+  const createFrequentStatusMutation = useMutation({
+    mutationFn: (text: string) => frequentStatusesApi.create(teamId, text),
+    onSuccess: () => {
+      setNewFrequentStatus('');
+      setStatusMsg('Frequently used status added.');
+      void queryClient.invalidateQueries({ queryKey: ['frequent-statuses', teamId] });
+    },
+  });
+
+  const updateFrequentStatusMutation = useMutation({
+    mutationFn: (payload: { id: string; statusText: string }) =>
+      frequentStatusesApi.update(teamId, payload.id, payload.statusText),
+    onSuccess: () => {
+      setEditingFreq(null);
+      setStatusMsg('Frequently used status updated.');
+      void queryClient.invalidateQueries({ queryKey: ['frequent-statuses', teamId] });
+    },
+  });
+
+  const deleteFrequentStatusMutation = useMutation({
+    mutationFn: (id: string) => frequentStatusesApi.remove(teamId, id),
+    onSuccess: () => {
+      setStatusMsg('Frequently used status removed.');
+      void queryClient.invalidateQueries({ queryKey: ['frequent-statuses', teamId] });
+    },
   });
 
   const [joinLink, setJoinLink] = useState<string | null>(null);
@@ -1121,6 +1156,127 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
                               </div>
                             ))}
                           </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {isLead && (
+            <Card className="border-t-2 border-t-primary">
+              <CardHeader className="py-3">
+                <CardTitle>Frequently Used Statuses</CardTitle>
+                <CardDescription>
+                  Save reusable status templates here. When team members click Add Status, they can
+                  click any suggestion to paste it into the status box and customize it.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-3 pt-3">
+                <form
+                  className="flex items-center gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const trimmed = newFrequentStatus.trim();
+                    if (!trimmed) return;
+                    createFrequentStatusMutation.mutate(trimmed);
+                  }}
+                >
+                  <Input
+                    value={newFrequentStatus}
+                    onChange={(e) => setNewFrequentStatus(e.target.value)}
+                    placeholder="e.g., Assisted user with account login"
+                    maxLength={2000}
+                  />
+                  <Button
+                    type="submit"
+                    size="sm"
+                    disabled={createFrequentStatusMutation.isPending || !newFrequentStatus.trim()}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Add
+                  </Button>
+                </form>
+
+                {frequentStatuses.length === 0 ? (
+                  <p className="text-xs text-zinc-500">
+                    No frequently used statuses saved yet.
+                  </p>
+                ) : (
+                  <div className="grid gap-2">
+                    {frequentStatuses.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2"
+                      >
+                        {editingFreq?.id === item.id ? (
+                          <form
+                            className="flex flex-1 items-center gap-2"
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              const trimmed = editingFreq.statusText.trim();
+                              if (!trimmed) return;
+                              updateFrequentStatusMutation.mutate({
+                                id: item.id,
+                                statusText: trimmed,
+                              });
+                            }}
+                          >
+                            <Input
+                              value={editingFreq.statusText}
+                              onChange={(e) =>
+                                setEditingFreq({ ...editingFreq, statusText: e.target.value })
+                              }
+                              maxLength={2000}
+                              autoFocus
+                            />
+                            <Button
+                              type="submit"
+                              size="xs"
+                              disabled={updateFrequentStatusMutation.isPending}
+                            >
+                              Save
+                            </Button>
+                            <Button
+                              type="button"
+                              size="xs"
+                              variant="ghost"
+                              onClick={() => setEditingFreq(null)}
+                            >
+                              Cancel
+                            </Button>
+                          </form>
+                        ) : (
+                          <>
+                            <span className="min-w-0 flex-1 whitespace-pre-wrap break-words text-xs font-medium text-zinc-900">
+                              {item.statusText}
+                            </span>
+                            <div className="flex shrink-0 items-center gap-1">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-xs"
+                                title="Edit template"
+                                onClick={() =>
+                                  setEditingFreq({ id: item.id, statusText: item.statusText })
+                                }
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-xs"
+                                title="Delete template"
+                                disabled={deleteFrequentStatusMutation.isPending}
+                                onClick={() => deleteFrequentStatusMutation.mutate(item.id)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5 text-rose-500" />
+                              </Button>
+                            </div>
+                          </>
                         )}
                       </div>
                     ))}

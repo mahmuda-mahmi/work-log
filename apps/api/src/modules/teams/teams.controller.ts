@@ -15,11 +15,15 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import {
+  CreateFrequentStatusSchema,
   CreateInviteSchema,
+  UpdateFrequentStatusSchema,
   UpdateMemberProfileSchema,
   UpdateMemberRoleSchema,
   UpdateTeamSettingsSchema,
+  type CreateFrequentStatusInput,
   type CreateInviteInput,
+  type UpdateFrequentStatusInput,
   type UpdateMemberProfileInput,
   type UpdateMemberRoleInput,
   type UpdateTeamSettingsInput,
@@ -39,6 +43,13 @@ import { ZodValidationPipe } from '../../common/zod-validation.pipe.js';
 import { getPool, withTransaction } from '../../db/pool.js';
 import { appendAuditEvent } from '../../db/repositories/audit.repo.js';
 import { deleteSessionsByUserId } from '../../db/repositories/auth.repo.js';
+import {
+  deleteFrequentStatus,
+  getNextFrequentStatusPosition,
+  insertFrequentStatus,
+  listFrequentStatuses,
+  updateFrequentStatus,
+} from '../../db/repositories/frequent-statuses.repo.js';
 import {
   findJoinRequestById,
   listPendingJoinRequests,
@@ -480,5 +491,67 @@ export class TeamsController {
     res.setHeader('Content-Type', logo.mimeType);
     res.setHeader('Cache-Control', 'private, max-age=300');
     res.send(logo.bytes);
+  }
+
+  @Get('frequent-statuses')
+  async getFrequentStatuses(@Param('teamId') teamId: string) {
+    const pool = getPool()!;
+    return listFrequentStatuses(pool, teamId);
+  }
+
+  @Post('frequent-statuses')
+  @UseGuards(TeamLeadGuard)
+  async createFrequentStatus(
+    @Param('teamId') teamId: string,
+    @Body(new ZodValidationPipe(CreateFrequentStatusSchema)) body: CreateFrequentStatusInput,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const pool = getPool()!;
+    const id = uuidv7();
+    return withTransaction(pool, async (conn) => {
+      const position = await getNextFrequentStatusPosition(conn, teamId);
+      return insertFrequentStatus(conn, {
+        id,
+        teamId,
+        statusText: body.statusText.trim(),
+        position,
+        createdBy: req.auth!.userId,
+      });
+    });
+  }
+
+  @Patch('frequent-statuses/:id')
+  @UseGuards(TeamLeadGuard)
+  async updateFrequentStatusItem(
+    @Param('teamId') teamId: string,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(UpdateFrequentStatusSchema)) body: UpdateFrequentStatusInput,
+  ) {
+    const pool = getPool()!;
+    const updated = await updateFrequentStatus(pool, teamId, id, body.statusText.trim());
+    if (!updated) {
+      throw new NotFoundException({
+        code: 'FREQUENT_STATUS_NOT_FOUND',
+        message: 'Frequently used status not found',
+      });
+    }
+    return updated;
+  }
+
+  @Delete('frequent-statuses/:id')
+  @UseGuards(TeamLeadGuard)
+  async deleteFrequentStatusItem(
+    @Param('teamId') teamId: string,
+    @Param('id') id: string,
+  ) {
+    const pool = getPool()!;
+    const deleted = await deleteFrequentStatus(pool, teamId, id);
+    if (!deleted) {
+      throw new NotFoundException({
+        code: 'FREQUENT_STATUS_NOT_FOUND',
+        message: 'Frequently used status not found',
+      });
+    }
+    return { ok: true };
   }
 }

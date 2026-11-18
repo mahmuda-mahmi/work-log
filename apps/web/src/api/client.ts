@@ -13,6 +13,7 @@ import type {
   ExportFormat,
   FinalizeReportInput,
   FollowupItemDto,
+  FrequentStatusDto,
   JoinByCodeInput,
   LoginInput,
   MemberSummary,
@@ -198,6 +199,25 @@ export const teamsApi = {
     apiFetch<{ ok: boolean; mimeType: string }>(`/api/teams/${teamId}/logo`, {
       method: 'PUT',
       body: JSON.stringify({ fileName, base64 }),
+    }),
+};
+
+export const frequentStatusesApi = {
+  list: (teamId: string) =>
+    apiFetch<FrequentStatusDto[]>(`/api/teams/${teamId}/frequent-statuses`),
+  create: (teamId: string, statusText: string) =>
+    apiFetch<FrequentStatusDto>(`/api/teams/${teamId}/frequent-statuses`, {
+      method: 'POST',
+      body: JSON.stringify({ statusText }),
+    }),
+  update: (teamId: string, id: string, statusText: string) =>
+    apiFetch<FrequentStatusDto>(`/api/teams/${teamId}/frequent-statuses/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ statusText }),
+    }),
+  remove: (teamId: string, id: string) =>
+    apiFetch<{ ok: boolean }>(`/api/teams/${teamId}/frequent-statuses/${id}`, {
+      method: 'DELETE',
     }),
 };
 
