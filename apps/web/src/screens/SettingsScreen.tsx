@@ -81,6 +81,7 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
   const [newTitleName, setNewTitleName] = useState('');
+  const [newTitleScope, setNewTitleScope] = useState<'daily' | 'followup'>('daily');
   const [renamePrompt, setRenamePrompt] = useState<RenamePromptState>(null);
   const [deleteDictTarget, setDeleteDictTarget] = useState<DeleteDictTarget>(null);
   const [removeMemberTarget, setRemoveMemberTarget] = useState<{
@@ -209,22 +210,39 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
     mutationFn: () => {
       const targetCatId = selectedCategoryId || dictionary[0]?.id;
       if (!targetCatId) throw new Error('Select a category first.');
-      return dictionaryApi.createTitle(teamId, targetCatId, newTitleName.trim());
+      return dictionaryApi.createTitle(teamId, targetCatId, newTitleName.trim(), newTitleScope);
     },
     onSuccess: async (created) => {
       setNewTitleName('');
-      setStatusMsg(`Title "${created.name}" added to dropdown.`);
-      await queryClient.invalidateQueries({ queryKey: ['dictionary', teamId] });
+      setStatusMsg(
+        `Title "${created.name}" added (${newTitleScope === 'daily' ? 'Daily Work Table' : 'Follow-up Table'}).`,
+      );
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['dictionary', teamId] }),
+        queryClient.invalidateQueries({ queryKey: ['report', teamId] }),
+      ]);
     },
     onError: (err: Error) => setStatusMsg(err.message),
   });
 
   const renameTitleMutation = useMutation({
-    mutationFn: ({ id, name, isActive }: { id: string; name?: string; isActive?: boolean }) =>
-      dictionaryApi.updateTitle(teamId, id, { name, isActive }),
+    mutationFn: ({
+      id,
+      name,
+      isActive,
+      scope,
+    }: {
+      id: string;
+      name?: string;
+      isActive?: boolean;
+      scope?: 'daily' | 'followup';
+    }) => dictionaryApi.updateTitle(teamId, id, { name, isActive, scope }),
     onSuccess: async () => {
       setRenamePrompt(null);
-      await queryClient.invalidateQueries({ queryKey: ['dictionary', teamId] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['dictionary', teamId] }),
+        queryClient.invalidateQueries({ queryKey: ['report', teamId] }),
+      ]);
     },
     onError: (err: Error) => setStatusMsg(err.message),
   });
@@ -677,6 +695,22 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
                   </div>
 
                   <div className="grid gap-1.5">
+                    <Label>3. Target Table</Label>
+                    <Select
+                      value={newTitleScope}
+                      onValueChange={(v) => setNewTitleScope(v as 'daily' | 'followup')}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="daily">Daily Work Table (Fixed Row)</SelectItem>
+                        <SelectItem value="followup">Follow-up Table</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="grid gap-1.5">
                     <Label htmlFor="quick-title">Title Name</Label>
                     <div className="flex items-center gap-2">
                       <Input
@@ -1021,6 +1055,24 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
                                 >
                                   {t.name}
                                 </span>
+                                <button
+                                  type="button"
+                                  title="Click to switch between Daily Table and Follow-up Table"
+                                  onClick={() =>
+                                    renameTitleMutation.mutate({
+                                      id: t.id,
+                                      scope: t.scope === 'followup' ? 'daily' : 'followup',
+                                    })
+                                  }
+                                  className={cn(
+                                    'cursor-pointer rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase',
+                                    t.scope === 'followup'
+                                      ? 'bg-zinc-200 text-zinc-800 hover:bg-zinc-300'
+                                      : 'bg-orange-100 text-orange-800 hover:bg-orange-200',
+                                  )}
+                                >
+                                  {t.scope === 'followup' ? 'Follow-up' : 'Daily'}
+                                </button>
                                 <button
                                   type="button"
                                   title="Edit title"

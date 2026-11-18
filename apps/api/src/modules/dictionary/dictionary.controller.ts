@@ -83,8 +83,9 @@ export class DictionaryController {
     @Body(new ZodValidationPipe(CreateTitleSchema)) body: CreateTitleInput,
   ) {
     const pool = getPool()!;
+    const titleScope = body.scope ?? 'daily';
     const created = await withTransaction(pool, async (conn) => {
-      const title = await createTitleUnderCategory(conn, teamId, categoryId, body.name);
+      const title = await createTitleUnderCategory(conn, teamId, categoryId, body.name, titleScope);
       if (!title) {
         throw new NotFoundException({ code: 'CATEGORY_NOT_FOUND', message: 'Category not found' });
       }
@@ -94,27 +95,29 @@ export class DictionaryController {
         action: 'title.created',
         entityType: 'title',
         entityId: title.id,
-        metadata: { categoryId, name: title.name },
+        metadata: { categoryId, name: title.name, scope: titleScope },
       });
 
-      const activeReport = await conn.query<{ id: string }>(
-        `SELECT id FROM daily_reports WHERE team_id = $1 AND status <> 'finalized' ORDER BY report_date DESC LIMIT 1`,
-        [teamId],
-      );
-      if (activeReport.rows[0]) {
-        const catRes = await conn.query<{ name: string }>(
-          `SELECT name FROM categories WHERE id = $1 AND team_id = $2 LIMIT 1`,
-          [categoryId, teamId],
+      if (titleScope === 'daily') {
+        const activeReport = await conn.query<{ id: string }>(
+          `SELECT id FROM daily_reports WHERE team_id = $1 AND status <> 'finalized' ORDER BY report_date DESC LIMIT 1`,
+          [teamId],
         );
-        const catName = catRes.rows[0]?.name?.trim().toLowerCase() ?? '';
-        await findOrCreateWorkGroup(conn, {
-          groupId: uuidv7(),
-          reportId: activeReport.rows[0].id,
-          categoryId,
-          titleId: title.id,
-          numberingMode: catName === 'support' ? 'numbered' : 'plain',
-          createdByUserId: req.auth!.userId,
-        });
+        if (activeReport.rows[0]) {
+          const catRes = await conn.query<{ name: string }>(
+            `SELECT name FROM categories WHERE id = $1 AND team_id = $2 LIMIT 1`,
+            [categoryId, teamId],
+          );
+          const catName = catRes.rows[0]?.name?.trim().toLowerCase() ?? '';
+          await findOrCreateWorkGroup(conn, {
+            groupId: uuidv7(),
+            reportId: activeReport.rows[0].id,
+            categoryId,
+            titleId: title.id,
+            numberingMode: catName === 'support' ? 'numbered' : 'plain',
+            createdByUserId: req.auth!.userId,
+          });
+        }
       }
 
       return title;

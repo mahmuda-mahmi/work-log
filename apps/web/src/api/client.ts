@@ -202,12 +202,17 @@ export const dictionaryApi = {
       method: 'POST',
       body: JSON.stringify({ name }),
     }),
-  createTitle: (teamId: string, categoryId: string, name: string) =>
+  createTitle: (
+    teamId: string,
+    categoryId: string,
+    name: string,
+    scope: 'daily' | 'followup' = 'daily',
+  ) =>
     apiFetch<{ id: string; name: string }>(
       `/api/teams/${teamId}/dictionary/categories/${categoryId}/titles`,
       {
         method: 'POST',
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, scope }),
       },
     ),
   updateCategory: (
@@ -222,7 +227,7 @@ export const dictionaryApi = {
   updateTitle: (
     teamId: string,
     titleId: string,
-    body: { name?: string; isActive?: boolean },
+    body: { name?: string; isActive?: boolean; scope?: 'daily' | 'followup' },
   ) =>
     apiFetch<{ ok: boolean }>(`/api/teams/${teamId}/dictionary/titles/${titleId}`, {
       method: 'PATCH',

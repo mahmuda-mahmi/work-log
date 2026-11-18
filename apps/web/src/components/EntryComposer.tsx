@@ -79,7 +79,7 @@ export function EntryComposer({
       .filter((c) => c.isActive)
       .map((c) => ({
         ...c,
-        titles: c.titles.filter((t) => t.isActive),
+        titles: c.titles.filter((t) => t.isActive && t.scope !== 'followup'),
       }))
       .filter((c) => c.titles.length > 0);
 
@@ -106,6 +106,7 @@ export function EntryComposer({
           name: titleName,
           position: 0,
           isActive: true,
+          scope: 'daily',
         });
       }
     }

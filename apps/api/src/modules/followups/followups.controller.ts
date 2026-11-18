@@ -87,6 +87,7 @@ export class FollowupsController {
         teamId,
         catName,
         body.titleName,
+        'followup',
       );
       const resolvedCategoryId = body.categoryName?.trim() ? categoryId : null;
       const existingDup = await findExistingActiveFollowup(conn, {

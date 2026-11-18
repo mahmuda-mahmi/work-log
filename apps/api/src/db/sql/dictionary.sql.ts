@@ -6,7 +6,7 @@ export const SELECT_CATEGORIES_BY_TEAM = `
 `;
 
 export const SELECT_TITLES_BY_TEAM = `
-  SELECT id, category_id, name, position, is_active
+  SELECT id, category_id, name, position, is_active, scope
   FROM titles
   WHERE team_id = $1
   ORDER BY is_active DESC, position ASC, name ASC
@@ -39,8 +39,8 @@ export const SELECT_TITLE_BY_NAME = `
 `;
 
 export const INSERT_TITLE = `
-  INSERT INTO titles (id, team_id, category_id, name, position, is_active)
-  VALUES ($1, $2, $3, $4, $5, TRUE)
+  INSERT INTO titles (id, team_id, category_id, name, position, is_active, scope)
+  VALUES ($1, $2, $3, $4, $5, TRUE, $6)
   ON CONFLICT DO NOTHING
 `;
 
@@ -58,8 +58,8 @@ export const UPDATE_CATEGORY = `
 
 export const UPDATE_TITLE = `
   UPDATE titles
-  SET name = COALESCE($1, name), is_active = COALESCE($2, is_active)
-  WHERE id = $3 AND team_id = $4
+  SET name = COALESCE($1, name), is_active = COALESCE($2, is_active), scope = COALESCE($3, scope)
+  WHERE id = $4 AND team_id = $5
 `;
 
 export const COUNT_CATEGORY_BY_LOWER_NAME = `

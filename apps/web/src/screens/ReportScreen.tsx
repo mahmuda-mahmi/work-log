@@ -170,9 +170,9 @@ export function ReportScreen({ session }: ReportScreenProps) {
       return false;
     }
   });
-  const [setupPairs, setSetupPairs] = useState<Array<{ category: string; title: string }>>([
-    { category: '', title: '' },
-  ]);
+  const [setupPairs, setSetupPairs] = useState<
+    Array<{ category: string; title: string; scope: 'daily' | 'followup' }>
+  >([{ category: '', title: '', scope: 'daily' }]);
   const [setupSaving, setSetupSaving] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
 
@@ -1511,13 +1511,14 @@ export function ReportScreen({ session }: ReportScreenProps) {
         !setupDismissed &&
         session.member.role === 'lead' && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="w-full max-w-lg rounded-xl border border-zinc-200 bg-white p-5 text-zinc-900 shadow-xl">
+            <div className="w-full max-w-2xl rounded-xl border border-zinc-200 bg-white p-5 text-zinc-900 shadow-xl">
               <h3 className="text-base font-bold text-zinc-950">
                 Set Up Categories &amp; Titles for {session.team.name}
               </h3>
               <p className="mt-1 text-xs text-zinc-500">
-                Add the Report Categories and Titles your team uses in daily reports, or skip to
-                start with a blank table and add them anytime.
+                Choose which Categories &amp; Titles belong in your fixed{' '}
+                <strong>Daily Work Table</strong> vs your <strong>Follow-up Table</strong>. This
+                setup is saved for every day.
               </p>
 
               {setupError && (
@@ -1528,9 +1529,12 @@ export function ReportScreen({ session }: ReportScreenProps) {
 
               <div className="mt-3 grid max-h-72 gap-2.5 overflow-y-auto pr-1">
                 {setupPairs.map((pair, idx) => (
-                  <div key={idx} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                  <div
+                    key={idx}
+                    className="grid grid-cols-1 items-center gap-2 sm:grid-cols-[1fr_1fr_140px_auto]"
+                  >
                     <Input
-                      placeholder="Report Category (e.g. Support)"
+                      placeholder="Category (e.g. Support)"
                       value={pair.category}
                       onChange={(e) => {
                         const next = [...setupPairs];
@@ -1547,6 +1551,22 @@ export function ReportScreen({ session }: ReportScreenProps) {
                         setSetupPairs(next);
                       }}
                     />
+                    <Select
+                      value={pair.scope}
+                      onValueChange={(val) => {
+                        const next = [...setupPairs];
+                        next[idx] = { ...pair, scope: val as 'daily' | 'followup' };
+                        setSetupPairs(next);
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="daily">Daily Table</SelectItem>
+                        <SelectItem value="followup">Follow-up</SelectItem>
+                      </SelectContent>
+                    </Select>
                     {setupPairs.length > 1 && (
                       <Button
                         type="button"
@@ -1566,7 +1586,9 @@ export function ReportScreen({ session }: ReportScreenProps) {
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => setSetupPairs([...setupPairs, { category: '', title: '' }])}
+                  onClick={() =>
+                    setSetupPairs([...setupPairs, { category: '', title: '', scope: 'daily' }])
+                  }
                 >
                   <Plus className="h-3.5 w-3.5" />
                   Add Another Row
@@ -1595,7 +1617,11 @@ export function ReportScreen({ session }: ReportScreenProps) {
                     disabled={setupSaving}
                     onClick={async () => {
                       const valid = setupPairs
-                        .map((p) => ({ category: p.category.trim(), title: p.title.trim() }))
+                        .map((p) => ({
+                          category: p.category.trim(),
+                          title: p.title.trim(),
+                          scope: p.scope,
+                        }))
                         .filter((p) => p.category.length > 0);
                       if (valid.length === 0) {
                         setSetupError('Add at least one category, or click Skip (Start Blank).');
@@ -1617,7 +1643,7 @@ export function ReportScreen({ session }: ReportScreenProps) {
                             catCache.set(key, catId);
                           }
                           if (row.title) {
-                            await dictionaryApi.createTitle(teamId, catId, row.title);
+                            await dictionaryApi.createTitle(teamId, catId, row.title, row.scope);
                           }
                         }
                         try {

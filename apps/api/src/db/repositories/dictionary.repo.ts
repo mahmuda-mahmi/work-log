@@ -35,6 +35,7 @@ type TitleRow = {
   name: string;
   position: number;
   is_active: boolean;
+  scope?: 'daily' | 'followup';
 };
 
 type NextPosRow = { next_pos: number };
@@ -55,6 +56,7 @@ export async function listDictionary(conn: DbClient, teamId: string): Promise<Di
       name: t.name,
       position: t.position,
       isActive: Boolean(t.is_active),
+      scope: t.scope === 'followup' ? 'followup' : 'daily',
     });
     titlesByCat.set(t.category_id, list);
   }
@@ -73,6 +75,7 @@ export async function findOrCreateCategoryAndTitle(
   teamId: string,
   categoryName: string,
   titleName: string,
+  scope: 'daily' | 'followup' = 'daily',
 ): Promise<{ categoryId: string; titleId: string }> {
   const trimmedCat = categoryName.trim();
   const trimmedTitle = titleName.trim();
@@ -108,6 +111,7 @@ export async function findOrCreateCategoryAndTitle(
       categoryId,
       trimmedTitle,
       nextPos,
+      scope,
     ]);
     if (insTitle.rowCount && insTitle.rowCount > 0) {
       titleId = newTitleId;
@@ -155,6 +159,7 @@ export async function createTitleUnderCategory(
   teamId: string,
   categoryId: string,
   name: string,
+  scope: 'daily' | 'followup' = 'daily',
 ): Promise<{ id: string; name: string } | null> {
   const cats = await conn.query<FoundRow>(SELECT_CATEGORY_BY_ID, [categoryId, teamId]);
   if (!cats.rows[0]) return null;
@@ -166,7 +171,7 @@ export async function createTitleUnderCategory(
   const id = uuidv7();
   const posRes = await conn.query<NextPosRow>(SELECT_NEXT_TITLE_POSITION, [teamId, categoryId]);
   const nextPos = Number(posRes.rows[0]?.next_pos ?? 10);
-  await conn.query(INSERT_TITLE, [id, teamId, categoryId, trimmed, nextPos]);
+  await conn.query(INSERT_TITLE, [id, teamId, categoryId, trimmed, nextPos, scope]);
   return { id, name: trimmed };
 }
 
@@ -189,11 +194,12 @@ export async function updateTitle(
   conn: DbClient,
   teamId: string,
   titleId: string,
-  patch: { name?: string; isActive?: boolean },
+  patch: { name?: string; isActive?: boolean; scope?: 'daily' | 'followup' },
 ): Promise<boolean> {
   const res = await conn.query(UPDATE_TITLE, [
     patch.name?.trim() ?? null,
     patch.isActive ?? null,
+    patch.scope ?? null,
     titleId,
     teamId,
   ]);

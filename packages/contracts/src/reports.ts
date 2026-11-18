@@ -9,6 +9,9 @@ export type ReportStatus = z.infer<typeof ReportStatusSchema>;
 export const NumberingModeSchema = z.enum(['numbered', 'plain']);
 export type NumberingMode = z.infer<typeof NumberingModeSchema>;
 
+export const TitleScopeSchema = z.enum(['daily', 'followup']);
+export type TitleScope = z.infer<typeof TitleScopeSchema>;
+
 export const FollowupStatusSchema = z.enum(['open', 'in_progress', 'done', 'archived']);
 export type FollowupStatus = z.infer<typeof FollowupStatusSchema>;
 
@@ -21,6 +24,7 @@ export const DictionaryTitleSchema = z.object({
   name: z.string(),
   position: z.number().int(),
   isActive: z.boolean(),
+  scope: TitleScopeSchema.default('daily'),
 });
 export type DictionaryTitle = z.infer<typeof DictionaryTitleSchema>;
 
@@ -36,6 +40,7 @@ export type DictionaryCategory = z.infer<typeof DictionaryCategorySchema>;
 export const RenameDictionarySchema = z.object({
   name: z.string().trim().min(1).max(120).optional(),
   isActive: z.boolean().optional(),
+  scope: TitleScopeSchema.optional(),
 });
 export type RenameDictionaryInput = z.infer<typeof RenameDictionarySchema>;
 
@@ -46,6 +51,7 @@ export type CreateCategoryInput = z.infer<typeof CreateCategorySchema>;
 
 export const CreateTitleSchema = z.object({
   name: z.string().trim().min(1).max(120),
+  scope: TitleScopeSchema.optional(),
 });
 export type CreateTitleInput = z.infer<typeof CreateTitleSchema>;
 

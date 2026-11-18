@@ -99,27 +99,107 @@ const seededDictionaryTeams = new Set<string>();
 const seededFollowupsTeams = new Set<string>();
 const seededReportGroups = new Set<string>();
 
-/**
- * No-op: new teams start with a blank dictionary and configure their own categories/titles.
- */
-export async function ensureDefaultDictionary(_pool: Pool, _teamId: string): Promise<void> {
-  return;
+async function isCghqTeam(conn: Pool, teamId: string): Promise<boolean> {
+  const res = await conn.query<{ name: string; slug: string }>(
+    `SELECT name, slug FROM teams WHERE id = $1 LIMIT 1`,
+    [teamId],
+  );
+  const row = res.rows[0];
+  if (!row) return false;
+  const nameLower = row.name.trim().toLowerCase();
+  const slugLower = row.slug.trim().toLowerCase();
+  return nameLower === 'cghq' || slugLower.startsWith('cghq');
 }
 
 /**
- * No-op: new teams start with no default follow-up items or follow-up table.
+ * Restores initial dictionary categories & titles for the CGHQ team (daily vs followup scopes);
+ * leaves other teams untouched so they configure their own dictionary items.
+ */
+export async function ensureDefaultDictionary(pool: Pool, teamId: string): Promise<void> {
+  if (seededDictionaryTeams.has(teamId)) return;
+
+  const cghq = await isCghqTeam(pool, teamId);
+  if (!cghq) {
+    seededDictionaryTeams.add(teamId);
+    return;
+  }
+
+  await withTransaction(pool, async (conn) => {
+    for (const grp of DEFAULT_REPORT_GROUPS) {
+      await findOrCreateCategoryAndTitle(conn, teamId, grp.categoryName, grp.titleName, 'daily');
+    }
+    for (const fu of DEFAULT_FOLLOWUPS) {
+      await findOrCreateCategoryAndTitle(conn, teamId, fu.categoryName, fu.titleName, 'followup');
+    }
+    await conn.query(
+      `UPDATE titles t
+       SET scope = 'followup'
+       FROM categories c
+       WHERE t.category_id = c.id
+         AND t.team_id = $1
+         AND LOWER(TRIM(c.name)) IN ('mobile apps', 'bill')`,
+      [teamId],
+    );
+  });
+  seededDictionaryTeams.add(teamId);
+}
+
+/**
+ * Restores initial 5 follow-up items for the CGHQ team when it has 0 follow-ups;
+ * other teams start with no default follow-up items.
  */
 export async function ensureDefaultFollowups(
-  _pool: Pool,
-  _teamId: string,
-  _actorUserId: string,
+  pool: Pool,
+  teamId: string,
+  actorUserId: string,
 ): Promise<void> {
-  return;
+  await deduplicateTeamFollowups(pool, teamId);
+  if (seededFollowupsTeams.has(teamId)) return;
+
+  const cghq = await isCghqTeam(pool, teamId);
+  if (!cghq) {
+    seededFollowupsTeams.add(teamId);
+    return;
+  }
+
+  const count = await countTeamFollowups(pool, teamId);
+  if (count > 0) {
+    seededFollowupsTeams.add(teamId);
+    return;
+  }
+
+  await withTransaction(pool, async (conn) => {
+    const innerCount = await countTeamFollowups(conn, teamId);
+    if (innerCount > 0) return;
+
+    for (let i = 0; i < DEFAULT_FOLLOWUPS.length; i += 1) {
+      const item = DEFAULT_FOLLOWUPS[i]!;
+      const { categoryId, titleId } = await findOrCreateCategoryAndTitle(
+        conn,
+        teamId,
+        item.categoryName,
+        item.titleName,
+        'followup',
+      );
+      await insertFollowupItem(conn, {
+        id: uuidv7(),
+        teamId,
+        categoryId,
+        titleId,
+        statusText: item.statusText,
+        completedByLabel: item.completedByLabel,
+        completedByMemberId: null,
+        position: (i + 1) * 1000,
+        actorUserId,
+      });
+    }
+  });
+  seededFollowupsTeams.add(teamId);
 }
 
 /**
- * Populates a draft/reopened daily report with the team's fixed dictionary (category, title)
- * rows, preserving them across every day, and seeds Communication placeholders when empty.
+ * Keeps a draft/reopened daily report synchronized with the team's fixed dictionary rows
+ * where scope = 'daily', removing any 'followup'-scoped groups and seeding Communication Nil placeholders.
  */
 export async function ensureDefaultReportGroups(
   pool: Pool,
@@ -127,41 +207,20 @@ export async function ensureDefaultReportGroups(
   reportId: string,
   actorUserId: string,
 ): Promise<void> {
-  if (seededReportGroups.has(reportId)) return;
-
-  const count = await countWorkGroupsByReport(pool, reportId);
-  if (count > 0) {
-    const emptyCommIds = await listEmptyCommunicationGroupIds(pool, reportId);
-    if (emptyCommIds.length > 0) {
-      await withTransaction(pool, async (conn) => {
-        for (const groupId of emptyCommIds) {
-          await insertWorkEntry(conn, {
-            id: uuidv7(),
-            groupId,
-            statusText: 'Officer: Nil',
-            completedByMemberId: null,
-            completedByLabel: null,
-            position: 1000,
-            createdByUserId: null,
-          });
-          await insertWorkEntry(conn, {
-            id: uuidv7(),
-            groupId,
-            statusText: 'Sailor: Nil',
-            completedByMemberId: null,
-            completedByLabel: null,
-            position: 2000,
-            createdByUserId: null,
-          });
-        }
-      });
-    }
-    seededReportGroups.add(reportId);
-    return;
+  const cghq = await isCghqTeam(pool, teamId);
+  if (cghq) {
+    await ensureDefaultDictionary(pool, teamId);
   }
 
+  await pool.query(
+    `DELETE FROM work_groups wg
+     USING titles t
+     WHERE wg.report_id = $1 AND wg.title_id = t.id AND t.scope = 'followup'`,
+    [reportId],
+  );
+
   const dictionary = await listDictionary(pool, teamId);
-  const pairs: Array<{
+  const dailyPairs: Array<{
     categoryId: string;
     categoryName: string;
     titleId: string;
@@ -170,8 +229,8 @@ export async function ensureDefaultReportGroups(
   for (const cat of dictionary) {
     if (!cat.isActive) continue;
     for (const title of cat.titles) {
-      if (!title.isActive) continue;
-      pairs.push({
+      if (!title.isActive || title.scope === 'followup') continue;
+      dailyPairs.push({
         categoryId: cat.id,
         categoryName: cat.name,
         titleId: title.id,
@@ -179,27 +238,30 @@ export async function ensureDefaultReportGroups(
     }
   }
 
-  if (pairs.length === 0) {
-    return;
+  if (dailyPairs.length > 0 && !seededReportGroups.has(reportId)) {
+    const existingCount = await countWorkGroupsByReport(pool, reportId);
+    await withTransaction(pool, async (conn) => {
+      for (let i = 0; i < dailyPairs.length; i += 1) {
+        const pair = dailyPairs[i]!;
+        const isSupport = pair.categoryName.trim().toLowerCase() === 'support';
+        await insertWorkGroupAtPosition(conn, {
+          id: uuidv7(),
+          reportId,
+          categoryId: pair.categoryId,
+          titleId: pair.titleId,
+          position: existingCount > 0 ? (existingCount + i + 1) * 10 : (i + 1) * 10,
+          numberingMode: isSupport ? 'numbered' : 'plain',
+          actorUserId,
+        });
+      }
+    });
+    seededReportGroups.add(reportId);
   }
 
-  await withTransaction(pool, async (conn) => {
-    for (let i = 0; i < pairs.length; i += 1) {
-      const pair = pairs[i]!;
-      const isSupport = pair.categoryName.trim().toLowerCase() === 'support';
-      const isComm = pair.categoryName.trim().toLowerCase() === 'communication';
-      const groupId = uuidv7();
-      await insertWorkGroupAtPosition(conn, {
-        id: groupId,
-        reportId,
-        categoryId: pair.categoryId,
-        titleId: pair.titleId,
-        position: (i + 1) * 10,
-        numberingMode: isSupport ? 'numbered' : 'plain',
-        actorUserId,
-      });
-
-      if (isComm) {
+  const emptyCommIds = await listEmptyCommunicationGroupIds(pool, reportId);
+  if (emptyCommIds.length > 0) {
+    await withTransaction(pool, async (conn) => {
+      for (const groupId of emptyCommIds) {
         await insertWorkEntry(conn, {
           id: uuidv7(),
           groupId,
@@ -219,7 +281,6 @@ export async function ensureDefaultReportGroups(
           createdByUserId: null,
         });
       }
-    }
-  });
-  seededReportGroups.add(reportId);
+    });
+  }
 }
