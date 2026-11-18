@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ActiveAuthSession, DocumentFontFamily } from '@cghq/contracts';
 import {
@@ -6,14 +7,18 @@ import {
   ArchiveRestore,
   Check,
   Copy,
+  FolderKanban,
+  KeyRound,
   Moon,
   Palette,
   Pencil,
   Plus,
   Sun,
   Trash2,
+  User,
+  Users,
 } from 'lucide-react';
-import { dictionaryApi, frequentStatusesApi, teamsApi } from '../api/client';
+import { authApi, dictionaryApi, frequentStatusesApi, teamsApi } from '../api/client';
 import { Alert } from '../components/ui/alert';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -46,7 +51,10 @@ type DeleteDictTarget =
   | { type: 'title'; id: string; name: string }
   | null;
 
+type SettingsTabId = 'team' | 'categories' | 'account' | 'appearance';
+
 export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const isLead = session.member.role === 'lead';
   const teamId = session.team.id;
@@ -123,8 +131,56 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
     id: string;
     displayName: string;
   } | null>(null);
-  const [activeTab, setActiveTab] = useState<'general' | 'appearance'>('general');
+  const [activeTab, setActiveTab] = useState<SettingsTabId>('team');
   const [appearance, setAppearance] = useState(() => readAppearancePrefs());
+  const tabRefs = useRef<Partial<Record<SettingsTabId, HTMLButtonElement | null>>>({});
+  const [pill, setPill] = useState<{ left: number; width: number }>({ left: 4, width: 0 });
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [pwError, setPwError] = useState<string | null>(null);
+
+  const changePasswordMutation = useMutation({
+    mutationFn: () =>
+      authApi.changePassword({
+        currentPassword: session.user.hasPassword === false ? '' : currentPassword,
+        newPassword,
+      }),
+    onSuccess: () => {
+      try {
+        window.localStorage.removeItem('cghq:session');
+      } catch {
+        // Ignore
+      }
+      queryClient.clear();
+      navigate('/login');
+    },
+    onError: (err: Error) => setPwError(err.message),
+  });
+
+  const settingsTabs = useMemo(
+    () =>
+      [
+        { id: 'team' as const, label: 'Team', icon: Users },
+        ...(isLead
+          ? [{ id: 'categories' as const, label: 'Report & Categories', icon: FolderKanban }]
+          : []),
+        { id: 'account' as const, label: 'Account', icon: User },
+        { id: 'appearance' as const, label: 'Appearance', icon: Palette },
+      ] as const,
+    [isLead],
+  );
+
+  useLayoutEffect(() => {
+    function measure() {
+      const btn = tabRefs.current[activeTab];
+      if (btn) {
+        setPill({ left: btn.offsetLeft, width: btn.offsetWidth });
+      }
+    }
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [activeTab, isLead]);
 
   const [docTitle, setDocTitle] = useState<string | null>(null);
   const [filePrefix, setFilePrefix] = useState<string | null>(null);
@@ -373,30 +429,52 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
 
   return (
     <div className="flex flex-col gap-3.5">
-      <div className="flex flex-wrap items-center gap-2 border-b border-zinc-200 pb-2.5">
-        <Button
-          type="button"
-          size="sm"
-          variant={activeTab === 'general' ? 'default' : 'outline'}
-          onClick={() => setActiveTab('general')}
+      <div className="border-b border-zinc-200 pb-3">
+        <div
+          role="tablist"
+          aria-label="Settings sections"
+          className="relative inline-flex max-w-full flex-wrap items-center gap-1 rounded-xl border border-zinc-200 bg-zinc-100 p-1 shadow-xs"
         >
-          General &amp; Team
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant={activeTab === 'appearance' ? 'default' : 'outline'}
-          onClick={() => setActiveTab('appearance')}
-        >
-          <Palette className="h-3.5 w-3.5" />
-          Appearance
-        </Button>
+          {pill.width > 0 && (
+            <span
+              aria-hidden
+              className="pointer-events-none absolute top-1 bottom-1 left-0 rounded-lg bg-primary shadow-sm transition-[transform,width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+              style={{
+                width: `${pill.width}px`,
+                transform: `translateX(${pill.left}px)`,
+              }}
+            />
+          )}
+          {settingsTabs.map((tab) => {
+            const Icon = tab.icon;
+            const selected = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                ref={(el) => {
+                  tabRefs.current[tab.id] = el;
+                }}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                onClick={() => setActiveTab(tab.id)}
+                className={cn(
+                  'relative z-10 inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-colors duration-200 whitespace-nowrap',
+                  selected ? 'text-white' : 'text-zinc-600 hover:text-zinc-950',
+                )}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {statusMsg && <Alert variant="success">{statusMsg}</Alert>}
 
-      {activeTab === 'appearance' ? (
-        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
+      {activeTab === 'appearance' && (
+        <div key="tab-appearance" className="auth-form-animate grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
           <Card className="border-t-2 border-t-primary">
             <CardHeader className="py-3">
               <CardTitle>Theme &amp; Dark Mode</CardTitle>
@@ -550,10 +628,13 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
             </CardContent>
           </Card>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
-        {/* Left Column (5 cols) */}
-        <div className="flex flex-col gap-4 lg:col-span-5">
+      )}
+
+      {activeTab === 'account' && (
+        <div
+          key="tab-account"
+          className="auth-form-animate grid grid-cols-1 items-start gap-4 lg:grid-cols-2"
+        >
           <Card className="border-t-2 border-t-primary">
             <CardHeader className="py-3">
               <CardTitle>My Profile</CardTitle>
@@ -562,9 +643,14 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3 pt-3">
-              <div className="text-xs text-zinc-500">
-                Signed in as <strong className="text-zinc-800">{session.user.name}</strong> (
-                {session.user.email})
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
+                <div>
+                  Signed in as <strong className="text-zinc-950">{session.user.name}</strong> (
+                  {session.user.email})
+                </div>
+                <Badge variant={isLead ? 'default' : 'secondary'} size="sm">
+                  {session.member.role}
+                </Badge>
               </div>
               <form
                 className="grid gap-3"
@@ -602,6 +688,73 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
           </Card>
 
           <Card className="border-t-2 border-t-primary">
+            <CardHeader className="py-3">
+              <div className="flex items-center gap-2">
+                <KeyRound className="h-4 w-4 text-primary" />
+                <CardTitle>
+                  {session.user.hasPassword === false ? 'Set App Password' : 'Change Password'}
+                </CardTitle>
+              </div>
+              <CardDescription>
+                {session.user.hasPassword === false
+                  ? 'Your account was created with Google Sign-In. Set an app password to also sign in with email & password.'
+                  : 'Update your Work Log account password. You will be asked to sign in again afterward.'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3 pt-3">
+              {pwError && <Alert variant="destructive">{pwError}</Alert>}
+              <form
+                className="grid gap-3"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  setPwError(null);
+                  changePasswordMutation.mutate();
+                }}
+              >
+                {session.user.hasPassword !== false && (
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="set-cur-pw">Current Password</Label>
+                    <Input
+                      id="set-cur-pw"
+                      type="password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                )}
+                <div className="grid gap-1.5">
+                  <Label htmlFor="set-new-pw">New Password (min 8 chars)</Label>
+                  <Input
+                    id="set-new-pw"
+                    type="password"
+                    minLength={8}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="flex justify-end">
+                  <Button type="submit" size="sm" disabled={changePasswordMutation.isPending}>
+                    <KeyRound className="h-3.5 w-3.5" />
+                    {changePasswordMutation.isPending ? 'Saving…' : 'Save Password'}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {activeTab === 'team' && (
+        <div
+          key="tab-team"
+          className="auth-form-animate grid grid-cols-1 items-start gap-4 lg:grid-cols-12"
+        >
+        {/* Left Column (5 cols) */}
+        {isLead && (
+          <div className="flex flex-col gap-4 lg:col-span-5">
+            <Card className="border-t-2 border-t-primary">
             <CardHeader className="py-3">
               <CardTitle>Team Settings &amp; Branding</CardTitle>
             </CardHeader>
@@ -671,107 +824,11 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
               )}
             </CardContent>
           </Card>
-
-          {isLead && (
-            <Card className="border-t-2 border-t-primary">
-              <CardHeader className="py-3">
-                <CardTitle>Dictionary Quick-Add</CardTitle>
-                <span className="text-xs text-zinc-500">Dropdown options</span>
-              </CardHeader>
-              <CardContent className="grid gap-4 pt-3">
-                <form
-                  className="grid gap-1.5"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (newCategoryName.trim()) createCategoryMutation.mutate();
-                  }}
-                >
-                  <Label htmlFor="quick-cat">1. Add Report Category</Label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      id="quick-cat"
-                      placeholder="e.g. Support, Communication, Physically Visit"
-                      value={newCategoryName}
-                      onChange={(e) => setNewCategoryName(e.target.value)}
-                      required
-                    />
-                    <Button type="submit" disabled={createCategoryMutation.isPending}>
-                      <Plus className="h-3.5 w-3.5" />
-                      Add
-                    </Button>
-                  </div>
-                </form>
-
-                <form
-                  className="grid gap-3 border-t border-zinc-100 pt-3"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (newTitleName.trim()) createTitleMutation.mutate();
-                  }}
-                >
-                  <div className="grid gap-1.5">
-                    <Label>2. Select Category</Label>
-                    <Select
-                      value={activeCategoryIdForTitle}
-                      onValueChange={setSelectedCategoryId}
-                      disabled={dictionary.length === 0}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {dictionary.map((cat) => (
-                          <SelectItem key={cat.id} value={cat.id}>
-                            {cat.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="grid gap-1.5">
-                    <Label>3. Target Table</Label>
-                    <Select
-                      value={newTitleScope}
-                      onValueChange={(v) => setNewTitleScope(v as 'daily' | 'followup')}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="daily">Daily Work Table (Fixed Row)</SelectItem>
-                        <SelectItem value="followup">Follow-up Table</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="quick-title">Title Name</Label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        id="quick-title"
-                        placeholder="e.g. Daily Calls from User and Desk Support"
-                        value={newTitleName}
-                        onChange={(e) => setNewTitleName(e.target.value)}
-                        required
-                      />
-                      <Button
-                        type="submit"
-                        disabled={createTitleMutation.isPending || dictionary.length === 0}
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                        Add
-                      </Button>
-                    </div>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-          )}
         </div>
+        )}
 
-        {/* Right Column (7 cols) */}
-        <div className="flex flex-col gap-4 lg:col-span-7">
+        {/* Right Column (7 cols, or full width for non-lead) */}
+        <div className={cn('flex flex-col gap-4', isLead ? 'lg:col-span-7' : 'lg:col-span-12')}>
           <Card className="border-t-2 border-t-primary">
             <CardHeader className="py-3">
               <CardTitle>Team Members &amp; Invites</CardTitle>
@@ -988,8 +1045,115 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
               )}
             </CardContent>
           </Card>
+        </div>
+      </div>
+      )}
 
-          {isLead && (
+      {activeTab === 'categories' && isLead && (
+        <div
+          key="tab-categories"
+          className="auth-form-animate grid grid-cols-1 items-start gap-4 lg:grid-cols-12"
+        >
+          <div className="flex flex-col gap-4 lg:col-span-5">
+            <Card className="border-t-2 border-t-primary">
+              <CardHeader className="py-3">
+                <CardTitle>Dictionary Quick-Add</CardTitle>
+                <span className="text-xs text-zinc-500">Dropdown options</span>
+              </CardHeader>
+              <CardContent className="grid gap-4 pt-3">
+                <form
+                  className="grid gap-1.5"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (newCategoryName.trim()) createCategoryMutation.mutate();
+                  }}
+                >
+                  <Label htmlFor="quick-cat">1. Add Report Category</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="quick-cat"
+                      placeholder="e.g. Support, Communication, Physically Visit"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      required
+                    />
+                    <Button type="submit" disabled={createCategoryMutation.isPending}>
+                      <Plus className="h-3.5 w-3.5" />
+                      Add
+                    </Button>
+                  </div>
+                </form>
+
+                <form
+                  className="grid gap-3 border-t border-zinc-100 pt-3"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (activeCategoryIdForTitle && newTitleName.trim()) {
+                      createTitleMutation.mutate();
+                    }
+                  }}
+                >
+                  <div className="grid gap-1.5">
+                    <Label>2. Add Title Under Category</Label>
+                    <Select
+                      value={activeCategoryIdForTitle}
+                      onValueChange={(v) => setSelectedCategoryId(v)}
+                      disabled={dictionary.length === 0}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {dictionary.map((cat) => (
+                          <SelectItem key={cat.id} value={cat.id}>
+                            {cat.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="grid gap-1.5">
+                    <Label>3. Target Table</Label>
+                    <Select
+                      value={newTitleScope}
+                      onValueChange={(v) => setNewTitleScope(v as 'daily' | 'followup')}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="daily">Daily Work Table (Fixed Row)</SelectItem>
+                        <SelectItem value="followup">Follow-up Table</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="quick-title">Title Name</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="quick-title"
+                        placeholder="e.g. Daily Calls from User and Desk Support"
+                        value={newTitleName}
+                        onChange={(e) => setNewTitleName(e.target.value)}
+                        required
+                      />
+                      <Button
+                        type="submit"
+                        disabled={createTitleMutation.isPending || dictionary.length === 0}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Add
+                      </Button>
+                    </div>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="flex flex-col gap-4 lg:col-span-7">
             <Card className="border-t-2 border-t-primary">
               <CardHeader className="py-3">
                 <div>
@@ -1163,9 +1327,7 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
                 )}
               </CardContent>
             </Card>
-          )}
 
-          {isLead && (
             <Card className="border-t-2 border-t-primary">
               <CardHeader className="py-3">
                 <CardTitle>Frequently Used Statuses</CardTitle>
@@ -1284,7 +1446,6 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
                 )}
               </CardContent>
             </Card>
-          )}
         </div>
       </div>
       )}
