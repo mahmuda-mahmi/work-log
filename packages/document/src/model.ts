@@ -147,7 +147,7 @@ export function buildDocumentModel(input: ReportDocumentInput): DocumentModel {
         status,
         completedBy: isNilCommunicationStatus(status) ? '' : item.completedBy.trim(),
         groupMerge: isSingle ? 'none' : idx === 0 ? 'restart' : 'continue',
-        statusPrefix: undefined,
+        statusPrefix: group.numberingMode === 'numbered' ? `${idx + 1}.` : undefined,
       });
     });
   }

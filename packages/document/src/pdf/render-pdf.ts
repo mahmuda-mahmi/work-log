@@ -59,6 +59,7 @@ function wrapText(text: string, font: PDFFont, fontSize: number, maxWidth: numbe
 interface LayoutRow {
   cells: Array<{
     lines: string[];
+    prefix?: string;
     align: 'left' | 'center';
     bold: boolean;
     indentPt: number;
@@ -103,7 +104,7 @@ function measureRow(
         suppressMergedText ? '' : row.ser,
         suppressMergedText ? '' : row.category,
         suppressMergedText ? '' : row.title,
-        row.statusPrefix ? `${row.statusPrefix} ${row.status}` : row.status,
+        row.status,
         row.completedBy,
       ];
 
@@ -113,7 +114,7 @@ function measureRow(
     const isNumberedStatus = !options.isHeader && idx === 3 && Boolean(row.statusPrefix);
     const indentPt = isNumberedStatus ? 18 : 0; // 360 twips = 18 pt
     const lineHeightPt = isNumberedStatus ? fontSize * 1.38 : fontSize * 1.2;
-    const availableWidth = Math.max(10, colWidthsPt[idx]! - padX * 2 - (isNumberedStatus ? 0 : 0));
+    const availableWidth = Math.max(10, colWidthsPt[idx]! - padX * 2 - indentPt);
     const lines = wrapText(val, font, fontSize, availableWidth);
     const align: 'left' | 'center' = options.isHeader
       ? 'center'
@@ -135,6 +136,7 @@ function measureRow(
 
     return {
       lines,
+      prefix: isNumberedStatus ? row.statusPrefix : undefined,
       align,
       bold,
       indentPt,
@@ -220,7 +222,7 @@ export async function renderPdf(model: DocumentModel): Promise<Buffer> {
         width: HEADER.logoWidthPt,
         height: HEADER.logoHeightPt,
       });
-      y -= 30;
+      y -= 16;
     }
 
     const titleWidth = boldFont.widthOfTextAtSize(model.documentTitle, HEADER.titleFontPt);
@@ -233,7 +235,7 @@ export async function renderPdf(model: DocumentModel): Promise<Buffer> {
       color: rgb(0, 0, 0),
     });
 
-    cursorY = Math.min(y - 22, pageHeight - PAGE.marginsPt.top);
+    cursorY = Math.min(y - 16, pageHeight - PAGE.marginsPt.top);
   }
 
   function drawRow(layout: LayoutRow, colWidthsPt: number[]) {
@@ -279,13 +281,23 @@ export async function renderPdf(model: DocumentModel): Promise<Buffer> {
 
       // Text lines (top-aligned)
       let textY = rowTopY - TABLE.cellPadVerticalPt - fontSize + 2;
-      for (const line of cell.lines) {
+      for (let lineIdx = 0; lineIdx < cell.lines.length; lineIdx++) {
+        const line = cell.lines[lineIdx]!;
+        if (lineIdx === 0 && cell.prefix) {
+          page.drawText(cell.prefix, {
+            x: x + TABLE.cellPadHorizontalPt,
+            y: textY,
+            size: fontSize,
+            font,
+            color: rgb(0, 0, 0),
+          });
+        }
         if (line.length > 0) {
           const lineWidth = font.widthOfTextAtSize(line, fontSize);
           const textX =
             cell.align === 'center'
               ? x + (colW - lineWidth) / 2
-              : x + TABLE.cellPadHorizontalPt;
+              : x + TABLE.cellPadHorizontalPt + cell.indentPt;
           page.drawText(line, {
             x: textX,
             y: textY,
@@ -415,29 +427,29 @@ export async function renderPdf(model: DocumentModel): Promise<Buffer> {
 
   // Date line
   const dateLabel = 'Date: ';
-  const dateLabelWidth = boldFont.widthOfTextAtSize(dateLabel, FONT.bodyPt);
+  const dateLabelWidth = boldFont.widthOfTextAtSize(dateLabel, bodyFontPt);
   page.drawText(dateLabel, {
     x: leftMargin,
     y: cursorY,
-    size: FONT.bodyPt,
+    size: bodyFontPt,
     font: boldFont,
     color: rgb(0, 0, 0),
   });
   page.drawText(model.formattedDate, {
     x: leftMargin + dateLabelWidth,
     y: cursorY,
-    size: FONT.bodyPt,
+    size: bodyFontPt,
     font: regularFont,
     color: rgb(0, 0, 0),
   });
-  cursorY -= 18;
+  cursorY -= Math.round(bodyFontPt * 1.25);
 
   // Table 1: Daily Work Status
   renderTable(model.mainRows, TABLE.mainColumnsTwips, true);
 
   if (model.hasFollowups) {
     // Add breathing room between Daily Work table and Follow-up Items
-    cursorY -= 16;
+    cursorY -= 14;
 
     // Table 2: Follow-up Items
     renderTable(model.followupRows, TABLE.followupColumnsTwips, false, 'Follow-up Items:');
@@ -447,20 +459,20 @@ export async function renderPdf(model: DocumentModel): Promise<Buffer> {
   if (cursorY - 32 < bottomMargin) {
     startNewPage();
   }
-  cursorY -= 24;
+  cursorY -= 20;
   const prepLabel = 'Prepared By: ';
-  const prepLabelWidth = boldFont.widthOfTextAtSize(prepLabel, FONT.bodyPt);
+  const prepLabelWidth = boldFont.widthOfTextAtSize(prepLabel, bodyFontPt);
   page.drawText(prepLabel, {
     x: leftMargin,
     y: cursorY,
-    size: FONT.bodyPt,
+    size: bodyFontPt,
     font: boldFont,
     color: rgb(0, 0, 0),
   });
   page.drawText(model.preparedBy, {
     x: leftMargin + prepLabelWidth,
     y: cursorY,
-    size: FONT.bodyPt,
+    size: bodyFontPt,
     font: regularFont,
     color: rgb(0, 0, 0),
   });
