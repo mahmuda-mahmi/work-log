@@ -1,13 +1,15 @@
-import { useEffect } from 'react';
-import type { AuthSession } from '@cghq/contracts';
+import { useEffect, useState } from 'react';
+import type { AuthSession, UserTeamSummary } from '@cghq/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, CheckCircle2, FileDown, Layers, ListChecks, Plus } from 'lucide-react';
-import { Link } from 'react-router';
+import { ArrowRight, Check, CheckCircle2, FileDown, Layers, ListChecks, Plus, Users } from 'lucide-react';
+import { Link, useNavigate } from 'react-router';
 import { authApi } from '../api/client';
 import { ProfileMenu } from '../components/ProfileMenu';
+import { Alert } from '../components/ui/alert';
 import { Badge } from '../components/ui/badge';
-import { buttonVariants } from '../components/ui/button';
+import { Button, buttonVariants } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
+import { cn } from '../lib/utils';
 
 const SESSION_CACHE_KEY = 'cghq:session';
 
@@ -54,8 +56,13 @@ const FEATURES = [
 ];
 
 export function LandingScreen() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const cachedSession = readCachedSession();
+  const [teamsPopupOpen, setTeamsPopupOpen] = useState(false);
+  const [teamsList, setTeamsList] = useState<UserTeamSummary[]>([]);
+  const [loadingTeams, setLoadingTeams] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const { data: session, isError } = useQuery({
     queryKey: ['me'],
@@ -81,7 +88,49 @@ export function LandingScreen() {
     },
   });
 
+  const enterTeamMutation = useMutation({
+    mutationFn: (teamId: string) => authApi.switchTeam(teamId),
+    onSuccess: async () => {
+      setTeamsPopupOpen(false);
+      queryClient.removeQueries({ queryKey: ['report'] });
+      queryClient.removeQueries({ queryKey: ['followups'] });
+      queryClient.removeQueries({ queryKey: ['dictionary'] });
+      await queryClient.invalidateQueries({ queryKey: ['me'] });
+      navigate('/today');
+    },
+    onError: (err: Error) => setErrorMsg(err.message),
+  });
+
   const isSignedIn = Boolean(session && !isError);
+
+  async function handleOpenWorkLog() {
+    if (!isSignedIn) {
+      navigate('/today');
+      return;
+    }
+    setLoadingTeams(true);
+    setErrorMsg(null);
+    try {
+      const teams = await authApi.listMyTeams();
+      if (teams.length === 1) {
+        await authApi.switchTeam(teams[0]!.teamId);
+        await queryClient.invalidateQueries({ queryKey: ['me'] });
+        navigate('/today');
+        return;
+      }
+      if (teams.length === 0) {
+        navigate('/today');
+        return;
+      }
+      setTeamsList(teams);
+      setTeamsPopupOpen(true);
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Could not load joined teams');
+      setTeamsPopupOpen(true);
+    } finally {
+      setLoadingTeams(false);
+    }
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50 text-zinc-950">
@@ -127,10 +176,16 @@ export function LandingScreen() {
                 Sign In
               </Link>
             )}
-            <Link to="/today" className={buttonVariants({ variant: 'default', size: 'sm' })}>
-              Open Work Log
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              disabled={loadingTeams}
+              onClick={() => void handleOpenWorkLog()}
+            >
+              {loadingTeams ? 'Loading…' : 'Open Work Log'}
               <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
+            </Button>
           </div>
         </div>
       </header>
@@ -161,13 +216,16 @@ export function LandingScreen() {
                 </p>
 
                 <div className="flex flex-wrap items-center gap-3 pt-1">
-                  <Link
-                    to="/today"
-                    className={buttonVariants({ variant: 'default', size: 'default' })}
+                  <Button
+                    type="button"
+                    variant="default"
+                    size="default"
+                    disabled={loadingTeams}
+                    onClick={() => void handleOpenWorkLog()}
                   >
-                    Go to Work Log
+                    {loadingTeams ? 'Loading…' : 'Go to Work Log'}
                     <ArrowRight className="h-4 w-4" />
-                  </Link>
+                  </Button>
                   {isSignedIn ? (
                     <Link
                       to="/teams/new"
@@ -233,6 +291,84 @@ export function LandingScreen() {
           </div>
         </div>
       </main>
+
+      {teamsPopupOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-5 text-zinc-900 shadow-xl">
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-primary" />
+              <h3 className="text-base font-bold text-zinc-950">Choose Team to Enter</h3>
+            </div>
+            <p className="mt-1 text-xs text-zinc-500">
+              Select which joined team workspace you want to open.
+            </p>
+
+            {errorMsg && (
+              <Alert variant="destructive" className="mt-3">
+                {errorMsg}
+              </Alert>
+            )}
+
+            <div className="mt-3 grid max-h-72 gap-2 overflow-y-auto">
+              {teamsList.map((t) => {
+                const isCurrent = session?.team?.id === t.teamId;
+                return (
+                  <button
+                    key={t.teamId}
+                    type="button"
+                    disabled={enterTeamMutation.isPending}
+                    onClick={() => enterTeamMutation.mutate(t.teamId)}
+                    className={cn(
+                      'flex w-full cursor-pointer items-center justify-between rounded-lg border px-3 py-2.5 text-left transition-colors',
+                      isCurrent
+                        ? 'border-primary bg-orange-50/70'
+                        : 'border-zinc-200 bg-white hover:bg-zinc-50',
+                    )}
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold text-zinc-950">
+                        {t.teamName}
+                      </div>
+                      <div className="truncate text-xs text-zinc-500">
+                        Code: <span className="font-mono">{t.teamSlug}</span> · As {t.displayName}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <Badge variant={t.role === 'lead' ? 'default' : 'secondary'} size="sm">
+                        {t.role}
+                      </Badge>
+                      {isCurrent && <Check className="h-4 w-4 text-primary" />}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-4 flex items-center justify-between border-t border-zinc-100 pt-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setTeamsPopupOpen(false);
+                  navigate('/teams/new');
+                }}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Create or Join Team
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setTeamsPopupOpen(false)}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
