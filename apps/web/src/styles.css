@@ -9,6 +9,9 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-border: var(--primary-border);
+  --color-primary-text: var(--primary-text);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -34,6 +37,9 @@
   --popover-foreground: #09090b;
   --primary: #f5931e;
   --primary-foreground: #ffffff;
+  --primary-hover: #ea580c;
+  --primary-border: #fdba74;
+  --primary-text: #c2410c;
   --secondary: #f4f4f5;
   --secondary-foreground: #09090b;
   --muted: #f4f4f5;
@@ -51,6 +57,9 @@
 /* Theme palettes */
 [data-theme='blue'] {
   --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-border: #93c5fd;
+  --primary-text: #1d4ed8;
   --ring: #2563eb;
   --accent: #eff6ff;
   --accent-foreground: #1e40af;
@@ -58,6 +67,9 @@
 
 [data-theme='emerald'] {
   --primary: #059669;
+  --primary-hover: #047857;
+  --primary-border: #6ee7b7;
+  --primary-text: #047857;
   --ring: #059669;
   --accent: #ecfdf5;
   --accent-foreground: #065f46;
@@ -65,6 +77,9 @@
 
 [data-theme='indigo'] {
   --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --primary-border: #a5b4fc;
+  --primary-text: #4338ca;
   --ring: #4f46e5;
   --accent: #eef2ff;
   --accent-foreground: #3730a3;
@@ -72,6 +87,9 @@
 
 [data-theme='crimson'] {
   --primary: #dc2626;
+  --primary-hover: #b91c1c;
+  --primary-border: #fca5a5;
+  --primary-text: #b91c1c;
   --ring: #dc2626;
   --accent: #fef2f2;
   --accent-foreground: #991b1b;
@@ -97,35 +115,50 @@
 }
 
 .dark[data-theme='orange'] {
-  --primary: #fb923c;
+  --primary: #ea580c;
+  --primary-hover: #c2410c;
+  --primary-border: rgba(251, 146, 60, 0.35);
+  --primary-text: #fdba74;
   --ring: #fb923c;
   --accent: rgba(251, 146, 60, 0.16);
   --accent-foreground: #fed7aa;
 }
 
 .dark[data-theme='blue'] {
-  --primary: #3b82f6;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-border: rgba(96, 165, 250, 0.35);
+  --primary-text: #93c5fd;
   --ring: #3b82f6;
   --accent: rgba(59, 130, 246, 0.16);
   --accent-foreground: #bfdbfe;
 }
 
 .dark[data-theme='emerald'] {
-  --primary: #10b981;
+  --primary: #059669;
+  --primary-hover: #047857;
+  --primary-border: rgba(52, 211, 153, 0.35);
+  --primary-text: #6ee7b7;
   --ring: #10b981;
   --accent: rgba(16, 185, 129, 0.16);
   --accent-foreground: #a7f3d0;
 }
 
 .dark[data-theme='indigo'] {
-  --primary: #6366f1;
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --primary-border: rgba(129, 140, 248, 0.35);
+  --primary-text: #a5b4fc;
   --ring: #6366f1;
   --accent: rgba(99, 102, 241, 0.16);
   --accent-foreground: #c7d2fe;
 }
 
 .dark[data-theme='crimson'] {
-  --primary: #ef4444;
+  --primary: #dc2626;
+  --primary-hover: #b91c1c;
+  --primary-border: rgba(248, 113, 113, 0.35);
+  --primary-text: #fca5a5;
   --ring: #ef4444;
   --accent: rgba(239, 68, 68, 0.16);
   --accent-foreground: #fecaca;
@@ -162,6 +195,46 @@
 .dark .border-zinc-100,
 .dark .border-zinc-300 {
   border-color: #27272a !important;
+}
+.dark .bg-zinc-200 {
+  background-color: #3f3f46 !important;
+}
+.dark .hover\:bg-zinc-100:hover,
+.dark .hover\:bg-zinc-50:hover,
+.dark .hover\:bg-zinc-200\/80:hover,
+.dark .hover\:bg-zinc-300:hover {
+  background-color: #27272a !important;
+}
+.dark .bg-rose-50 {
+  background-color: rgba(225, 29, 72, 0.14) !important;
+}
+.dark .border-rose-200 {
+  border-color: rgba(244, 63, 94, 0.35) !important;
+}
+.dark .text-rose-700,
+.dark .text-rose-800 {
+  color: #fda4af !important;
+}
+.dark .bg-emerald-50 {
+  background-color: rgba(16, 185, 129, 0.14) !important;
+}
+.dark .border-emerald-200 {
+  border-color: rgba(52, 211, 153, 0.35) !important;
+}
+.dark .text-emerald-800 {
+  color: #6ee7b7 !important;
+}
+.dark .bg-amber-50 {
+  background-color: rgba(245, 158, 11, 0.14) !important;
+}
+.dark .border-amber-200,
+.dark .border-amber-300 {
+  border-color: rgba(251, 191, 36, 0.35) !important;
+}
+.dark .text-amber-700,
+.dark .text-amber-800,
+.dark .text-amber-900 {
+  color: #fcd34d !important;
 }
 .dark .bg-grid-subtle {
   background-color: #09090b;

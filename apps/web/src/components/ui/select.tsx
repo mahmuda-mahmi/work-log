@@ -157,13 +157,13 @@ export function SelectItem({
         ctx?.setOpen(false);
       }}
       className={cn(
-        'relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-3 text-left text-sm outline-none transition-colors hover:bg-orange-50 hover:text-zinc-950',
-        selected && 'bg-orange-50/70 font-semibold text-zinc-950',
+        'relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-3 text-left text-sm outline-none transition-colors hover:bg-accent hover:text-zinc-950',
+        selected && 'bg-accent/70 font-semibold text-zinc-950',
         className,
       )}
     >
       <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
-        {selected && <Check className="h-4 w-4 text-orange-600" />}
+        {selected && <Check className="h-4 w-4 text-primary-text" />}
       </span>
       <span className="truncate">{children}</span>
     </button>

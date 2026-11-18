@@ -104,7 +104,7 @@ export function InviteAcceptScreen() {
             </Button>
             <p className="text-center text-xs text-zinc-500">
               Already joined?{' '}
-              <Link to="/login" className="font-semibold text-orange-600 hover:underline">
+              <Link to="/login" className="font-semibold text-primary-text hover:underline">
                 Sign In
               </Link>
             </p>

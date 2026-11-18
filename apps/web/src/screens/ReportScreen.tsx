@@ -745,7 +745,7 @@ export function ReportScreen({ session }: ReportScreenProps) {
                     <Fragment key={group.id}>
                       <tr className="border-b border-zinc-200 last:border-b-0">
                         <td className="border-r border-zinc-200 p-2.5 text-center align-top">
-                          <span className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-orange-300 bg-orange-50 text-xs font-extrabold text-orange-700">
+                          <span className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-primary-border bg-accent text-xs font-extrabold text-primary-text">
                             {gIdx + 1}
                           </span>
                           {!isFinalized && (
@@ -886,7 +886,7 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                         className="border-b border-zinc-200 last:border-b-0"
                                       >
                                         <td colSpan={2} className="bg-zinc-50 p-2.5">
-                                          <div className="grid gap-3 rounded-md border border-orange-300 border-l-4 border-l-primary bg-white p-3">
+                                          <div className="grid gap-3 rounded-md border border-primary-border border-l-4 border-l-primary bg-white p-3">
                                             {editingEntry.conflictCurrent && (
                                               <Alert variant="warning" className="grid gap-2">
                                                 <div>
@@ -1023,7 +1023,7 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                       <td className="p-2.5 align-top">
                                         <div className="whitespace-pre-wrap text-zinc-950 leading-relaxed">
                                           {group.numberingMode === 'numbered' ? (
-                                            <span className="mr-1.5 font-bold text-orange-600">
+                                            <span className="mr-1.5 font-bold text-primary-text">
                                               {eIdx + 1}.
                                             </span>
                                           ) : null}
@@ -1270,7 +1270,7 @@ export function ReportScreen({ session }: ReportScreenProps) {
                       {isEditingThisGroup && editingGroup && (
                         <tr className="border-b border-zinc-200">
                           <td colSpan={5} className="bg-zinc-50 p-3">
-                            <div className="grid gap-3 rounded-md border border-orange-300 border-l-4 border-l-primary bg-white p-3.5">
+                            <div className="grid gap-3 rounded-md border border-primary-border border-l-4 border-l-primary bg-white p-3.5">
                               <div className="border-b border-zinc-100 pb-2 text-xs font-bold text-zinc-950">
                                 Edit Category &amp; Title for Ser {gIdx + 1}
                               </div>
@@ -1365,7 +1365,7 @@ export function ReportScreen({ session }: ReportScreenProps) {
                       {isQuickAdding && quickAdd && (
                         <tr className="border-b border-zinc-200">
                           <td colSpan={5} className="bg-zinc-50 p-3">
-                            <div className="grid gap-3 rounded-md border border-orange-300 border-l-4 border-l-primary bg-white p-3.5">
+                            <div className="grid gap-3 rounded-md border border-primary-border border-l-4 border-l-primary bg-white p-3.5">
                               <div className="border-b border-zinc-100 pb-2 text-xs font-bold text-zinc-950">
                                 Add Status to Ser {gIdx + 1} ({group.categoryName} /{' '}
                                 {group.titleName})

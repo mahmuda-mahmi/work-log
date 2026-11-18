@@ -321,7 +321,7 @@ export function LandingScreen() {
                     className={cn(
                       'flex w-full cursor-pointer items-center justify-between rounded-lg border px-3 py-2.5 text-left transition-colors',
                       isCurrent
-                        ? 'border-primary bg-orange-50/70'
+                        ? 'border-primary bg-accent/70'
                         : 'border-zinc-200 bg-white hover:bg-zinc-50',
                     )}
                   >

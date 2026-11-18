@@ -422,7 +422,7 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
                       return (
                         <tr key={item.id} className="border-b border-zinc-200 last:border-b-0">
                           <td colSpan={6} className="bg-zinc-50 p-3">
-                            <div className="grid gap-3 rounded-md border border-orange-300 border-l-4 border-l-primary bg-white p-3.5">
+                            <div className="grid gap-3 rounded-md border border-primary-border border-l-4 border-l-primary bg-white p-3.5">
                               <div className="border-b border-zinc-100 pb-2 text-xs font-bold text-zinc-950">
                                 Editing Follow-up #{idx + 1}
                               </div>
@@ -579,7 +579,7 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
                       return (
                         <tr key={item.id} className="border-b border-zinc-200">
                           <td colSpan={6} className="bg-zinc-50 p-3">
-                            <div className="grid gap-3 rounded-md border border-orange-300 border-l-4 border-l-primary bg-white p-3.5">
+                            <div className="grid gap-3 rounded-md border border-primary-border border-l-4 border-l-primary bg-white p-3.5">
                               <div className="border-b border-zinc-100 pb-2 text-xs font-bold text-zinc-950">
                                 Move Follow-up #{idx + 1} to Today&apos;s Daily Work (
                                 {movingToDaily.categoryName} / {movingToDaily.titleName})
@@ -635,7 +635,7 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
                     return (
                       <tr key={item.id} className="border-b border-zinc-200 last:border-b-0">
                         <td className="border-r border-zinc-200 p-2.5 text-center align-top">
-                          <span className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-orange-300 bg-orange-50 text-xs font-extrabold text-orange-700">
+                          <span className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-primary-border bg-accent text-xs font-extrabold text-primary-text">
                             {idx + 1}
                           </span>
                         </td>

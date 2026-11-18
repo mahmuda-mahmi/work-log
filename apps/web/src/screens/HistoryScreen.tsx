@@ -95,7 +95,7 @@ export function HistoryScreen({ session }: HistoryScreenProps) {
                       <td className="border-r border-zinc-200 px-3 py-2.5 font-bold">
                         <Link
                           to={`/reports/${row.reportDate}`}
-                          className="text-zinc-950 hover:text-orange-600 hover:underline"
+                          className="text-zinc-950 hover:text-primary-text hover:underline"
                         >
                           {row.reportDate}
                         </Link>

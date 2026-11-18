@@ -975,7 +975,7 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
                     {dictionary.map((cat) => (
                       <div
                         key={cat.id}
-                        className="grid gap-2.5 rounded-md border border-orange-200 border-l-4 border-l-primary bg-white p-3"
+                        className="grid gap-2.5 rounded-md border border-primary-border border-l-4 border-l-primary bg-white p-3"
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 pb-2">
                           <strong
@@ -1068,7 +1068,7 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
                                     'cursor-pointer rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase',
                                     t.scope === 'followup'
                                       ? 'bg-zinc-200 text-zinc-800 hover:bg-zinc-300'
-                                      : 'bg-orange-100 text-orange-800 hover:bg-orange-200',
+                                      : 'bg-accent text-accent-foreground border border-primary-border/60 hover:bg-accent/80',
                                   )}
                                 >
                                   {t.scope === 'followup' ? 'Follow-up' : 'Daily'}
