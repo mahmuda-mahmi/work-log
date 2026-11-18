@@ -83,6 +83,10 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
   const [newTitleName, setNewTitleName] = useState('');
   const [renamePrompt, setRenamePrompt] = useState<RenamePromptState>(null);
   const [deleteDictTarget, setDeleteDictTarget] = useState<DeleteDictTarget>(null);
+  const [removeMemberTarget, setRemoveMemberTarget] = useState<{
+    id: string;
+    displayName: string;
+  } | null>(null);
   const [activeTab, setActiveTab] = useState<'general' | 'appearance'>('general');
   const [appearance, setAppearance] = useState(() => readAppearancePrefs());
 
@@ -266,8 +270,19 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
 
   const deactivateMutation = useMutation({
     mutationFn: (memberId: string) => teamsApi.deactivateMember(teamId, memberId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['team-members', teamId] }),
-    onError: (err: Error) => setStatusMsg(err.message),
+    onSuccess: async () => {
+      const removedName = removeMemberTarget?.displayName ?? 'Member';
+      setRemoveMemberTarget(null);
+      setStatusMsg(`${removedName} was removed from the team.`);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['team-members', teamId] }),
+        queryClient.invalidateQueries({ queryKey: ['report', teamId] }),
+      ]);
+    },
+    onError: (err: Error) => {
+      setRemoveMemberTarget(null);
+      setStatusMsg(err.message);
+    },
   });
 
   const logoMutation = useMutation({
@@ -686,12 +701,14 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
             <CardHeader className="py-3">
               <CardTitle>Team Members &amp; Invites</CardTitle>
               <Badge variant="secondary" size="sm">
-                {members.length} members
+                {members.filter((m) => m.isActive).length} members
               </Badge>
             </CardHeader>
             <CardContent className="grid gap-4 pt-3">
               <ul className="grid gap-2">
-                {members.map((m) => (
+                {members
+                  .filter((m) => m.isActive)
+                  .map((m) => (
                   <li
                     key={m.id}
                     className="flex flex-wrap items-center justify-between gap-2.5 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2.5"
@@ -737,9 +754,12 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
                           type="button"
                           variant="destructive"
                           size="xs"
-                          onClick={() => deactivateMutation.mutate(m.id)}
+                          disabled={deactivateMutation.isPending}
+                          onClick={() =>
+                            setRemoveMemberTarget({ id: m.id, displayName: m.displayName })
+                          }
                         >
-                          Deactivate
+                          Remove
                         </Button>
                       </div>
                     )}
@@ -1098,6 +1118,21 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
           } else {
             deleteTitleMutation.mutate(deleteDictTarget.id);
           }
+        }}
+      />
+
+      <ConfirmDialog
+        open={Boolean(removeMemberTarget)}
+        onOpenChange={(open) => {
+          if (!open) setRemoveMemberTarget(null);
+        }}
+        title="Remove Team Member"
+        description={`Remove ${removeMemberTarget?.displayName ?? 'this member'} from ${session.team.name}? They will lose access to this team immediately.`}
+        confirmLabel="Remove Member"
+        destructive
+        pending={deactivateMutation.isPending}
+        onConfirm={() => {
+          if (removeMemberTarget) deactivateMutation.mutate(removeMemberTarget.id);
         }}
       />
     </div>

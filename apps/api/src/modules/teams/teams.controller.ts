@@ -368,7 +368,11 @@ export class TeamsController {
       }
 
       await deactivateTeamMember(conn, teamId, memberId);
-      await deleteSessionsByUserId(conn, target.userId);
+      await conn.query(
+        `UPDATE sessions SET active_team_id = NULL WHERE user_id = $1 AND active_team_id = $2`,
+        [target.userId, teamId],
+      );
+      invalidateSessionCache();
       await appendAuditEvent(conn, {
         teamId,
         actorUserId: req.auth!.userId,
