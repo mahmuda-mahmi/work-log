@@ -515,6 +515,7 @@ export class TeamsController {
         teamId,
         statusText: body.statusText.trim(),
         position,
+        titleIds: body.titleIds ?? [],
         createdBy: req.auth!.userId,
       });
     });
@@ -528,7 +529,13 @@ export class TeamsController {
     @Body(new ZodValidationPipe(UpdateFrequentStatusSchema)) body: UpdateFrequentStatusInput,
   ) {
     const pool = getPool()!;
-    const updated = await updateFrequentStatus(pool, teamId, id, body.statusText.trim());
+    const updated = await updateFrequentStatus(
+      pool,
+      teamId,
+      id,
+      body.statusText.trim(),
+      body.titleIds,
+    );
     if (!updated) {
       throw new NotFoundException({
         code: 'FREQUENT_STATUS_NOT_FOUND',

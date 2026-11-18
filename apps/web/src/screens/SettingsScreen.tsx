@@ -87,20 +87,43 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
   });
 
   const [newFrequentStatus, setNewFrequentStatus] = useState('');
-  const [editingFreq, setEditingFreq] = useState<{ id: string; statusText: string } | null>(null);
+  const [newFreqTitleIds, setNewFreqTitleIds] = useState<string[]>([]);
+  const [editingFreq, setEditingFreq] = useState<{
+    id: string;
+    statusText: string;
+    titleIds: string[];
+  } | null>(null);
+
+  const dailyTitleOptions = useMemo(() => {
+    const out: Array<{ id: string; label: string; shortLabel: string }> = [];
+    for (const cat of dictionary) {
+      if (!cat.isActive) continue;
+      for (const t of cat.titles) {
+        if (!t.isActive || t.scope === 'followup') continue;
+        out.push({
+          id: t.id,
+          label: `${cat.name} / ${t.name}`,
+          shortLabel: t.name,
+        });
+      }
+    }
+    return out;
+  }, [dictionary]);
 
   const createFrequentStatusMutation = useMutation({
-    mutationFn: (text: string) => frequentStatusesApi.create(teamId, text),
+    mutationFn: (payload: { text: string; titleIds: string[] }) =>
+      frequentStatusesApi.create(teamId, payload.text, payload.titleIds),
     onSuccess: () => {
       setNewFrequentStatus('');
+      setNewFreqTitleIds([]);
       setStatusMsg('Frequently used status added.');
       void queryClient.invalidateQueries({ queryKey: ['frequent-statuses', teamId] });
     },
   });
 
   const updateFrequentStatusMutation = useMutation({
-    mutationFn: (payload: { id: string; statusText: string }) =>
-      frequentStatusesApi.update(teamId, payload.id, payload.statusText),
+    mutationFn: (payload: { id: string; statusText: string; titleIds: string[] }) =>
+      frequentStatusesApi.update(teamId, payload.id, payload.statusText, payload.titleIds),
     onSuccess: () => {
       setEditingFreq(null);
       setStatusMsg('Frequently used status updated.');
@@ -1164,28 +1187,77 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
               </CardHeader>
               <CardContent className="grid gap-3 pt-3">
                 <form
-                  className="flex items-center gap-2"
+                  className="grid gap-2.5"
                   onSubmit={(e) => {
                     e.preventDefault();
                     const trimmed = newFrequentStatus.trim();
                     if (!trimmed) return;
-                    createFrequentStatusMutation.mutate(trimmed);
+                    createFrequentStatusMutation.mutate({
+                      text: trimmed,
+                      titleIds: newFreqTitleIds,
+                    });
                   }}
                 >
-                  <Input
-                    value={newFrequentStatus}
-                    onChange={(e) => setNewFrequentStatus(e.target.value)}
-                    placeholder="e.g., Assisted user with account login"
-                    maxLength={2000}
-                  />
-                  <Button
-                    type="submit"
-                    size="sm"
-                    disabled={createFrequentStatusMutation.isPending || !newFrequentStatus.trim()}
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    Add
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={newFrequentStatus}
+                      onChange={(e) => setNewFrequentStatus(e.target.value)}
+                      placeholder="e.g., Assisted user with account login"
+                      maxLength={2000}
+                    />
+                    <Button
+                      type="submit"
+                      size="sm"
+                      disabled={createFrequentStatusMutation.isPending || !newFrequentStatus.trim()}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Add
+                    </Button>
+                  </div>
+
+                  {dailyTitleOptions.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[11px] font-semibold text-zinc-500">
+                        Show on rows:
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setNewFreqTitleIds([])}
+                        className={cn(
+                          'cursor-pointer rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors',
+                          newFreqTitleIds.length === 0
+                            ? 'border-primary bg-primary text-white'
+                            : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50',
+                        )}
+                      >
+                        All Rows
+                      </button>
+                      {dailyTitleOptions.map((opt) => {
+                        const selected = newFreqTitleIds.includes(opt.id);
+                        return (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() =>
+                              setNewFreqTitleIds((prev) =>
+                                prev.includes(opt.id)
+                                  ? prev.filter((id) => id !== opt.id)
+                                  : [...prev, opt.id],
+                              )
+                            }
+                            className={cn(
+                              'cursor-pointer rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors',
+                              selected
+                                ? 'border-primary bg-accent text-accent-foreground'
+                                : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50',
+                            )}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </form>
 
                 {frequentStatuses.length === 0 ? (
@@ -1194,17 +1266,24 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
                   </p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
-                    {frequentStatuses.map((item) => (
+                    {frequentStatuses.map((item) => {
+                      const rowNames =
+                        item.titleIds.length === 0
+                          ? ['All rows']
+                          : item.titleIds
+                              .map((tid) => dailyTitleOptions.find((o) => o.id === tid)?.shortLabel)
+                              .filter((x): x is string => Boolean(x));
+                      return (
                       <div
                         key={item.id}
                         className={cn(
                           'inline-flex max-w-full items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs shadow-xs',
-                          editingFreq?.id === item.id && 'w-full p-2',
+                          editingFreq?.id === item.id && 'w-full p-2.5',
                         )}
                       >
                         {editingFreq?.id === item.id ? (
                           <form
-                            className="flex flex-1 items-center gap-2"
+                            className="grid flex-1 gap-2"
                             onSubmit={(e) => {
                               e.preventDefault();
                               const trimmed = editingFreq.statusText.trim();
@@ -1212,43 +1291,98 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
                               updateFrequentStatusMutation.mutate({
                                 id: item.id,
                                 statusText: trimmed,
+                                titleIds: editingFreq.titleIds,
                               });
                             }}
                           >
-                            <Input
-                              value={editingFreq.statusText}
-                              onChange={(e) =>
-                                setEditingFreq({ ...editingFreq, statusText: e.target.value })
-                              }
-                              maxLength={2000}
-                              autoFocus
-                            />
-                            <Button
-                              type="submit"
-                              size="xs"
-                              disabled={updateFrequentStatusMutation.isPending}
-                            >
-                              Save
-                            </Button>
-                            <Button
-                              type="button"
-                              size="xs"
-                              variant="ghost"
-                              onClick={() => setEditingFreq(null)}
-                            >
-                              Cancel
-                            </Button>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                value={editingFreq.statusText}
+                                onChange={(e) =>
+                                  setEditingFreq({ ...editingFreq, statusText: e.target.value })
+                                }
+                                maxLength={2000}
+                                autoFocus
+                              />
+                              <Button
+                                type="submit"
+                                size="xs"
+                                disabled={updateFrequentStatusMutation.isPending}
+                              >
+                                Save
+                              </Button>
+                              <Button
+                                type="button"
+                                size="xs"
+                                variant="ghost"
+                                onClick={() => setEditingFreq(null)}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                            {dailyTitleOptions.length > 0 && (
+                              <div className="flex flex-wrap items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setEditingFreq({ ...editingFreq, titleIds: [] })
+                                  }
+                                  className={cn(
+                                    'cursor-pointer rounded border px-1.5 py-0.5 text-[10px] font-medium transition-colors',
+                                    editingFreq.titleIds.length === 0
+                                      ? 'border-primary bg-primary text-white'
+                                      : 'border-zinc-200 bg-white text-zinc-700',
+                                  )}
+                                >
+                                  All Rows
+                                </button>
+                                {dailyTitleOptions.map((opt) => {
+                                  const sel = editingFreq.titleIds.includes(opt.id);
+                                  return (
+                                    <button
+                                      key={opt.id}
+                                      type="button"
+                                      onClick={() =>
+                                        setEditingFreq({
+                                          ...editingFreq,
+                                          titleIds: sel
+                                            ? editingFreq.titleIds.filter((id) => id !== opt.id)
+                                            : [...editingFreq.titleIds, opt.id],
+                                        })
+                                      }
+                                      className={cn(
+                                        'cursor-pointer rounded border px-1.5 py-0.5 text-[10px] font-medium transition-colors',
+                                        sel
+                                          ? 'border-primary bg-accent text-accent-foreground'
+                                          : 'border-zinc-200 bg-white text-zinc-700',
+                                      )}
+                                    >
+                                      {opt.label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </form>
                         ) : (
                           <>
                             <span className="break-words font-medium text-zinc-900">
                               {item.statusText}
                             </span>
+                            {rowNames.length > 0 && (
+                              <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600">
+                                {rowNames.join(', ')}
+                              </span>
+                            )}
                             <button
                               type="button"
                               title="Edit template"
                               onClick={() =>
-                                setEditingFreq({ id: item.id, statusText: item.statusText })
+                                setEditingFreq({
+                                  id: item.id,
+                                  statusText: item.statusText,
+                                  titleIds: item.titleIds ?? [],
+                                })
                               }
                               className="cursor-pointer rounded p-0.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
                             >
@@ -1266,7 +1400,8 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
                           </>
                         )}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>

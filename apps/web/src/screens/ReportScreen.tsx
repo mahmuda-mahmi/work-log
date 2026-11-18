@@ -1510,31 +1510,40 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                     }
                                   />
                                 </div>
-                                {quickAddStatusFocused && frequentStatuses.length > 0 && (
-                                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                                    <span className="text-[11px] font-semibold text-zinc-500">
-                                      Frequently Used:
-                                    </span>
-                                    {frequentStatuses.map((item) => (
-                                      <button
-                                        key={item.id}
-                                        type="button"
-                                        onMouseDown={(e) => e.preventDefault()}
-                                        onClick={() => {
-                                          setQuickAdd({
-                                            ...quickAdd,
-                                            statusText: item.statusText,
-                                          });
-                                          setQuickAddStatusFocused(false);
-                                        }}
-                                        className="cursor-pointer rounded-md border border-primary-border bg-accent px-2.5 py-1 text-left text-xs font-medium text-accent-foreground transition-colors hover:bg-primary hover:text-white"
-                                        title="Click to paste into status box"
-                                      >
-                                        {item.statusText}
-                                      </button>
-                                    ))}
-                                  </div>
-                                )}
+                                {quickAddStatusFocused &&
+                                  (() => {
+                                    const rowSuggestions = frequentStatuses.filter(
+                                      (item) =>
+                                        item.titleIds.length === 0 ||
+                                        item.titleIds.includes(group.titleId),
+                                    );
+                                    if (rowSuggestions.length === 0) return null;
+                                    return (
+                                      <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                                        <span className="text-[11px] font-semibold text-zinc-500">
+                                          Frequently Used:
+                                        </span>
+                                        {rowSuggestions.map((item) => (
+                                          <button
+                                            key={item.id}
+                                            type="button"
+                                            onMouseDown={(e) => e.preventDefault()}
+                                            onClick={() => {
+                                              setQuickAdd({
+                                                ...quickAdd,
+                                                statusText: item.statusText,
+                                              });
+                                              setQuickAddStatusFocused(false);
+                                            }}
+                                            className="cursor-pointer rounded-md border border-primary-border bg-accent px-2.5 py-1 text-left text-xs font-medium text-accent-foreground transition-colors hover:bg-primary hover:text-white"
+                                            title="Click to paste into status box"
+                                          >
+                                            {item.statusText}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    );
+                                  })()}
                               </div>
                               <div className="grid gap-1.5">
                                 <Label>Task Completed By (optional)</Label>

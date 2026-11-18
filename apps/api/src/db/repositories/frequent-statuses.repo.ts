@@ -12,6 +12,7 @@ type FrequentStatusRow = {
   id: string;
   status_text: string;
   position: number;
+  title_ids: string[] | null;
 };
 
 export async function listFrequentStatuses(
@@ -23,6 +24,7 @@ export async function listFrequentStatuses(
     id: r.id,
     statusText: r.status_text,
     position: r.position,
+    titleIds: Array.isArray(r.title_ids) ? r.title_ids : [],
   }));
 }
 
@@ -41,6 +43,7 @@ export async function insertFrequentStatus(
     teamId: string;
     statusText: string;
     position: number;
+    titleIds: string[];
     createdBy: string;
   },
 ): Promise<FrequentStatusDto> {
@@ -49,12 +52,14 @@ export async function insertFrequentStatus(
     input.teamId,
     input.statusText,
     input.position,
+    input.titleIds,
     input.createdBy,
   ]);
   return {
     id: input.id,
     statusText: input.statusText,
     position: input.position,
+    titleIds: input.titleIds,
   };
 }
 
@@ -63,14 +68,21 @@ export async function updateFrequentStatus(
   teamId: string,
   id: string,
   statusText: string,
+  titleIds?: string[],
 ): Promise<FrequentStatusDto | null> {
-  const res = await conn.query<FrequentStatusRow>(UPDATE_FREQUENT_STATUS, [statusText, id, teamId]);
+  const res = await conn.query<FrequentStatusRow>(UPDATE_FREQUENT_STATUS, [
+    statusText,
+    titleIds ?? null,
+    id,
+    teamId,
+  ]);
   const r = res.rows[0];
   if (!r) return null;
   return {
     id: r.id,
     statusText: r.status_text,
     position: r.position,
+    titleIds: Array.isArray(r.title_ids) ? r.title_ids : [],
   };
 }
 

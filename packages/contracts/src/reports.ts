@@ -217,15 +217,18 @@ export const FrequentStatusDtoSchema = z.object({
   id: z.string().uuid(),
   statusText: z.string(),
   position: z.number().int(),
+  titleIds: z.array(z.string().uuid()).default([]),
 });
 export type FrequentStatusDto = z.infer<typeof FrequentStatusDtoSchema>;
 
 export const CreateFrequentStatusSchema = z.object({
   statusText: z.string().trim().min(1, 'Status text is required').max(2000),
+  titleIds: z.array(z.string().uuid()).optional().default([]),
 });
 export type CreateFrequentStatusInput = z.infer<typeof CreateFrequentStatusSchema>;
 
 export const UpdateFrequentStatusSchema = z.object({
   statusText: z.string().trim().min(1, 'Status text is required').max(2000),
+  titleIds: z.array(z.string().uuid()).optional(),
 });
 export type UpdateFrequentStatusInput = z.infer<typeof UpdateFrequentStatusSchema>;

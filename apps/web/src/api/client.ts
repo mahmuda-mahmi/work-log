@@ -206,15 +206,15 @@ export const teamsApi = {
 export const frequentStatusesApi = {
   list: (teamId: string) =>
     apiFetch<FrequentStatusDto[]>(`/api/teams/${teamId}/frequent-statuses`),
-  create: (teamId: string, statusText: string) =>
+  create: (teamId: string, statusText: string, titleIds: string[] = []) =>
     apiFetch<FrequentStatusDto>(`/api/teams/${teamId}/frequent-statuses`, {
       method: 'POST',
-      body: JSON.stringify({ statusText }),
+      body: JSON.stringify({ statusText, titleIds }),
     }),
-  update: (teamId: string, id: string, statusText: string) =>
+  update: (teamId: string, id: string, statusText: string, titleIds?: string[]) =>
     apiFetch<FrequentStatusDto>(`/api/teams/${teamId}/frequent-statuses/${id}`, {
       method: 'PATCH',
-      body: JSON.stringify({ statusText }),
+      body: JSON.stringify({ statusText, titleIds }),
     }),
   remove: (teamId: string, id: string) =>
     apiFetch<{ ok: boolean }>(`/api/teams/${teamId}/frequent-statuses/${id}`, {
