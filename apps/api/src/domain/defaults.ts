@@ -215,7 +215,12 @@ export async function ensureDefaultReportGroups(
   await pool.query(
     `DELETE FROM work_groups wg
      USING titles t
-     WHERE wg.report_id = $1 AND wg.title_id = t.id AND t.scope = 'followup'`,
+     WHERE wg.report_id = $1
+       AND wg.title_id = t.id
+       AND t.scope = 'followup'
+       AND NOT EXISTS (
+         SELECT 1 FROM work_entries we WHERE we.group_id = wg.id
+       )`,
     [reportId],
   );
 
