@@ -6,6 +6,7 @@ import {
   Delete,
   ForbiddenException,
   Get,
+  Header,
   HttpStatus,
   NotFoundException,
   Param,
@@ -113,6 +114,7 @@ export class ReportsController {
   }
 
   @Get('workspace')
+  @Header('Cache-Control', 'no-store')
   async getTodayWorkspace(
     @Param('teamId') teamId: string,
     @Req() req: AuthenticatedRequest,
@@ -122,6 +124,7 @@ export class ReportsController {
   }
 
   @Get('workspace/:date')
+  @Header('Cache-Control', 'no-store')
   async getWorkspaceByDate(
     @Param('teamId') teamId: string,
     @Param('date') dateParam: string,

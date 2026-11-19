@@ -64,6 +64,11 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
   const followupsQuery = useQuery({
     queryKey: ['followups', teamId, includeArchived],
     queryFn: () => followupsApi.list(teamId, includeArchived),
+    staleTime: 0,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: 'always',
+    refetchOnReconnect: true,
   });
 
   const dictionaryQuery = useQuery({

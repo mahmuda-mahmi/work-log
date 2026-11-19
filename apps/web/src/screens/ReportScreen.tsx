@@ -38,7 +38,7 @@ import { ReportPreview } from '../components/ReportPreview.js';
 import { appendStatusSuggestion, StatusSuggestionChips } from '../components/StatusSuggestions.js';
 import { ReportPageSkeleton } from '../components/WorkspaceSkeleton.js';
 import { Alert } from '../components/ui/alert.js';
-import { Badge } from '../components/ui/badge.js';
+import { Badge, badgeVariants } from '../components/ui/badge.js';
 import { Button, buttonVariants } from '../components/ui/button.js';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.js';
 import { ConfirmDialog, PromptDialog } from '../components/ui/confirm-dialog.js';
@@ -188,9 +188,10 @@ export function ReportScreen({ session }: ReportScreenProps) {
       return data;
     },
     placeholderData: () => readCachedWorkspace(workspaceCacheKey),
-    refetchInterval: 15_000,
+    staleTime: 0,
+    refetchInterval: 30_000,
     refetchIntervalInBackground: false,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: 'always',
     refetchOnReconnect: true,
   });
 
@@ -212,6 +213,11 @@ export function ReportScreen({ session }: ReportScreenProps) {
   const { data: frequentStatuses = [] } = useQuery({
     queryKey: ['frequent-statuses', teamId],
     queryFn: () => frequentStatusesApi.list(teamId),
+    staleTime: 0,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: 'always',
+    refetchOnReconnect: true,
   });
   const [dragMember, setDragMember] = useState<{ groupId: string; memberId: string } | null>(null);
   const [dragOverMember, setDragOverMember] = useState<{
@@ -607,10 +613,25 @@ export function ReportScreen({ session }: ReportScreenProps) {
               REV {report.revision}
             </Badge>
 
-            <Badge variant="outline" size="toolbar" className="text-zinc-600">
-              <RefreshCw className="h-3 w-3" />
-              Auto-sync 15s
-            </Badge>
+            <button
+              type="button"
+              onClick={() => {
+                void Promise.all([
+                  workspaceQuery.refetch(),
+                  queryClient.invalidateQueries({ queryKey: ['frequent-statuses', teamId] }),
+                ]);
+              }}
+              title="Auto-syncs whole team every 30s (click to sync now)"
+              className={cn(
+                badgeVariants({ variant: 'outline', size: 'toolbar' }),
+                'cursor-pointer text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-950',
+              )}
+            >
+              <RefreshCw
+                className={cn('h-3 w-3', workspaceQuery.isFetching && 'animate-spin text-primary')}
+              />
+              Auto-sync 30s
+            </button>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -1608,22 +1629,18 @@ export function ReportScreen({ session }: ReportScreenProps) {
       <div className="flex flex-col gap-2">
         <div className="no-print flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-bold text-zinc-950">
-            {isFinalized
-              ? 'Finalized Report Preview (Full Team)'
-              : `Live Preview (${session.member.displayName}'s Entries)`}
+            {isFinalized ? 'Finalized Report Preview (Full Team)' : 'Live Preview (Full Team)'}
           </h2>
-          {!isFinalized && (
-            <span className="text-xs text-zinc-500">
-              Showing your entries while in draft; full team document appears once finalized.
-            </span>
-          )}
+          <span className="text-xs text-zinc-500">
+            {isFinalized
+              ? 'Showing finalized full team document.'
+              : 'Showing entries of the whole team; auto-syncs every 30s.'}
+          </span>
         </div>
         <ReportPreview
           report={report}
           documentTitle={session.team.documentTitle}
           hasLogo={session.team.hasLogo}
-          filterMemberId={isFinalized ? undefined : session.member.id}
-          filterUserId={isFinalized ? undefined : session.user.id}
         />
       </div>
 

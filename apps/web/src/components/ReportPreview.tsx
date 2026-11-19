@@ -6,8 +6,6 @@ interface ReportPreviewProps {
   report: DailyReportDto;
   documentTitle: string;
   hasLogo: boolean;
-  filterMemberId?: string;
-  filterUserId?: string;
 }
 
 function computeRowSpans(rows: DocumentRow[]): number[] {
@@ -31,33 +29,20 @@ function computeRowSpans(rows: DocumentRow[]): number[] {
   return spans;
 }
 
-export function ReportPreview({
-  report,
-  documentTitle,
-  filterMemberId,
-  filterUserId,
-}: ReportPreviewProps) {
+export function ReportPreview({ report, documentTitle }: ReportPreviewProps) {
   const [logoVisible, setLogoVisible] = useState(true);
 
   const model = useMemo(() => {
     const entries: ReportEntryInput[] = report.groups
       .filter((group) => group.entries.length > 0)
       .flatMap((group) =>
-        group.entries
-          .filter((entry) => {
-            if (!filterMemberId && !filterUserId) return true;
-            return (
-              entry.completedByMemberId === filterMemberId ||
-              entry.createdByUserId === filterUserId
-            );
-          })
-          .map((entry) => ({
-            categoryName: group.categoryName,
-            titleName: group.titleName,
-            statusText: entry.statusText,
-            completedBy: entry.completedByDisplay,
-            numberingMode: group.numberingMode,
-          })),
+        group.entries.map((entry) => ({
+          categoryName: group.categoryName,
+          titleName: group.titleName,
+          statusText: entry.statusText,
+          completedBy: entry.completedByDisplay,
+          numberingMode: group.numberingMode,
+        })),
       );
 
     return buildDocumentModel({
@@ -72,7 +57,7 @@ export function ReportPreview({
         completedBy: f.completedByDisplay,
       })),
     });
-  }, [report, documentTitle, filterMemberId, filterUserId]);
+  }, [report, documentTitle]);
 
   const mainRowSpans = useMemo(() => computeRowSpans(model.mainRows), [model.mainRows]);
 
