@@ -573,20 +573,21 @@ export function EntryComposer({
                   required
                 />
               </div>
-              {statusFocused && !disabled && (
-                <StatusSuggestionChips
-                  variant="popover"
-                  items={frequentStatuses}
-                  titleId={
-                    activeCategories
-                      .find((c) => c.name === categoryName)
-                      ?.titles.find((t) => t.name === titleName)?.id
-                  }
-                  showAllWhenNoTitle
-                  onPick={(picked) => setStatusText((prev) => appendStatusSuggestion(prev, picked))}
-                  onClose={() => setStatusFocused(false)}
-                />
-              )}
+              <StatusSuggestionChips
+                variant="popover"
+                open={statusFocused && !disabled}
+                value={statusText}
+                resetKey={`${categoryName}::${titleName}`}
+                items={frequentStatuses}
+                titleId={
+                  activeCategories
+                    .find((c) => c.name === categoryName)
+                    ?.titles.find((t) => t.name === titleName)?.id
+                }
+                showAllWhenNoTitle
+                onPick={(picked) => setStatusText((prev) => appendStatusSuggestion(prev, picked))}
+                onClose={() => setStatusFocused(false)}
+              />
             </div>
 
             <Button

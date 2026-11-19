@@ -222,7 +222,7 @@ export async function renderPdf(model: DocumentModel): Promise<Buffer> {
       color: rgb(0, 0, 0),
     });
 
-    cursorY = Math.min(y - 16, pageHeight - PAGE.marginsPt.top);
+    cursorY = Math.min(y - HEADER.pdfBottomGapPt, pageHeight - PAGE.marginsPt.top);
   }
 
   function drawRow(layout: LayoutRow, colWidthsPt: number[]) {
@@ -318,7 +318,7 @@ export async function renderPdf(model: DocumentModel): Promise<Buffer> {
     );
 
     if (heading) {
-      const neededForHeadingAndHeader = 28 + headerLayout.heightPt;
+      const neededForHeadingAndHeader = 16 + HEADER.pdfHeadingBottomGapPt + headerLayout.heightPt;
       if (cursorY - neededForHeadingAndHeader < bottomMargin) {
         startNewPage();
       }
@@ -337,7 +337,7 @@ export async function renderPdf(model: DocumentModel): Promise<Buffer> {
         thickness: 0.8,
         color: rgb(0, 0, 0),
       });
-      cursorY -= 12;
+      cursorY -= HEADER.pdfHeadingBottomGapPt;
     } else if (cursorY - headerLayout.heightPt < bottomMargin) {
       startNewPage();
     }

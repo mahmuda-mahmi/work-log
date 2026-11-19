@@ -960,6 +960,8 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                               />
                                               <StatusSuggestionChips
                                                 items={frequentStatuses}
+                                                value={editingEntry.statusText}
+                                                resetKey={`edit-${editingEntry.entryId}`}
                                                 titleId={group.titleId}
                                                 onPick={(picked) =>
                                                   setEditingEntry((prev) =>
@@ -1518,6 +1520,8 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                 </div>
                                 <StatusSuggestionChips
                                   items={frequentStatuses}
+                                  value={quickAdd.statusText}
+                                  resetKey={`quick-${group.id}`}
                                   titleId={group.titleId}
                                   onPick={(picked) =>
                                     setQuickAdd((prev) =>

@@ -1,4 +1,31 @@
+import { useEffect, useState } from 'react';
 import type { FrequentStatusDto } from '@cghq/contracts';
+import { Check } from 'lucide-react';
+import { cn } from '../lib/utils';
+
+function normalizeSuggestionText(text: string): string {
+  return text.trim().replace(/[^\S\n]+/g, ' ').replace(/\n+/g, '\n').toLowerCase();
+}
+
+function escapeRegExp(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Checks whether `suggestion` already appears as a complete segment in `current`
+ * (bounded by start/comma/newline, ignoring optional Officer/Sailor prefix) so
+ * prefixes like "OPS" do not falsely match "OPS (Dhaka Zone)".
+ */
+export function isSuggestionPresentInText(current: string, suggestion: string): boolean {
+  const normCurrent = normalizeSuggestionText(current);
+  const normSuggestion = normalizeSuggestionText(suggestion);
+  if (!normCurrent || !normSuggestion) return false;
+  const pattern = new RegExp(
+    `(?:^|,|\\n)\\s*(?:(?:officer|sailor)\\s*:\\s*)?${escapeRegExp(normSuggestion)}(?=\\s*(?:$|,|\\n))`,
+    'i',
+  );
+  return pattern.test(normCurrent);
+}
 
 /**
  * Appends a selected status suggestion to the current text with ", " between items,
@@ -31,23 +58,71 @@ export function filterSuggestionsForTitle(
 
 interface StatusSuggestionChipsProps {
   items: FrequentStatusDto[];
+  value: string;
+  resetKey?: string;
   titleId?: string | null;
   showAllWhenNoTitle?: boolean;
   onPick: (statusText: string) => void;
   variant?: 'inline' | 'popover';
+  open?: boolean;
   onClose?: () => void;
 }
 
 export function StatusSuggestionChips({
   items,
+  value,
+  resetKey,
   titleId,
   showAllWhenNoTitle = false,
   onPick,
   variant = 'inline',
+  open = true,
   onClose,
 }: StatusSuggestionChipsProps) {
+  const [pickedIds, setPickedIds] = useState<Set<string>>(() => new Set());
+
+  useEffect(() => {
+    setPickedIds(new Set());
+  }, [resetKey]);
+
+  useEffect(() => {
+    if (!value.trim()) {
+      setPickedIds((prev) => (prev.size === 0 ? prev : new Set()));
+      return;
+    }
+    const normalizedValue = normalizeSuggestionText(value);
+    setPickedIds((prev) => {
+      if (prev.size === 0) return prev;
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of prev) {
+        const match = items.find((item) => item.id === id);
+        if (match && normalizedValue.includes(normalizeSuggestionText(match.statusText))) {
+          next.add(id);
+        } else {
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [value, items]);
+
   const suggestions = filterSuggestionsForTitle(items, titleId, showAllWhenNoTitle);
-  if (suggestions.length === 0) return null;
+  if (!open || suggestions.length === 0) return null;
+
+  function isItemUsed(item: FrequentStatusDto): boolean {
+    return pickedIds.has(item.id) || isSuggestionPresentInText(value, item.statusText);
+  }
+
+  function handlePick(item: FrequentStatusDto) {
+    if (isItemUsed(item)) return;
+    setPickedIds((prev) => {
+      const next = new Set(prev);
+      next.add(item.id);
+      return next;
+    });
+    onPick(item.statusText);
+  }
 
   const chipList = (
     <div
@@ -57,18 +132,33 @@ export function StatusSuggestionChips({
           : 'flex max-h-44 flex-wrap items-center gap-1.5 overflow-y-auto'
       }
     >
-      {suggestions.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => onPick(item.statusText)}
-          className="cursor-pointer rounded-md border border-primary-border bg-accent px-2.5 py-1 text-left text-xs font-medium text-accent-foreground transition-colors hover:bg-primary hover:text-white"
-          title="Click to append into status box"
-        >
-          {item.statusText}
-        </button>
-      ))}
+      {suggestions.map((item) => {
+        const used = isItemUsed(item);
+        return (
+          <span
+            key={item.id}
+            className={used ? 'inline-flex cursor-not-allowed' : 'inline-flex'}
+            title={used ? 'Already selected for this status' : 'Click to append into status box'}
+          >
+            <button
+              type="button"
+              disabled={used}
+              aria-disabled={used}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => handlePick(item)}
+              className={cn(
+                'inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-left text-xs font-medium transition-colors',
+                used
+                  ? 'pointer-events-none border-zinc-200 bg-zinc-100 text-zinc-400 opacity-75'
+                  : 'cursor-pointer border-primary-border bg-accent text-accent-foreground hover:bg-primary hover:text-white',
+              )}
+            >
+              {used && <Check className="h-3 w-3 shrink-0 text-emerald-600" />}
+              <span>{item.statusText}</span>
+            </button>
+          </span>
+        );
+      })}
     </div>
   );
 

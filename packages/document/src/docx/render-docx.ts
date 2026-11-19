@@ -106,7 +106,7 @@ function buildHeader(model: DocumentModel): Header {
   children.push(
     new Paragraph({
       alignment: AlignmentType.CENTER,
-      spacing: { before: HEADER.titleBeforeTwips, after: HEADER.titleAfterTwips },
+      spacing: { before: HEADER.titleBeforeTwips, after: HEADER.titleBottomAfterTwips },
       children: [
         makeRun(model.documentTitle, {
           bold: true,
@@ -301,7 +301,7 @@ export async function renderDocx(model: DocumentModel): Promise<Buffer> {
                 new Paragraph({
                   alignment: AlignmentType.LEFT,
                   keepNext: true,
-                  spacing: { before: 240, after: 120 },
+                  spacing: { before: 240, after: HEADER.headingAfterTwips },
                   children: [makeRun('Follow-up Items:', { bold: true, underline: true })],
                 }),
                 buildTable(model.followupRows, TABLE.followupColumnsTwips, false),
