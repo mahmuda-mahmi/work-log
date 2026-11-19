@@ -7,6 +7,7 @@ import { ProfileMenu } from './components/ProfileMenu';
 import { PageCardSkeleton, WorkspaceShellSkeleton } from './components/WorkspaceSkeleton';
 import { Badge } from './components/ui/badge';
 import { Button } from './components/ui/button';
+import { clearRememberedReturnRoute, rememberReturnRoute } from './lib/navigation';
 import { cn } from './lib/utils';
 import { FollowupsScreen } from './screens/FollowupsScreen';
 import { HistoryScreen } from './screens/HistoryScreen';
@@ -122,15 +123,23 @@ function AuthenticatedShell() {
   useEffect(() => {
     if (isError) {
       writeCachedSession(null);
+      clearRememberedReturnRoute();
     } else if (session) {
       writeCachedSession(session);
     }
   }, [session, isError]);
 
+  useEffect(() => {
+    if (session?.team && session?.member && location.pathname !== '/teams/new') {
+      rememberReturnRoute(`${location.pathname}${location.search}`);
+    }
+  }, [location.pathname, location.search, session?.member, session?.team]);
+
   const logoutMutation = useMutation({
     mutationFn: authApi.logout,
     onSuccess: async () => {
       writeCachedSession(null);
+      clearRememberedReturnRoute();
       queryClient.clear();
       await queryClient.invalidateQueries({ queryKey: ['me'] });
     },

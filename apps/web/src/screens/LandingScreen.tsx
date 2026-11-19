@@ -9,6 +9,7 @@ import { Alert } from '../components/ui/alert';
 import { Badge } from '../components/ui/badge';
 import { Button, buttonVariants } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
+import { activateTeamWorkspace, clearRememberedReturnRoute, rememberReturnRoute } from '../lib/navigation';
 import { cn } from '../lib/utils';
 
 const SESSION_CACHE_KEY = 'cghq:session';
@@ -72,8 +73,13 @@ export function LandingScreen() {
   });
 
   useEffect(() => {
+    rememberReturnRoute('/');
+  }, []);
+
+  useEffect(() => {
     if (isError) {
       writeCachedSession(null);
+      clearRememberedReturnRoute();
     } else if (session) {
       writeCachedSession(session);
     }
@@ -83,19 +89,17 @@ export function LandingScreen() {
     mutationFn: authApi.logout,
     onSuccess: async () => {
       writeCachedSession(null);
+      clearRememberedReturnRoute();
       queryClient.clear();
       await queryClient.invalidateQueries({ queryKey: ['me'] });
     },
   });
 
   const enterTeamMutation = useMutation({
-    mutationFn: (teamId: string) => authApi.switchTeam(teamId),
-    onSuccess: async () => {
+    mutationFn: (teamId: string) =>
+      activateTeamWorkspace(queryClient, teamId, authApi.switchTeam),
+    onSuccess: () => {
       setTeamsPopupOpen(false);
-      queryClient.removeQueries({ queryKey: ['report'] });
-      queryClient.removeQueries({ queryKey: ['followups'] });
-      queryClient.removeQueries({ queryKey: ['dictionary'] });
-      await queryClient.invalidateQueries({ queryKey: ['me'] });
       navigate('/today');
     },
     onError: (err: Error) => setErrorMsg(err.message),
@@ -229,6 +233,7 @@ export function LandingScreen() {
                   {isSignedIn ? (
                     <Link
                       to="/teams/new"
+                      state={{ from: '/' }}
                       className={buttonVariants({ variant: 'dark', size: 'default' })}
                     >
                       <Plus className="h-4 w-4" />
@@ -351,7 +356,7 @@ export function LandingScreen() {
                 size="sm"
                 onClick={() => {
                   setTeamsPopupOpen(false);
-                  navigate('/teams/new');
+                  navigate('/teams/new', { state: { from: '/' } });
                 }}
               >
                 <Plus className="h-3.5 w-3.5" />

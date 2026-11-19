@@ -20,6 +20,7 @@ import {
   Users,
 } from 'lucide-react';
 import { authApi, dictionaryApi, frequentStatusesApi, teamsApi } from '../api/client';
+import { clearRememberedReturnRoute } from '../lib/navigation';
 import { Alert } from '../components/ui/alert';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -437,6 +438,9 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
       queryClient.removeQueries({ queryKey: ['team-settings', teamId] });
       queryClient.removeQueries({ queryKey: ['team-members', teamId] });
       queryClient.removeQueries({ queryKey: ['report', teamId] });
+      if (res.remainingCount === 0) {
+        clearRememberedReturnRoute();
+      }
       await queryClient.invalidateQueries({ queryKey: ['me'] });
       await queryClient.invalidateQueries({ queryKey: ['my-teams'] });
       navigate(res.remainingCount > 1 ? '/' : '/today');

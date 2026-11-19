@@ -1,9 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AuthSession, UserTeamSummary } from '@cghq/contracts';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Camera, Check, KeyRound, LogOut, Plus, RefreshCw, Trash2, Users } from 'lucide-react';
-import { useNavigate } from 'react-router';
+import {
+  ArrowLeft,
+  ArrowRight,
+  Camera,
+  Check,
+  KeyRound,
+  LogOut,
+  Plus,
+  RefreshCw,
+  Trash2,
+  Users,
+} from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router';
 import { authApi } from '../api/client';
+import { activateTeamWorkspace, resolvePreviousPagePath } from '../lib/navigation';
 import { cn } from '../lib/utils';
 import { Alert } from './ui/alert';
 import { Badge } from './ui/badge';
@@ -57,9 +69,18 @@ async function resizeImageToDataUrl(file: File): Promise<string> {
 
 export function ProfileMenu({ session, onLogout, logoutPending = false }: ProfileMenuProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const menuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const currentPath = `${location.pathname}${location.search}`;
+  const isOnOnboarding =
+    location.pathname === '/teams/new' || !session.team || !session.member;
+  const isInWorkspace =
+    Boolean(session.team && session.member) &&
+    location.pathname !== '/' &&
+    location.pathname !== '/teams/new';
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [photoModalOpen, setPhotoModalOpen] = useState(false);
@@ -118,13 +139,10 @@ export function ProfileMenu({ session, onLogout, logoutPending = false }: Profil
   });
 
   const switchMutation = useMutation({
-    mutationFn: (teamId: string) => authApi.switchTeam(teamId),
-    onSuccess: async () => {
+    mutationFn: (teamId: string) =>
+      activateTeamWorkspace(queryClient, teamId, authApi.switchTeam),
+    onSuccess: () => {
       setSwitchModalOpen(false);
-      queryClient.removeQueries({ queryKey: ['report'] });
-      queryClient.removeQueries({ queryKey: ['followups'] });
-      queryClient.removeQueries({ queryKey: ['dictionary'] });
-      await queryClient.invalidateQueries({ queryKey: ['me'] });
       navigate('/today');
     },
     onError: (err: Error) => setErrorMsg(err.message),
@@ -136,18 +154,22 @@ export function ProfileMenu({ session, onLogout, logoutPending = false }: Profil
     setLoadingTeams(true);
     try {
       const teams = await authApi.listMyTeams();
-      if (teams.length <= 1) {
-        navigate('/teams/new');
+      if (teams.length === 0 && !isOnOnboarding) {
+        navigate('/teams/new', { state: { from: currentPath } });
         return;
       }
       setTeamsList(teams);
       setSwitchModalOpen(true);
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Could not load teams');
+      setSwitchModalOpen(true);
     } finally {
       setLoadingTeams(false);
     }
   }
+
+  const hasJoinedTeam = teamsList.length > 0 || Boolean(session.team && session.member);
+  const previousPath = resolvePreviousPagePath(location.state, hasJoinedTeam);
 
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -241,12 +263,14 @@ export function ProfileMenu({ session, onLogout, logoutPending = false }: Profil
                 type="button"
                 onClick={() => {
                   setMenuOpen(false);
-                  navigate('/teams/new');
+                  if (location.pathname !== '/teams/new') {
+                    navigate('/teams/new', { state: { from: currentPath } });
+                  }
                 }}
                 className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 hover:text-zinc-950"
               >
                 <Plus className="h-3.5 w-3.5 text-zinc-500" />
-                Create Team
+                Create or Join Team
               </button>
 
               <div className="my-1 border-t border-zinc-100" />
@@ -346,13 +370,26 @@ export function ProfileMenu({ session, onLogout, logoutPending = false }: Profil
       {/* Switch Teams Modal */}
       {switchModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-5 text-zinc-900 shadow-xl">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Switch Teams"
+            className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-5 text-zinc-900 shadow-xl"
+          >
             <div className="flex items-center gap-2">
               <Users className="h-4 w-4 text-primary" />
               <h3 className="text-base font-bold text-zinc-950">Switch Teams</h3>
             </div>
             <p className="mt-1 text-xs text-zinc-500">
-              Choose which joined team workspace you want to open.
+              {teamsList.length === 0
+                ? 'No joined teams found yet.'
+                : teamsList.length === 1
+                  ? isInWorkspace
+                    ? 'You are currently in your only joined team. Create or join another team below.'
+                    : isOnOnboarding
+                      ? 'Select your joined team below to return to its workspace, or go back to your previous page.'
+                      : 'Select your joined team below to open its workspace, or create or join another team.'
+                  : 'Choose which joined team workspace you want to open.'}
             </p>
 
             {errorMsg && (
@@ -361,67 +398,113 @@ export function ProfileMenu({ session, onLogout, logoutPending = false }: Profil
               </Alert>
             )}
 
-            <div className="mt-3 grid max-h-72 gap-2 overflow-y-auto">
-              {teamsList.map((t) => {
-                const isCurrent = session.team?.id === t.teamId;
-                return (
-                  <button
-                    key={t.teamId}
-                    type="button"
-                    disabled={switchMutation.isPending}
-                    onClick={() => {
-                      if (isCurrent) {
-                        setSwitchModalOpen(false);
-                        return;
-                      }
-                      switchMutation.mutate(t.teamId);
-                    }}
-                    className={cn(
-                      'flex w-full cursor-pointer items-center justify-between rounded-lg border px-3 py-2.5 text-left transition-colors',
-                      isCurrent
-                        ? 'border-primary bg-accent/70'
-                        : 'border-zinc-200 bg-white hover:bg-zinc-50',
-                    )}
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold text-zinc-950">
-                        {t.teamName}
+            {teamsList.length === 0 ? (
+              <div className="mt-3 rounded-lg border border-dashed border-zinc-200 bg-zinc-50 px-3 py-4 text-center text-xs text-zinc-600">
+                You haven&apos;t joined any team yet. Create a new team or request to join one on
+                this page.
+              </div>
+            ) : (
+              <div className="mt-3 grid max-h-72 gap-2 overflow-y-auto">
+                {teamsList.map((t) => {
+                  const isCurrent = session.team?.id === t.teamId;
+                  return (
+                    <button
+                      key={t.teamId}
+                      type="button"
+                      disabled={switchMutation.isPending}
+                      onClick={() => {
+                        if (isCurrent && isInWorkspace) {
+                          setSwitchModalOpen(false);
+                          return;
+                        }
+                        switchMutation.mutate(t.teamId);
+                      }}
+                      className={cn(
+                        'flex w-full cursor-pointer items-center justify-between rounded-lg border px-3 py-2.5 text-left transition-colors',
+                        isCurrent
+                          ? 'border-primary bg-accent/70 hover:bg-accent'
+                          : 'border-zinc-200 bg-white hover:bg-zinc-50',
+                      )}
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-zinc-950">
+                          {t.teamName}
+                        </div>
+                        <div className="truncate text-xs text-zinc-500">
+                          Code: <span className="font-mono">{t.teamSlug}</span> · As {t.displayName}
+                        </div>
                       </div>
-                      <div className="truncate text-xs text-zinc-500">
-                        Code: <span className="font-mono">{t.teamSlug}</span> · As {t.displayName}
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <Badge variant={t.role === 'lead' ? 'default' : 'secondary'} size="sm">
+                          {t.role}
+                        </Badge>
+                        {!isInWorkspace ? (
+                          <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-primary">
+                            Open
+                            <ArrowRight className="h-3.5 w-3.5" />
+                          </span>
+                        ) : (
+                          isCurrent && <Check className="h-4 w-4 text-primary" />
+                        )}
                       </div>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1.5">
-                      <Badge variant={t.role === 'lead' ? 'default' : 'secondary'} size="sm">
-                        {t.role}
-                      </Badge>
-                      {isCurrent && <Check className="h-4 w-4 text-primary" />}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
-            <div className="mt-4 flex items-center justify-between border-t border-zinc-100 pt-3">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setSwitchModalOpen(false);
-                  navigate('/teams/new');
-                }}
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Create or Join Team
-              </Button>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-zinc-100 pt-3">
+              {!isOnOnboarding ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSwitchModalOpen(false);
+                    navigate('/teams/new', { state: { from: currentPath } });
+                  }}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Create or Join Team
+                </Button>
+              ) : previousPath ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={switchMutation.isPending}
+                  onClick={async () => {
+                    setErrorMsg(null);
+                    try {
+                      if (!session.team && teamsList.length > 0 && previousPath !== '/') {
+                        await activateTeamWorkspace(
+                          queryClient,
+                          teamsList[0]!.teamId,
+                          authApi.switchTeam,
+                        );
+                      }
+                      setSwitchModalOpen(false);
+                      navigate(previousPath);
+                    } catch (err) {
+                      setErrorMsg(
+                        err instanceof Error ? err.message : 'Could not open previous page',
+                      );
+                    }
+                  }}
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  Back to Previous Page
+                </Button>
+              ) : (
+                <span />
+              )}
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
                 onClick={() => setSwitchModalOpen(false)}
               >
-                Cancel
+                {teamsList.length === 0 ? 'Close' : 'Cancel'}
               </Button>
             </div>
           </div>
