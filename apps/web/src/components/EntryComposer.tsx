@@ -5,6 +5,7 @@ import { isNilCommunicationStatus } from '@cghq/document/model';
 import { findUnsupportedLatinChars } from '@cghq/document/date';
 import { List, Plus } from 'lucide-react';
 import { ApiError, frequentStatusesApi, reportsApi } from '../api/client.js';
+import { appendStatusSuggestion, StatusSuggestionChips } from './StatusSuggestions.js';
 import { Alert } from './ui/alert.js';
 import { Badge } from './ui/badge.js';
 import { Button } from './ui/button.js';
@@ -297,6 +298,7 @@ export function EntryComposer({
       setIsCustomTitle(false);
       setCommunicationType('');
       setStatusText('');
+      setStatusFocused(false);
       setCompletedByMemberIds(currentMemberId ? [currentMemberId] : []);
       try {
         window.localStorage.removeItem(draftKey);
@@ -571,42 +573,20 @@ export function EntryComposer({
                   required
                 />
               </div>
-              {statusFocused &&
-                !disabled &&
-                (() => {
-                  const selectedTitleId = activeCategories
-                    .find((c) => c.name === categoryName)
-                    ?.titles.find((t) => t.name === titleName)?.id;
-                  const filtered = frequentStatuses.filter(
-                    (item) =>
-                      item.titleIds.length === 0 ||
-                      (selectedTitleId ? item.titleIds.includes(selectedTitleId) : true),
-                  );
-                  if (filtered.length === 0) return null;
-                  return (
-                    <div className="absolute top-full left-0 right-0 z-30 mt-1 rounded-lg border border-zinc-200 bg-white p-2 shadow-lg">
-                      <div className="mb-1.5 px-1 text-[11px] font-semibold text-zinc-500">
-                        Frequently Used Statuses
-                      </div>
-                      <div className="flex max-h-44 flex-col gap-1 overflow-y-auto">
-                        {filtered.map((item) => (
-                          <button
-                            key={item.id}
-                            type="button"
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => {
-                              setStatusText(item.statusText);
-                              setStatusFocused(false);
-                            }}
-                            className="w-full cursor-pointer rounded-md border border-transparent px-2.5 py-1.5 text-left text-xs font-medium text-zinc-900 transition-colors hover:border-primary-border hover:bg-accent hover:text-accent-foreground"
-                          >
-                            {item.statusText}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })()}
+              {statusFocused && !disabled && (
+                <StatusSuggestionChips
+                  variant="popover"
+                  items={frequentStatuses}
+                  titleId={
+                    activeCategories
+                      .find((c) => c.name === categoryName)
+                      ?.titles.find((t) => t.name === titleName)?.id
+                  }
+                  showAllWhenNoTitle
+                  onPick={(picked) => setStatusText((prev) => appendStatusSuggestion(prev, picked))}
+                  onClose={() => setStatusFocused(false)}
+                />
+              )}
             </div>
 
             <Button

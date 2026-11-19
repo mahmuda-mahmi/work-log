@@ -35,6 +35,7 @@ import {
 } from '../api/client.js';
 import { EntryComposer } from '../components/EntryComposer.js';
 import { ReportPreview } from '../components/ReportPreview.js';
+import { appendStatusSuggestion, StatusSuggestionChips } from '../components/StatusSuggestions.js';
 import { ReportPageSkeleton } from '../components/WorkspaceSkeleton.js';
 import { Alert } from '../components/ui/alert.js';
 import { Badge } from '../components/ui/badge.js';
@@ -212,7 +213,6 @@ export function ReportScreen({ session }: ReportScreenProps) {
     queryKey: ['frequent-statuses', teamId],
     queryFn: () => frequentStatusesApi.list(teamId),
   });
-  const [quickAddStatusFocused, setQuickAddStatusFocused] = useState(false);
   const [dragMember, setDragMember] = useState<{ groupId: string; memberId: string } | null>(null);
   const [dragOverMember, setDragOverMember] = useState<{
     groupId: string;
@@ -958,6 +958,23 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                                   })
                                                 }
                                               />
+                                              <StatusSuggestionChips
+                                                items={frequentStatuses}
+                                                titleId={group.titleId}
+                                                onPick={(picked) =>
+                                                  setEditingEntry((prev) =>
+                                                    prev
+                                                      ? {
+                                                          ...prev,
+                                                          statusText: appendStatusSuggestion(
+                                                            prev.statusText,
+                                                            picked,
+                                                          ),
+                                                        }
+                                                      : prev,
+                                                  )
+                                                }
+                                              />
                                             </div>
 
                                             <div className="grid gap-1.5">
@@ -1488,11 +1505,6 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                     rows={2}
                                     className="min-w-0 flex-1"
                                     value={quickAdd.statusText}
-                                    onFocus={() => setQuickAddStatusFocused(true)}
-                                    onBlur={() => setQuickAddStatusFocused(false)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Escape') setQuickAddStatusFocused(false);
-                                    }}
                                     onChange={(e) =>
                                       setQuickAdd({ ...quickAdd, statusText: e.target.value })
                                     }
@@ -1504,40 +1516,23 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                     }
                                   />
                                 </div>
-                                {quickAddStatusFocused &&
-                                  (() => {
-                                    const rowSuggestions = frequentStatuses.filter(
-                                      (item) =>
-                                        item.titleIds.length === 0 ||
-                                        item.titleIds.includes(group.titleId),
-                                    );
-                                    if (rowSuggestions.length === 0) return null;
-                                    return (
-                                      <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                                        <span className="text-[11px] font-semibold text-zinc-500">
-                                          Frequently Used:
-                                        </span>
-                                        {rowSuggestions.map((item) => (
-                                          <button
-                                            key={item.id}
-                                            type="button"
-                                            onMouseDown={(e) => e.preventDefault()}
-                                            onClick={() => {
-                                              setQuickAdd({
-                                                ...quickAdd,
-                                                statusText: item.statusText,
-                                              });
-                                              setQuickAddStatusFocused(false);
-                                            }}
-                                            className="cursor-pointer rounded-md border border-primary-border bg-accent px-2.5 py-1 text-left text-xs font-medium text-accent-foreground transition-colors hover:bg-primary hover:text-white"
-                                            title="Click to paste into status box"
-                                          >
-                                            {item.statusText}
-                                          </button>
-                                        ))}
-                                      </div>
-                                    );
-                                  })()}
+                                <StatusSuggestionChips
+                                  items={frequentStatuses}
+                                  titleId={group.titleId}
+                                  onPick={(picked) =>
+                                    setQuickAdd((prev) =>
+                                      prev
+                                        ? {
+                                            ...prev,
+                                            statusText: appendStatusSuggestion(
+                                              prev.statusText,
+                                              picked,
+                                            ),
+                                          }
+                                        : prev,
+                                    )
+                                  }
+                                />
                               </div>
                               <div className="grid gap-1.5">
                                 <Label>Task Completed By (optional)</Label>
