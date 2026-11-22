@@ -211,7 +211,7 @@ export function ProfileMenu({ session, onLogout, logoutPending = false }: Profil
         </button>
 
         {menuOpen && (
-          <div className="absolute right-0 z-50 mt-2 w-60 rounded-lg border border-zinc-200 bg-white p-1.5 text-zinc-900 shadow-lg">
+          <div className="absolute right-0 z-50 mt-2 w-60 max-w-[calc(100vw-1.5rem)] rounded-lg border border-zinc-200 bg-white p-1.5 text-zinc-900 shadow-lg">
             <div className="border-b border-zinc-100 px-2.5 py-2">
               <div className="truncate text-xs font-bold text-zinc-950">
                 {session.member?.displayName || session.user.name}
@@ -295,7 +295,7 @@ export function ProfileMenu({ session, onLogout, logoutPending = false }: Profil
       {/* Change / Delete Profile Picture Modal */}
       {photoModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-5 text-zinc-900 shadow-xl">
+          <div className="max-h-[90dvh] w-full max-w-sm overflow-y-auto rounded-xl border border-zinc-200 bg-white p-5 text-zinc-900 shadow-xl">
             <h3 className="text-base font-bold text-zinc-950">Profile Picture</h3>
             <p className="mt-1 text-xs text-zinc-500">
               Upload a PNG or JPEG photo, or remove your current picture.
@@ -374,7 +374,7 @@ export function ProfileMenu({ session, onLogout, logoutPending = false }: Profil
             role="dialog"
             aria-modal="true"
             aria-label="Switch Teams"
-            className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-5 text-zinc-900 shadow-xl"
+            className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-xl border border-zinc-200 bg-white p-5 text-zinc-900 shadow-xl"
           >
             <div className="flex items-center gap-2">
               <Users className="h-4 w-4 text-primary" />
@@ -514,7 +514,7 @@ export function ProfileMenu({ session, onLogout, logoutPending = false }: Profil
       {/* Set / Change App Password Modal */}
       {passwordModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-5 text-zinc-900 shadow-xl">
+          <div className="max-h-[90dvh] w-full max-w-sm overflow-y-auto rounded-xl border border-zinc-200 bg-white p-5 text-zinc-900 shadow-xl">
             <div className="flex items-center gap-2">
               <KeyRound className="h-4 w-4 text-primary" />
               <h3 className="text-base font-bold text-zinc-950">

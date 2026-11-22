@@ -565,6 +565,463 @@ export function ReportScreen({ session }: ReportScreenProps) {
     };
   })();
 
+  function openQuickAdd(group: WorkGroupDto) {
+    setQuickAdd({
+      groupId: group.id,
+      categoryName: group.categoryName,
+      titleName: group.titleName,
+      communicationType: '',
+      statusText: '',
+      completedByMemberIds: session.member.id ? [session.member.id] : [],
+    });
+  }
+
+  function renderEditEntryBox(group: WorkGroupDto) {
+    if (!editingEntry) return null;
+    return (
+      <div className="grid gap-3 rounded-md border border-primary-border border-l-4 border-l-primary bg-white p-3">
+        {editingEntry.conflictCurrent && (
+          <Alert variant="warning" className="grid gap-2">
+            <div>
+              <strong>Edit conflict:</strong> Another member updated this entry.
+              <div className="mt-1 text-xs">
+                <em>Their version:</em> &ldquo;
+                {editingEntry.conflictCurrent.statusText}
+                &rdquo; (by {editingEntry.conflictCurrent.completedByDisplay})
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="xs"
+                onClick={() =>
+                  updateEntryMutation.mutate({
+                    entryId: editingEntry.entryId,
+                    statusText: editingEntry.statusText,
+                    completedByMemberId: editingEntry.completedByMemberId,
+                    completedByLabel: editingEntry.completedByLabel,
+                    version: editingEntry.conflictCurrent!.version,
+                  })
+                }
+              >
+                Keep Mine
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                onClick={() => {
+                  setEditingEntry(null);
+                  void queryClient.invalidateQueries({
+                    queryKey: ['report', teamId],
+                  });
+                }}
+              >
+                Take Theirs
+              </Button>
+            </div>
+          </Alert>
+        )}
+
+        <div className="grid gap-1.5">
+          <Label>Status</Label>
+          <Textarea
+            rows={3}
+            value={editingEntry.statusText}
+            onChange={(e) =>
+              setEditingEntry({
+                ...editingEntry,
+                statusText: e.target.value,
+              })
+            }
+          />
+          <StatusSuggestionChips
+            items={frequentStatuses}
+            value={editingEntry.statusText}
+            resetKey={`edit-${editingEntry.entryId}`}
+            titleId={group.titleId}
+            onPick={(picked) =>
+              setEditingEntry((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      statusText: appendStatusSuggestion(prev.statusText, picked),
+                    }
+                  : prev,
+              )
+            }
+          />
+        </div>
+
+        <div className="grid gap-1.5">
+          <Label>Task Completed By</Label>
+          <div className="flex flex-wrap gap-1.5">
+            {activeMembers.map((m) => {
+              const selected = editingEntry.completedByMemberId === m.id;
+              return (
+                <Button
+                  key={m.id}
+                  type="button"
+                  size="xs"
+                  variant={selected ? 'dark' : 'outline'}
+                  onClick={() =>
+                    setEditingEntry({
+                      ...editingEntry,
+                      completedByMemberId: selected ? null : m.id,
+                      completedByLabel: null,
+                    })
+                  }
+                >
+                  {m.displayName}
+                </Button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            disabled={updateEntryMutation.isPending}
+            onClick={() =>
+              updateEntryMutation.mutate({
+                entryId: editingEntry.entryId,
+                statusText: editingEntry.statusText,
+                completedByMemberId: editingEntry.completedByMemberId,
+                completedByLabel: editingEntry.completedByLabel,
+                version: editingEntry.version,
+              })
+            }
+          >
+            {updateEntryMutation.isPending ? 'Saving…' : 'Save'}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setEditingEntry(null)}
+          >
+            Cancel
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  function renderEditGroupBox(gIdx: number) {
+    if (!editingGroup) return null;
+    const editCat = activeCategories.find((c) => c.name === editingGroup.categoryName);
+    const editTitles = editCat?.titles ?? [];
+    return (
+      <div className="grid gap-3 rounded-md border border-primary-border border-l-4 border-l-primary bg-white p-3.5">
+        <div className="border-b border-zinc-100 pb-2 text-xs font-bold text-zinc-950">
+          Edit Category &amp; Title for Ser {gIdx + 1}
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid gap-1.5">
+            <Label>Report Category</Label>
+            <Select
+              value={editingGroup.categoryName}
+              onValueChange={(nextCatName) => {
+                const nextCat = activeCategories.find((c) => c.name === nextCatName);
+                setEditingGroup({
+                  ...editingGroup,
+                  categoryName: nextCatName,
+                  titleName: nextCat?.titles[0]?.name ?? editingGroup.titleName,
+                });
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {!activeCategories.some((c) => c.name === editingGroup.categoryName) && (
+                  <SelectItem value={editingGroup.categoryName}>
+                    {editingGroup.categoryName}
+                  </SelectItem>
+                )}
+                {activeCategories.map((c) => (
+                  <SelectItem key={c.id} value={c.name}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid gap-1.5">
+            <Label>Title</Label>
+            <Select
+              value={editingGroup.titleName}
+              onValueChange={(val) => setEditingGroup({ ...editingGroup, titleName: val })}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {!editTitles.some((t) => t.name === editingGroup.titleName) && (
+                  <SelectItem value={editingGroup.titleName}>{editingGroup.titleName}</SelectItem>
+                )}
+                {editTitles.map((t) => (
+                  <SelectItem key={t.id} value={t.name}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            disabled={updateGroupMutation.isPending}
+            onClick={() => updateGroupMutation.mutate(editingGroup)}
+          >
+            {updateGroupMutation.isPending ? 'Saving…' : 'Save Changes'}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setEditingGroup(null)}
+          >
+            Cancel
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  function renderQuickAddBox(group: WorkGroupDto, gIdx: number) {
+    if (!quickAdd) return null;
+    const isComm = quickAdd.categoryName.trim().toLowerCase() === 'communication';
+    return (
+      <div className="grid gap-3 rounded-md border border-primary-border border-l-4 border-l-primary bg-white p-3.5">
+        <div className="border-b border-zinc-100 pb-2 text-xs font-bold text-zinc-950">
+          Add Status to Ser {gIdx + 1} ({group.categoryName} / {group.titleName})
+        </div>
+        <div className="relative grid gap-1.5">
+          <Label>Status</Label>
+          <div className={isComm ? 'flex flex-col items-stretch gap-2 sm:flex-row sm:items-start' : 'grid'}>
+            {isComm && (
+              <Select
+                className="w-full shrink-0 sm:w-[148px]"
+                value={quickAdd.communicationType}
+                onValueChange={(val) => setQuickAdd({ ...quickAdd, communicationType: val })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Sailor / Officer" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Sailor">Sailor</SelectItem>
+                  <SelectItem value="Officer">Officer</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+            <Textarea
+              rows={2}
+              className="min-w-0 flex-1"
+              value={quickAdd.statusText}
+              onChange={(e) => setQuickAdd({ ...quickAdd, statusText: e.target.value })}
+              placeholder={
+                isComm ? 'Write details beside Sailor / Officer...' : 'Enter status...'
+              }
+            />
+          </div>
+          <StatusSuggestionChips
+            items={frequentStatuses}
+            value={quickAdd.statusText}
+            resetKey={`quick-${group.id}`}
+            titleId={group.titleId}
+            onPick={(picked) =>
+              setQuickAdd((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      statusText: appendStatusSuggestion(prev.statusText, picked),
+                    }
+                  : prev,
+              )
+            }
+          />
+        </div>
+        <div className="grid gap-1.5">
+          <Label>Task Completed By (optional)</Label>
+          <div className="flex flex-wrap gap-1.5">
+            {activeMembers.map((m) => {
+              const selected = quickAdd.completedByMemberIds.includes(m.id);
+              return (
+                <Button
+                  key={m.id}
+                  type="button"
+                  size="xs"
+                  variant={selected ? 'dark' : 'outline'}
+                  onClick={() => {
+                    const exists = quickAdd.completedByMemberIds.includes(m.id);
+                    const next = exists
+                      ? quickAdd.completedByMemberIds.filter((id) => id !== m.id)
+                      : [...quickAdd.completedByMemberIds, m.id];
+                    setQuickAdd({
+                      ...quickAdd,
+                      completedByMemberIds: next,
+                    });
+                  }}
+                >
+                  {m.displayName}
+                </Button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            disabled={quickAddMutation.isPending || !quickAdd.statusText.trim()}
+            onClick={() => quickAddMutation.mutate(quickAdd)}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            {quickAddMutation.isPending ? 'Adding…' : 'Add Status'}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setQuickAdd(null)}
+          >
+            Cancel
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  function renderMemberOrderBar(group: WorkGroupDto, baseEntries: WorkEntryDto[]) {
+    const groupMembers = Array.from(
+      new Map(
+        baseEntries
+          .filter((e) => e.completedByMemberId && e.completedByDisplay)
+          .map((e) => [e.completedByMemberId!, e.completedByDisplay]),
+      ).entries(),
+    );
+    if (baseEntries.length <= 1 || groupMembers.length < 2) {
+      return null;
+    }
+    const memberIdsOrder = groupMembers.map(([mId]) => mId);
+    return (
+      <div className="no-print flex flex-wrap items-center gap-1.5">
+        <span className="text-[11px] font-medium text-zinc-500">Member order:</span>
+        {groupMembers.map(([mId, mName], mIdx) => {
+          const isDragging = dragMember?.groupId === group.id && dragMember.memberId === mId;
+          const isDragTarget =
+            dragOverMember?.groupId === group.id &&
+            dragOverMember.memberId === mId &&
+            dragMember?.memberId !== mId;
+          return (
+            <div
+              key={mId}
+              draggable={!reorderEntriesMutation.isPending}
+              onDragStart={(e) => {
+                setDragMember({ groupId: group.id, memberId: mId });
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', mId);
+              }}
+              onDragOver={(e) => {
+                if (dragMember?.groupId === group.id && dragMember.memberId !== mId) {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  if (
+                    dragOverMember?.groupId !== group.id ||
+                    dragOverMember.memberId !== mId
+                  ) {
+                    setDragOverMember({ groupId: group.id, memberId: mId });
+                  }
+                }
+              }}
+              onDragLeave={() => {
+                if (
+                  dragOverMember?.groupId === group.id &&
+                  dragOverMember.memberId === mId
+                ) {
+                  setDragOverMember(null);
+                }
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                const draggedId = dragMember?.memberId;
+                const fromGroup = dragMember?.groupId;
+                setDragMember(null);
+                setDragOverMember(null);
+                if (fromGroup !== group.id || !draggedId || draggedId === mId) {
+                  return;
+                }
+                const fromIdx = memberIdsOrder.indexOf(draggedId);
+                const toIdx = memberIdsOrder.indexOf(mId);
+                if (fromIdx === -1 || toIdx === -1) return;
+                const nextOrder = [...memberIdsOrder];
+                const [moved] = nextOrder.splice(fromIdx, 1);
+                nextOrder.splice(toIdx, 0, moved!);
+                const ordered = orderEntriesByMemberSequence(baseEntries, nextOrder);
+                reorderEntriesMutation.mutate({
+                  groupId: group.id,
+                  ids: ordered.map((item) => item.id),
+                });
+              }}
+              onDragEnd={() => {
+                setDragMember(null);
+                setDragOverMember(null);
+              }}
+              className={cn(
+                'inline-flex cursor-grab items-center gap-0.5 rounded border bg-white px-1.5 py-0.5 text-[11px] text-zinc-800 shadow-2xs transition-colors active:cursor-grabbing',
+                isDragTarget ? 'border-primary bg-accent ring-1 ring-primary' : 'border-zinc-200',
+                isDragging && 'opacity-50',
+              )}
+            >
+              <GripVertical className="hidden h-3 w-3 shrink-0 text-zinc-400 sm:inline-block" />
+              <button
+                type="button"
+                title={`Move ${mName} earlier`}
+                disabled={mIdx === 0 || reorderEntriesMutation.isPending}
+                onClick={() => {
+                  const nextOrder = moveItem(memberIdsOrder, mIdx, -1);
+                  const ordered = orderEntriesByMemberSequence(baseEntries, nextOrder);
+                  reorderEntriesMutation.mutate({
+                    groupId: group.id,
+                    ids: ordered.map((item) => item.id),
+                  });
+                }}
+                className="rounded p-0.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-30"
+              >
+                <ArrowLeft className="h-3 w-3" />
+              </button>
+              <span className="px-1 font-medium select-none">
+                {mIdx + 1}. {mName}
+              </span>
+              <button
+                type="button"
+                title={`Move ${mName} later`}
+                disabled={mIdx === groupMembers.length - 1 || reorderEntriesMutation.isPending}
+                onClick={() => {
+                  const nextOrder = moveItem(memberIdsOrder, mIdx, 1);
+                  const ordered = orderEntriesByMemberSequence(baseEntries, nextOrder);
+                  reorderEntriesMutation.mutate({
+                    groupId: group.id,
+                    ids: ordered.map((item) => item.id),
+                  });
+                }}
+                className="rounded p-0.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-30"
+              >
+                <ArrowRight className="h-3 w-3" />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-3.5">
       {showNewDayBanner && (
@@ -584,7 +1041,7 @@ export function ReportScreen({ session }: ReportScreenProps) {
       <Card className="no-print">
         <CardContent className="flex flex-wrap items-center justify-between gap-3 p-3">
           <div className="flex flex-wrap items-center gap-2">
-            <label className="inline-flex h-8 items-center gap-2 text-xs font-semibold text-zinc-700">
+            <label className="flex flex-wrap items-center gap-2 text-xs font-semibold text-zinc-700 sm:inline-flex sm:h-8">
               <Calendar className="h-3.5 w-3.5 text-zinc-500" />
               <span>Report Date</span>
               <Input
@@ -730,8 +1187,272 @@ export function ReportScreen({ session }: ReportScreenProps) {
           </Badge>
         </CardHeader>
 
-        <CardContent className="p-3">
-          <div className="w-full overflow-x-auto rounded-md border border-zinc-200 bg-white">
+        <CardContent className="p-2.5 sm:p-3">
+          <div className="grid gap-3 md:hidden">
+            {report.groups.length === 0 && (
+              <div className="rounded-md border border-zinc-200 bg-white px-4 py-6 text-center text-sm text-zinc-500">
+                No rows added yet. Use <strong>Add Work Entry</strong> above to log your first entry.
+              </div>
+            )}
+            {report.groups.map((group, gIdx) => {
+              const isEditingThisGroup = editingGroup?.groupId === group.id;
+              const isQuickAdding = quickAdd?.groupId === group.id;
+              const baseEntries =
+                group.categoryName.trim().toLowerCase() === 'communication'
+                  ? sortCommunicationItems(group.entries)
+                  : group.entries;
+
+              return (
+                <div
+                  key={group.id}
+                  className="overflow-hidden rounded-lg border border-zinc-200 bg-white"
+                >
+                  <div className="flex flex-col gap-2 border-b border-zinc-200 bg-zinc-50 px-3 py-2.5">
+                    <div className="flex min-w-0 items-start gap-2">
+                      <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-primary-border bg-accent text-xs font-extrabold text-primary-text">
+                        {gIdx + 1}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-bold text-zinc-950">{group.categoryName}</div>
+                        <div className="text-xs font-medium leading-snug text-zinc-600">
+                          {group.titleName}
+                        </div>
+                      </div>
+                    </div>
+                    {!isFinalized && (
+                      <div className="flex flex-wrap items-center justify-end gap-1">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon-xs"
+                          title="Move row up"
+                          disabled={gIdx === 0 || reorderGroupsMutation.isPending}
+                          onClick={() =>
+                            reorderGroupsMutation.mutate(
+                              moveItem(report.groups, gIdx, -1).map((g) => g.id),
+                            )
+                          }
+                        >
+                          <ArrowUp className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon-xs"
+                          title="Move row down"
+                          disabled={
+                            gIdx === report.groups.length - 1 || reorderGroupsMutation.isPending
+                          }
+                          onClick={() =>
+                            reorderGroupsMutation.mutate(
+                              moveItem(report.groups, gIdx, 1).map((g) => g.id),
+                            )
+                          }
+                        >
+                          <ArrowDown className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="xs"
+                          title="Toggle numbered (1. 2. 3.) vs plain text"
+                          onClick={() =>
+                            toggleNumberingMutation.mutate({
+                              groupId: group.id,
+                              numberingMode:
+                                group.numberingMode === 'numbered' ? 'plain' : 'numbered',
+                            })
+                          }
+                        >
+                          {group.numberingMode === 'numbered' ? '1. 2. 3.' : 'Plain'}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon-xs"
+                          title="Edit category & title"
+                          onClick={() => startEditGroup(group)}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="icon-xs"
+                          title="Delete table row"
+                          disabled={deleteGroupMutation.isPending}
+                          onClick={() => setConfirmAction({ type: 'delete-group', group })}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
+                  {isEditingThisGroup && editingGroup && (
+                    <div className="border-b border-zinc-200 bg-zinc-50 p-2.5">
+                      {renderEditGroupBox(gIdx)}
+                    </div>
+                  )}
+
+                  {group.entries.length === 0 ? (
+                    <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5">
+                      <span className="text-xs text-zinc-500">No status added yet</span>
+                      {!isFinalized && (
+                        <Button type="button" size="xs" onClick={() => openQuickAdd(group)}>
+                          <Plus className="h-3 w-3" />
+                          Add Status
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-zinc-200">
+                      {baseEntries.map((entry, eIdx) => {
+                        const isEditingThis = editingEntry?.entryId === entry.id;
+                        const editable = canMutateEntry(entry);
+
+                        if (isEditingThis && editingEntry) {
+                          return (
+                            <div key={entry.id} className="bg-zinc-50 p-2.5">
+                              {renderEditEntryBox(group)}
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div key={entry.id} className="grid gap-2 p-3">
+                            <div className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-950">
+                              {group.numberingMode === 'numbered' ? (
+                                <span className="mr-1.5 font-bold text-primary-text">
+                                  {eIdx + 1}.
+                                </span>
+                              ) : null}
+                              {entry.statusText}
+                            </div>
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div>
+                                {!isNilCommunicationStatus(entry.statusText) &&
+                                entry.completedByDisplay ? (
+                                  <Badge variant="secondary" size="sm" className="normal-case">
+                                    {entry.completedByDisplay}
+                                  </Badge>
+                                ) : null}
+                              </div>
+                              {!isFinalized && (
+                                <div className="flex flex-wrap items-center gap-1">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon-xs"
+                                    title="Move status up"
+                                    disabled={eIdx === 0 || reorderEntriesMutation.isPending}
+                                    onClick={() =>
+                                      reorderEntriesMutation.mutate({
+                                        groupId: group.id,
+                                        ids: moveItem(baseEntries, eIdx, -1).map((item) => item.id),
+                                      })
+                                    }
+                                  >
+                                    <ArrowUp className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon-xs"
+                                    title="Move status down"
+                                    disabled={
+                                      eIdx === group.entries.length - 1 ||
+                                      reorderEntriesMutation.isPending
+                                    }
+                                    onClick={() =>
+                                      reorderEntriesMutation.mutate({
+                                        groupId: group.id,
+                                        ids: moveItem(baseEntries, eIdx, 1).map((item) => item.id),
+                                      })
+                                    }
+                                  >
+                                    <ArrowDown className="h-3 w-3" />
+                                  </Button>
+                                  {editable && (
+                                    <>
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="icon-xs"
+                                        title="Edit status"
+                                        onClick={() => startEditEntry(entry)}
+                                      >
+                                        <Pencil className="h-3 w-3" />
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="icon-xs"
+                                        title="Move to follow-up"
+                                        disabled={
+                                          promoteFollowupMutation.isPending ||
+                                          entry.id.startsWith('optimistic-')
+                                        }
+                                        onClick={() => {
+                                          setActionSuccess(null);
+                                          promoteFollowupMutation.mutate(entry.id);
+                                        }}
+                                      >
+                                        <Forward className="h-3 w-3" />
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="destructive"
+                                        size="icon-xs"
+                                        title="Delete status"
+                                        onClick={() =>
+                                          setConfirmAction({
+                                            type: 'delete-entry',
+                                            entryId: entry.id,
+                                          })
+                                        }
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                      </Button>
+                                    </>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {!isFinalized && group.entries.length > 0 && (
+                    <div className="flex flex-col gap-2 border-t border-zinc-200 bg-zinc-50 px-3 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="xs"
+                          onClick={() => openQuickAdd(group)}
+                        >
+                          <Plus className="h-3 w-3" />
+                          Add
+                        </Button>
+                      </div>
+                      {renderMemberOrderBar(group, baseEntries)}
+                    </div>
+                  )}
+
+                  {isQuickAdding && quickAdd && (
+                    <div className="border-t border-zinc-200 bg-zinc-50 p-2.5">
+                      {renderQuickAddBox(group, gIdx)}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="hidden w-full overflow-x-auto rounded-md border border-zinc-200 bg-white md:block">
             <table className="w-full table-fixed border-collapse text-sm">
               <thead>
                 <tr className="bg-zinc-950 text-white border-b-2 border-b-primary">
@@ -764,10 +1485,10 @@ export function ReportScreen({ session }: ReportScreenProps) {
                 {report.groups.map((group, gIdx) => {
                   const isEditingThisGroup = editingGroup?.groupId === group.id;
                   const isQuickAdding = quickAdd?.groupId === group.id;
-                  const editCat = activeCategories.find(
-                    (c) => c.name === editingGroup?.categoryName,
-                  );
-                  const editTitles = editCat?.titles ?? [];
+                  const baseEntries =
+                    group.categoryName.trim().toLowerCase() === 'communication'
+                      ? sortCommunicationItems(group.entries)
+                      : group.entries;
 
                   return (
                     <Fragment key={group.id}>
@@ -875,18 +1596,7 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                 <Button
                                   type="button"
                                   size="xs"
-                                  onClick={() =>
-                                    setQuickAdd({
-                                      groupId: group.id,
-                                      categoryName: group.categoryName,
-                                      titleName: group.titleName,
-                                      communicationType: '',
-                                      statusText: '',
-                                      completedByMemberIds: session.member.id
-                                        ? [session.member.id]
-                                        : [],
-                                    })
-                                  }
+                                  onClick={() => openQuickAdd(group)}
                                 >
                                   <Plus className="h-3 w-3" />
                                   Add Status
@@ -900,10 +1610,7 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                 <col style={{ width: '30%' }} />
                               </colgroup>
                               <tbody>
-                                {(group.categoryName.trim().toLowerCase() === 'communication'
-                                  ? sortCommunicationItems(group.entries)
-                                  : group.entries
-                                ).map((entry, eIdx) => {
+                                {baseEntries.map((entry, eIdx) => {
                                   const isEditingThis = editingEntry?.entryId === entry.id;
                                   const editable = canMutateEntry(entry);
 
@@ -914,149 +1621,7 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                         className="border-b border-zinc-200 last:border-b-0"
                                       >
                                         <td colSpan={2} className="bg-zinc-50 p-2.5">
-                                          <div className="grid gap-3 rounded-md border border-primary-border border-l-4 border-l-primary bg-white p-3">
-                                            {editingEntry.conflictCurrent && (
-                                              <Alert variant="warning" className="grid gap-2">
-                                                <div>
-                                                  <strong>Edit conflict:</strong> Another member
-                                                  updated this entry.
-                                                  <div className="mt-1 text-xs">
-                                                    <em>Their version:</em> &ldquo;
-                                                    {editingEntry.conflictCurrent.statusText}
-                                                    &rdquo; (by{' '}
-                                                    {
-                                                      editingEntry.conflictCurrent
-                                                        .completedByDisplay
-                                                    }
-                                                    )
-                                                  </div>
-                                                </div>
-                                                <div className="flex flex-wrap gap-2">
-                                                  <Button
-                                                    type="button"
-                                                    size="xs"
-                                                    onClick={() =>
-                                                      updateEntryMutation.mutate({
-                                                        entryId: editingEntry.entryId,
-                                                        statusText: editingEntry.statusText,
-                                                        completedByMemberId:
-                                                          editingEntry.completedByMemberId,
-                                                        completedByLabel:
-                                                          editingEntry.completedByLabel,
-                                                        version:
-                                                          editingEntry.conflictCurrent!.version,
-                                                      })
-                                                    }
-                                                  >
-                                                    Keep Mine
-                                                  </Button>
-                                                  <Button
-                                                    type="button"
-                                                    variant="outline"
-                                                    size="xs"
-                                                    onClick={() => {
-                                                      setEditingEntry(null);
-                                                      void queryClient.invalidateQueries({
-                                                        queryKey: ['report', teamId],
-                                                      });
-                                                    }}
-                                                  >
-                                                    Take Theirs
-                                                  </Button>
-                                                </div>
-                                              </Alert>
-                                            )}
-
-                                            <div className="grid gap-1.5">
-                                              <Label>Status</Label>
-                                              <Textarea
-                                                rows={3}
-                                                value={editingEntry.statusText}
-                                                onChange={(e) =>
-                                                  setEditingEntry({
-                                                    ...editingEntry,
-                                                    statusText: e.target.value,
-                                                  })
-                                                }
-                                              />
-                                              <StatusSuggestionChips
-                                                items={frequentStatuses}
-                                                value={editingEntry.statusText}
-                                                resetKey={`edit-${editingEntry.entryId}`}
-                                                titleId={group.titleId}
-                                                onPick={(picked) =>
-                                                  setEditingEntry((prev) =>
-                                                    prev
-                                                      ? {
-                                                          ...prev,
-                                                          statusText: appendStatusSuggestion(
-                                                            prev.statusText,
-                                                            picked,
-                                                          ),
-                                                        }
-                                                      : prev,
-                                                  )
-                                                }
-                                              />
-                                            </div>
-
-                                            <div className="grid gap-1.5">
-                                              <Label>Task Completed By</Label>
-                                              <div className="flex flex-wrap gap-1.5">
-                                                {activeMembers.map((m) => {
-                                                  const selected =
-                                                    editingEntry.completedByMemberId === m.id;
-                                                  return (
-                                                    <Button
-                                                      key={m.id}
-                                                      type="button"
-                                                      size="xs"
-                                                      variant={selected ? 'dark' : 'outline'}
-                                                      onClick={() =>
-                                                        setEditingEntry({
-                                                          ...editingEntry,
-                                                          completedByMemberId: selected
-                                                            ? null
-                                                            : m.id,
-                                                          completedByLabel: null,
-                                                        })
-                                                      }
-                                                    >
-                                                      {m.displayName}
-                                                    </Button>
-                                                  );
-                                                })}
-                                              </div>
-                                            </div>
-
-                                            <div className="flex items-center gap-2">
-                                              <Button
-                                                type="button"
-                                                size="sm"
-                                                disabled={updateEntryMutation.isPending}
-                                                onClick={() =>
-                                                  updateEntryMutation.mutate({
-                                                    entryId: editingEntry.entryId,
-                                                    statusText: editingEntry.statusText,
-                                                    completedByMemberId:
-                                                      editingEntry.completedByMemberId,
-                                                    completedByLabel: editingEntry.completedByLabel,
-                                                    version: editingEntry.version,
-                                                  })
-                                                }
-                                              >
-                                                {updateEntryMutation.isPending ? 'Saving…' : 'Save'}
-                                              </Button>
-                                              <Button
-                                                type="button"
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => setEditingEntry(null)}
-                                              >
-                                                Cancel
-                                              </Button>
-                                            </div>
-                                          </div>
+                                          {renderEditEntryBox(group)}
                                         </td>
                                       </tr>
                                     );
@@ -1089,14 +1654,9 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                               onClick={() =>
                                                 reorderEntriesMutation.mutate({
                                                   groupId: group.id,
-                                                  ids: moveItem(
-                                                    group.categoryName.trim().toLowerCase() ===
-                                                      'communication'
-                                                      ? sortCommunicationItems(group.entries)
-                                                      : group.entries,
-                                                    eIdx,
-                                                    -1,
-                                                  ).map((item) => item.id),
+                                                  ids: moveItem(baseEntries, eIdx, -1).map(
+                                                    (item) => item.id,
+                                                  ),
                                                 })
                                               }
                                             >
@@ -1114,14 +1674,9 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                               onClick={() =>
                                                 reorderEntriesMutation.mutate({
                                                   groupId: group.id,
-                                                  ids: moveItem(
-                                                    group.categoryName.trim().toLowerCase() ===
-                                                      'communication'
-                                                      ? sortCommunicationItems(group.entries)
-                                                      : group.entries,
-                                                    eIdx,
-                                                    1,
-                                                  ).map((item) => item.id),
+                                                  ids: moveItem(baseEntries, eIdx, 1).map(
+                                                    (item) => item.id,
+                                                  ),
                                                 })
                                               }
                                             >
@@ -1196,194 +1751,12 @@ export function ReportScreen({ session }: ReportScreenProps) {
                                           variant="outline"
                                           size="xs"
                                           title={`Add status to Ser ${gIdx + 1}`}
-                                          onClick={() =>
-                                            setQuickAdd({
-                                              groupId: group.id,
-                                              categoryName: group.categoryName,
-                                              titleName: group.titleName,
-                                              communicationType: '',
-                                              statusText: '',
-                                              completedByMemberIds: session.member.id
-                                                ? [session.member.id]
-                                                : [],
-                                            })
-                                          }
+                                          onClick={() => openQuickAdd(group)}
                                         >
                                           <Plus className="h-3 w-3" />
                                           Add
                                         </Button>
-                                        {(() => {
-                                          const baseEntries =
-                                            group.categoryName.trim().toLowerCase() ===
-                                            'communication'
-                                              ? sortCommunicationItems(group.entries)
-                                              : group.entries;
-                                          const groupMembers = Array.from(
-                                            new Map(
-                                              baseEntries
-                                                .filter(
-                                                  (e) =>
-                                                    e.completedByMemberId && e.completedByDisplay,
-                                                )
-                                                .map((e) => [
-                                                  e.completedByMemberId!,
-                                                  e.completedByDisplay,
-                                                ]),
-                                            ).entries(),
-                                          );
-                                          if (baseEntries.length <= 1 || groupMembers.length < 2) {
-                                            return null;
-                                          }
-                                          const memberIdsOrder = groupMembers.map(([mId]) => mId);
-                                          return (
-                                            <div className="no-print flex flex-wrap items-center gap-1.5">
-                                              <span className="text-[11px] font-medium text-zinc-500">
-                                                Member order (drag to reorder):
-                                              </span>
-                                              {groupMembers.map(([mId, mName], mIdx) => {
-                                                const isDragging =
-                                                  dragMember?.groupId === group.id &&
-                                                  dragMember.memberId === mId;
-                                                const isDragTarget =
-                                                  dragOverMember?.groupId === group.id &&
-                                                  dragOverMember.memberId === mId &&
-                                                  dragMember?.memberId !== mId;
-                                                return (
-                                                <div
-                                                  key={mId}
-                                                  draggable={!reorderEntriesMutation.isPending}
-                                                  onDragStart={(e) => {
-                                                    setDragMember({ groupId: group.id, memberId: mId });
-                                                    e.dataTransfer.effectAllowed = 'move';
-                                                    e.dataTransfer.setData('text/plain', mId);
-                                                  }}
-                                                  onDragOver={(e) => {
-                                                    if (
-                                                      dragMember?.groupId === group.id &&
-                                                      dragMember.memberId !== mId
-                                                    ) {
-                                                      e.preventDefault();
-                                                      e.dataTransfer.dropEffect = 'move';
-                                                      if (
-                                                        dragOverMember?.groupId !== group.id ||
-                                                        dragOverMember.memberId !== mId
-                                                      ) {
-                                                        setDragOverMember({
-                                                          groupId: group.id,
-                                                          memberId: mId,
-                                                        });
-                                                      }
-                                                    }
-                                                  }}
-                                                  onDragLeave={() => {
-                                                    if (
-                                                      dragOverMember?.groupId === group.id &&
-                                                      dragOverMember.memberId === mId
-                                                    ) {
-                                                      setDragOverMember(null);
-                                                    }
-                                                  }}
-                                                  onDrop={(e) => {
-                                                    e.preventDefault();
-                                                    const draggedId = dragMember?.memberId;
-                                                    const fromGroup = dragMember?.groupId;
-                                                    setDragMember(null);
-                                                    setDragOverMember(null);
-                                                    if (
-                                                      fromGroup !== group.id ||
-                                                      !draggedId ||
-                                                      draggedId === mId
-                                                    ) {
-                                                      return;
-                                                    }
-                                                    const fromIdx = memberIdsOrder.indexOf(draggedId);
-                                                    const toIdx = memberIdsOrder.indexOf(mId);
-                                                    if (fromIdx === -1 || toIdx === -1) return;
-                                                    const nextOrder = [...memberIdsOrder];
-                                                    const [moved] = nextOrder.splice(fromIdx, 1);
-                                                    nextOrder.splice(toIdx, 0, moved!);
-                                                    const ordered = orderEntriesByMemberSequence(
-                                                      baseEntries,
-                                                      nextOrder,
-                                                    );
-                                                    reorderEntriesMutation.mutate({
-                                                      groupId: group.id,
-                                                      ids: ordered.map((item) => item.id),
-                                                    });
-                                                  }}
-                                                  onDragEnd={() => {
-                                                    setDragMember(null);
-                                                    setDragOverMember(null);
-                                                  }}
-                                                  className={cn(
-                                                    'inline-flex cursor-grab items-center gap-0.5 rounded-md border bg-white px-1.5 py-0.5 text-xs text-zinc-800 shadow-2xs transition-colors active:cursor-grabbing',
-                                                    isDragTarget
-                                                      ? 'border-primary bg-accent ring-1 ring-primary'
-                                                      : 'border-zinc-200',
-                                                    isDragging && 'opacity-50',
-                                                  )}
-                                                >
-                                                  <GripVertical className="h-3 w-3 shrink-0 text-zinc-400" />
-                                                  <button
-                                                    type="button"
-                                                    title={`Move ${mName} earlier`}
-                                                    disabled={
-                                                      mIdx === 0 || reorderEntriesMutation.isPending
-                                                    }
-                                                    onClick={() => {
-                                                      const nextOrder = moveItem(
-                                                        memberIdsOrder,
-                                                        mIdx,
-                                                        -1,
-                                                      );
-                                                      const ordered = orderEntriesByMemberSequence(
-                                                        baseEntries,
-                                                        nextOrder,
-                                                      );
-                                                      reorderEntriesMutation.mutate({
-                                                        groupId: group.id,
-                                                        ids: ordered.map((item) => item.id),
-                                                      });
-                                                    }}
-                                                    className="rounded p-0.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-30"
-                                                  >
-                                                    <ArrowLeft className="h-3 w-3" />
-                                                  </button>
-                                                  <span className="px-1 font-medium select-none">
-                                                    {mIdx + 1}. {mName}
-                                                  </span>
-                                                  <button
-                                                    type="button"
-                                                    title={`Move ${mName} later`}
-                                                    disabled={
-                                                      mIdx === groupMembers.length - 1 ||
-                                                      reorderEntriesMutation.isPending
-                                                    }
-                                                    onClick={() => {
-                                                      const nextOrder = moveItem(
-                                                        memberIdsOrder,
-                                                        mIdx,
-                                                        1,
-                                                      );
-                                                      const ordered = orderEntriesByMemberSequence(
-                                                        baseEntries,
-                                                        nextOrder,
-                                                      );
-                                                      reorderEntriesMutation.mutate({
-                                                        groupId: group.id,
-                                                        ids: ordered.map((item) => item.id),
-                                                      });
-                                                    }}
-                                                    className="rounded p-0.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-30"
-                                                  >
-                                                    <ArrowRight className="h-3 w-3" />
-                                                  </button>
-                                                </div>
-                                                );
-                                              })}
-                                            </div>
-                                          );
-                                        })()}
+                                        {renderMemberOrderBar(group, baseEntries)}
                                       </div>
                                     </td>
                                   </tr>
@@ -1397,94 +1770,7 @@ export function ReportScreen({ session }: ReportScreenProps) {
                       {isEditingThisGroup && editingGroup && (
                         <tr className="border-b border-zinc-200">
                           <td colSpan={5} className="bg-zinc-50 p-3">
-                            <div className="grid gap-3 rounded-md border border-primary-border border-l-4 border-l-primary bg-white p-3.5">
-                              <div className="border-b border-zinc-100 pb-2 text-xs font-bold text-zinc-950">
-                                Edit Category &amp; Title for Ser {gIdx + 1}
-                              </div>
-                              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                <div className="grid gap-1.5">
-                                  <Label>Report Category</Label>
-                                  <Select
-                                    value={editingGroup.categoryName}
-                                    onValueChange={(nextCatName) => {
-                                      const nextCat = activeCategories.find(
-                                        (c) => c.name === nextCatName,
-                                      );
-                                      setEditingGroup({
-                                        ...editingGroup,
-                                        categoryName: nextCatName,
-                                        titleName:
-                                          nextCat?.titles[0]?.name ?? editingGroup.titleName,
-                                      });
-                                    }}
-                                  >
-                                    <SelectTrigger>
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {!activeCategories.some(
-                                        (c) => c.name === editingGroup.categoryName,
-                                      ) && (
-                                        <SelectItem value={editingGroup.categoryName}>
-                                          {editingGroup.categoryName}
-                                        </SelectItem>
-                                      )}
-                                      {activeCategories.map((c) => (
-                                        <SelectItem key={c.id} value={c.name}>
-                                          {c.name}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-
-                                <div className="grid gap-1.5">
-                                  <Label>Title</Label>
-                                  <Select
-                                    value={editingGroup.titleName}
-                                    onValueChange={(val) =>
-                                      setEditingGroup({ ...editingGroup, titleName: val })
-                                    }
-                                  >
-                                    <SelectTrigger>
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {!editTitles.some(
-                                        (t) => t.name === editingGroup.titleName,
-                                      ) && (
-                                        <SelectItem value={editingGroup.titleName}>
-                                          {editingGroup.titleName}
-                                        </SelectItem>
-                                      )}
-                                      {editTitles.map((t) => (
-                                        <SelectItem key={t.id} value={t.name}>
-                                          {t.name}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  disabled={updateGroupMutation.isPending}
-                                  onClick={() => updateGroupMutation.mutate(editingGroup)}
-                                >
-                                  {updateGroupMutation.isPending ? 'Saving…' : 'Save Changes'}
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => setEditingGroup(null)}
-                                >
-                                  Cancel
-                                </Button>
-                              </div>
-                            </div>
+                            {renderEditGroupBox(gIdx)}
                           </td>
                         </tr>
                       )}
@@ -1492,127 +1778,7 @@ export function ReportScreen({ session }: ReportScreenProps) {
                       {isQuickAdding && quickAdd && (
                         <tr className="border-b border-zinc-200">
                           <td colSpan={5} className="bg-zinc-50 p-3">
-                            <div className="grid gap-3 rounded-md border border-primary-border border-l-4 border-l-primary bg-white p-3.5">
-                              <div className="border-b border-zinc-100 pb-2 text-xs font-bold text-zinc-950">
-                                Add Status to Ser {gIdx + 1} ({group.categoryName} /{' '}
-                                {group.titleName})
-                              </div>
-                              <div className="relative grid gap-1.5">
-                                <Label>Status</Label>
-                                <div
-                                  className={
-                                    quickAdd.categoryName.trim().toLowerCase() === 'communication'
-                                      ? 'flex items-start gap-2'
-                                      : 'grid'
-                                  }
-                                >
-                                  {quickAdd.categoryName.trim().toLowerCase() ===
-                                    'communication' && (
-                                    <Select
-                                      className="w-[148px] shrink-0"
-                                      value={quickAdd.communicationType}
-                                      onValueChange={(val) =>
-                                        setQuickAdd({ ...quickAdd, communicationType: val })
-                                      }
-                                    >
-                                      <SelectTrigger>
-                                        <SelectValue placeholder="Sailor / Officer" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="Sailor">Sailor</SelectItem>
-                                        <SelectItem value="Officer">Officer</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                  )}
-                                  <Textarea
-                                    rows={2}
-                                    className="min-w-0 flex-1"
-                                    value={quickAdd.statusText}
-                                    onChange={(e) =>
-                                      setQuickAdd({ ...quickAdd, statusText: e.target.value })
-                                    }
-                                    placeholder={
-                                      quickAdd.categoryName.trim().toLowerCase() ===
-                                      'communication'
-                                        ? 'Write details beside Sailor / Officer...'
-                                        : 'Enter status...'
-                                    }
-                                  />
-                                </div>
-                                <StatusSuggestionChips
-                                  items={frequentStatuses}
-                                  value={quickAdd.statusText}
-                                  resetKey={`quick-${group.id}`}
-                                  titleId={group.titleId}
-                                  onPick={(picked) =>
-                                    setQuickAdd((prev) =>
-                                      prev
-                                        ? {
-                                            ...prev,
-                                            statusText: appendStatusSuggestion(
-                                              prev.statusText,
-                                              picked,
-                                            ),
-                                          }
-                                        : prev,
-                                    )
-                                  }
-                                />
-                              </div>
-                              <div className="grid gap-1.5">
-                                <Label>Task Completed By (optional)</Label>
-                                <div className="flex flex-wrap gap-1.5">
-                                  {activeMembers.map((m) => {
-                                    const selected = quickAdd.completedByMemberIds.includes(m.id);
-                                    return (
-                                      <Button
-                                        key={m.id}
-                                        type="button"
-                                        size="xs"
-                                        variant={selected ? 'dark' : 'outline'}
-                                        onClick={() => {
-                                          const exists = quickAdd.completedByMemberIds.includes(
-                                            m.id,
-                                          );
-                                          const next = exists
-                                            ? quickAdd.completedByMemberIds.filter(
-                                                (id) => id !== m.id,
-                                              )
-                                            : [...quickAdd.completedByMemberIds, m.id];
-                                          setQuickAdd({
-                                            ...quickAdd,
-                                            completedByMemberIds: next,
-                                          });
-                                        }}
-                                      >
-                                        {m.displayName}
-                                      </Button>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  disabled={
-                                    quickAddMutation.isPending || !quickAdd.statusText.trim()
-                                  }
-                                  onClick={() => quickAddMutation.mutate(quickAdd)}
-                                >
-                                  <Plus className="h-3.5 w-3.5" />
-                                  {quickAddMutation.isPending ? 'Adding…' : 'Add Status'}
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => setQuickAdd(null)}
-                                >
-                                  Cancel
-                                </Button>
-                              </div>
-                            </div>
+                            {renderQuickAddBox(group, gIdx)}
                           </td>
                         </tr>
                       )}
@@ -1637,6 +1803,9 @@ export function ReportScreen({ session }: ReportScreenProps) {
               : 'Showing entries of the whole team; auto-syncs every 30s.'}
           </span>
         </div>
+        <p className="no-print text-[11px] text-zinc-500 sm:hidden">
+          Swipe horizontally inside the preview sheet to inspect the full report width.
+        </p>
         <ReportPreview
           report={report}
           documentTitle={session.team.documentTitle}
@@ -1651,7 +1820,7 @@ export function ReportScreen({ session }: ReportScreenProps) {
         !setupDismissed &&
         session.member.role === 'lead' && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="w-full max-w-2xl rounded-xl border border-zinc-200 bg-white p-5 text-zinc-900 shadow-xl">
+            <div className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-xl border border-zinc-200 bg-white p-5 text-zinc-900 shadow-xl">
               <h3 className="text-base font-bold text-zinc-950">
                 Set Up Categories &amp; Titles for {session.team.name}
               </h3>

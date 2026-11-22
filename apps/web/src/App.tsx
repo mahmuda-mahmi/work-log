@@ -180,28 +180,28 @@ function AuthenticatedShell() {
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50">
       <header className="no-print sticky top-0 z-40 w-full border-t-[3px] border-t-primary border-b border-b-zinc-800 bg-zinc-950 text-white shadow-sm">
-        <div className="mx-auto flex min-h-14 w-full max-w-[1440px] flex-wrap items-center justify-between gap-3 px-4 py-1.5 sm:px-6">
-          <div className="flex items-center gap-3 min-w-0">
+        <div className="mx-auto flex min-h-14 w-full max-w-[1440px] flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3 py-2 sm:px-6 md:flex-nowrap md:py-1.5">
+          <div className="order-1 flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3 md:flex-initial">
             <Link
               to="/"
               title="Back to Landing Page"
-              className="flex h-9 shrink-0 items-center justify-center rounded-md border border-zinc-800 bg-white px-2.5 transition-opacity hover:opacity-90"
+              className="flex h-8 shrink-0 items-center justify-center rounded-md border border-zinc-800 bg-white px-2 transition-opacity hover:opacity-90 sm:h-9 sm:px-2.5"
             >
               <img
                 src="/default-logo.png"
                 alt="Solution Art"
-                className="h-6 w-auto object-contain"
+                className="h-5 w-auto object-contain sm:h-6"
               />
             </Link>
             <div className="flex flex-col min-w-0">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2">
                 <span className="truncate text-sm font-bold tracking-tight text-white">
                   {activeSession.team.name}
                 </span>
                 <Badge
                   variant={activeSession.member.role === 'lead' ? 'default' : 'secondary'}
                   className={cn(
-                    'h-5 px-1.5 text-[10px]',
+                    'h-5 shrink-0 px-1.5 text-[10px]',
                     activeSession.member.role === 'lead'
                       ? 'border-primary/40 bg-primary/20 text-primary'
                       : 'border-zinc-700 bg-zinc-800 text-zinc-200',
@@ -216,13 +216,25 @@ function AuthenticatedShell() {
             </div>
           </div>
 
-          <nav className="flex flex-wrap items-center gap-1" aria-label="Main navigation">
+          <div className="order-2 flex shrink-0 items-center gap-1.5 md:order-3">
+            <span className="mx-1 hidden h-5 w-px bg-zinc-800 md:inline-block" aria-hidden />
+            <ProfileMenu
+              session={activeSession}
+              onLogout={() => logoutMutation.mutate()}
+              logoutPending={logoutMutation.isPending}
+            />
+          </div>
+
+          <nav
+            className="order-3 flex w-full items-center gap-1 border-t border-zinc-800/80 pt-2 md:order-2 md:ml-auto md:w-auto md:border-t-0 md:pt-0"
+            aria-label="Main navigation"
+          >
             {navItems.map((item) => (
               <Link
                 key={item.to}
                 to={item.to}
                 className={cn(
-                  'inline-flex h-8 items-center justify-center rounded-md px-3 text-xs font-medium transition-colors whitespace-nowrap',
+                  'inline-flex h-9 flex-1 items-center justify-center rounded-md px-2 text-xs font-medium transition-colors whitespace-nowrap md:h-8 md:flex-initial md:px-3',
                   item.active
                     ? 'bg-primary text-white font-bold'
                     : 'text-zinc-400 hover:bg-zinc-900 hover:text-white',
@@ -231,17 +243,11 @@ function AuthenticatedShell() {
                 {item.label}
               </Link>
             ))}
-            <span className="mx-1.5 hidden h-5 w-px bg-zinc-800 sm:inline-block" aria-hidden />
-            <ProfileMenu
-              session={activeSession}
-              onLogout={() => logoutMutation.mutate()}
-              logoutPending={logoutMutation.isPending}
-            />
           </nav>
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-4 sm:px-6 sm:py-5">
+      <main className="mx-auto w-full max-w-[1440px] flex-1 px-3 py-3 sm:px-6 sm:py-5">
         <Suspense fallback={<PageCardSkeleton rows={5} />}>
           <Routes>
             <Route path="/today" element={<ReportScreen session={activeSession} />} />

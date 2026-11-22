@@ -55,7 +55,7 @@ export function DialogContent({
         role="dialog"
         aria-modal="true"
         className={cn(
-          'relative z-10 grid w-full max-w-md gap-4 rounded-lg border border-zinc-200 border-t-4 border-t-primary bg-white p-6 shadow-xl',
+          'relative z-10 grid max-h-[90dvh] w-full max-w-md gap-4 overflow-y-auto rounded-lg border border-zinc-200 border-t-4 border-t-primary bg-white p-5 shadow-xl sm:p-6',
           className,
         )}
       >

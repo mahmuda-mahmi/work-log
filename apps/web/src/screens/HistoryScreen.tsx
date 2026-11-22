@@ -83,40 +83,21 @@ export function HistoryScreen({ session }: HistoryScreenProps) {
           ) : rows.length === 0 ? (
             <p className="text-sm text-zinc-500">No daily reports created yet.</p>
           ) : (
-            <div className="w-full overflow-x-auto rounded-md border border-zinc-200 bg-white">
-              <table className="w-full table-fixed border-collapse text-sm">
-                <thead>
-                  <tr className="bg-zinc-950 text-white border-b-2 border-b-primary">
-                    <th className="w-[16%] border-r border-zinc-800 px-3 py-2.5 text-left text-xs font-bold">
-                      Date
-                    </th>
-                    <th className="w-[14%] border-r border-zinc-800 px-3 py-2.5 text-left text-xs font-bold">
-                      Status
-                    </th>
-                    <th className="w-[10%] border-r border-zinc-800 px-3 py-2.5 text-left text-xs font-bold">
-                      Rev
-                    </th>
-                    <th className="w-[12%] border-r border-zinc-800 px-3 py-2.5 text-left text-xs font-bold">
-                      Entries
-                    </th>
-                    <th className="w-[20%] border-r border-zinc-800 px-3 py-2.5 text-left text-xs font-bold">
-                      Prepared By
-                    </th>
-                    <th className="w-[28%] px-3 py-2.5 text-right text-xs font-bold">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => (
-                    <tr key={row.id} className="border-b border-zinc-200 last:border-b-0">
-                      <td className="border-r border-zinc-200 px-3 py-2.5 font-bold">
-                        <Link
-                          to={`/reports/${row.reportDate}`}
-                          className="text-zinc-950 hover:text-primary-text hover:underline"
-                        >
-                          {row.reportDate}
-                        </Link>
-                      </td>
-                      <td className="border-r border-zinc-200 px-3 py-2.5">
+            <>
+              <div className="grid gap-2.5 md:hidden">
+                {rows.map((row) => (
+                  <div
+                    key={row.id}
+                    className="grid gap-2.5 rounded-lg border border-zinc-200 bg-white p-3"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <Link
+                        to={`/reports/${row.reportDate}`}
+                        className="text-sm font-bold text-zinc-950 hover:text-primary-text hover:underline"
+                      >
+                        {row.reportDate}
+                      </Link>
+                      <div className="flex items-center gap-1.5">
                         <Badge
                           variant={
                             row.status === 'finalized'
@@ -129,63 +110,162 @@ export function HistoryScreen({ session }: HistoryScreenProps) {
                         >
                           {row.status}
                         </Badge>
-                      </td>
-                      <td className="border-r border-zinc-200 px-3 py-2.5">
                         <Badge variant="secondary" size="sm">
                           rev {row.revision}
                         </Badge>
-                      </td>
-                      <td className="border-r border-zinc-200 px-3 py-2.5 text-zinc-700">
-                        {row.entryCount}
-                      </td>
-                      <td className="border-r border-zinc-200 px-3 py-2.5 text-zinc-700">
-                        {row.preparedByName}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <div className="flex flex-wrap items-center justify-end gap-1.5">
-                          <Link
-                            className={buttonVariants({ variant: 'outline', size: 'xs' })}
-                            to={`/reports/${row.reportDate}`}
+                      </div>
+                    </div>
+                    <div className="text-xs text-zinc-600">
+                      {row.entryCount} entries · Prepared by{' '}
+                      <strong className="text-zinc-900">{row.preparedByName}</strong>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5 border-t border-zinc-100 pt-2">
+                      <Link
+                        className={buttonVariants({ variant: 'outline', size: 'xs' })}
+                        to={`/reports/${row.reportDate}`}
+                      >
+                        Open
+                      </Link>
+                      {row.status === 'finalized' && (
+                        <>
+                          <a
+                            className={buttonVariants({ variant: 'dark', size: 'xs' })}
+                            href={reportsApi.getExportUrl(teamId, row.reportDate, 'pdf')}
                           >
-                            Open
-                          </Link>
-                          {row.status === 'finalized' && (
-                            <>
-                              <a
-                                className={buttonVariants({ variant: 'dark', size: 'xs' })}
-                                href={reportsApi.getExportUrl(teamId, row.reportDate, 'pdf')}
-                              >
-                                <Download className="h-3 w-3" />
-                                PDF
-                              </a>
-                              <a
-                                className={buttonVariants({ variant: 'outline', size: 'xs' })}
-                                href={reportsApi.getExportUrl(teamId, row.reportDate, 'docx')}
-                              >
-                                <Download className="h-3 w-3" />
-                                DOCX
-                              </a>
-                            </>
-                          )}
-                          {session.member.role === 'lead' && (
-                            <Button
-                              type="button"
-                              variant="destructive"
-                              size="xs"
-                              disabled={deleteMutation.isPending}
-                              onClick={() => setDeleteDate(row.reportDate)}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                              Delete
-                            </Button>
-                          )}
-                        </div>
-                      </td>
+                            <Download className="h-3 w-3" />
+                            PDF
+                          </a>
+                          <a
+                            className={buttonVariants({ variant: 'outline', size: 'xs' })}
+                            href={reportsApi.getExportUrl(teamId, row.reportDate, 'docx')}
+                          >
+                            <Download className="h-3 w-3" />
+                            DOCX
+                          </a>
+                        </>
+                      )}
+                      {session.member.role === 'lead' && (
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="xs"
+                          className="ml-auto"
+                          disabled={deleteMutation.isPending}
+                          onClick={() => setDeleteDate(row.reportDate)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          Delete
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="hidden w-full overflow-x-auto rounded-md border border-zinc-200 bg-white md:block">
+                <table className="w-full table-fixed border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-zinc-950 text-white border-b-2 border-b-primary">
+                      <th className="w-[16%] border-r border-zinc-800 px-3 py-2.5 text-left text-xs font-bold">
+                        Date
+                      </th>
+                      <th className="w-[14%] border-r border-zinc-800 px-3 py-2.5 text-left text-xs font-bold">
+                        Status
+                      </th>
+                      <th className="w-[10%] border-r border-zinc-800 px-3 py-2.5 text-left text-xs font-bold">
+                        Rev
+                      </th>
+                      <th className="w-[12%] border-r border-zinc-800 px-3 py-2.5 text-left text-xs font-bold">
+                        Entries
+                      </th>
+                      <th className="w-[20%] border-r border-zinc-800 px-3 py-2.5 text-left text-xs font-bold">
+                        Prepared By
+                      </th>
+                      <th className="w-[28%] px-3 py-2.5 text-right text-xs font-bold">Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {rows.map((row) => (
+                      <tr key={row.id} className="border-b border-zinc-200 last:border-b-0">
+                        <td className="border-r border-zinc-200 px-3 py-2.5 font-bold">
+                          <Link
+                            to={`/reports/${row.reportDate}`}
+                            className="text-zinc-950 hover:text-primary-text hover:underline"
+                          >
+                            {row.reportDate}
+                          </Link>
+                        </td>
+                        <td className="border-r border-zinc-200 px-3 py-2.5">
+                          <Badge
+                            variant={
+                              row.status === 'finalized'
+                                ? 'dark'
+                                : row.status === 'reopened'
+                                  ? 'warning'
+                                  : 'default'
+                            }
+                            size="sm"
+                          >
+                            {row.status}
+                          </Badge>
+                        </td>
+                        <td className="border-r border-zinc-200 px-3 py-2.5">
+                          <Badge variant="secondary" size="sm">
+                            rev {row.revision}
+                          </Badge>
+                        </td>
+                        <td className="border-r border-zinc-200 px-3 py-2.5 text-zinc-700">
+                          {row.entryCount}
+                        </td>
+                        <td className="border-r border-zinc-200 px-3 py-2.5 text-zinc-700">
+                          {row.preparedByName}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <div className="flex flex-wrap items-center justify-end gap-1.5">
+                            <Link
+                              className={buttonVariants({ variant: 'outline', size: 'xs' })}
+                              to={`/reports/${row.reportDate}`}
+                            >
+                              Open
+                            </Link>
+                            {row.status === 'finalized' && (
+                              <>
+                                <a
+                                  className={buttonVariants({ variant: 'dark', size: 'xs' })}
+                                  href={reportsApi.getExportUrl(teamId, row.reportDate, 'pdf')}
+                                >
+                                  <Download className="h-3 w-3" />
+                                  PDF
+                                </a>
+                                <a
+                                  className={buttonVariants({ variant: 'outline', size: 'xs' })}
+                                  href={reportsApi.getExportUrl(teamId, row.reportDate, 'docx')}
+                                >
+                                  <Download className="h-3 w-3" />
+                                  DOCX
+                                </a>
+                              </>
+                            )}
+                            {session.member.role === 'lead' && (
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="xs"
+                                disabled={deleteMutation.isPending}
+                                onClick={() => setDeleteDate(row.reportDate)}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                                Delete
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

@@ -159,7 +159,12 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
   const [activeTab, setActiveTab] = useState<SettingsTabId>('team');
   const [appearance, setAppearance] = useState(() => readAppearancePrefs());
   const tabRefs = useRef<Partial<Record<SettingsTabId, HTMLButtonElement | null>>>({});
-  const [pill, setPill] = useState<{ left: number; width: number }>({ left: 4, width: 0 });
+  const [pill, setPill] = useState<{ left: number; top: number; width: number; height: number }>({
+    left: 4,
+    top: 4,
+    width: 0,
+    height: 0,
+  });
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [pwError, setPwError] = useState<string | null>(null);
@@ -201,7 +206,12 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
     function measure() {
       const btn = tabRefs.current[activeTab];
       if (btn) {
-        setPill({ left: btn.offsetLeft, width: btn.offsetWidth });
+        setPill({
+          left: btn.offsetLeft,
+          top: btn.offsetTop,
+          width: btn.offsetWidth,
+          height: btn.offsetHeight,
+        });
       }
     }
     measure();
@@ -465,15 +475,16 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
         <div
           role="tablist"
           aria-label="Settings sections"
-          className="relative inline-flex max-w-full flex-wrap items-center gap-1 rounded-xl border border-zinc-200 bg-zinc-100 p-1 shadow-xs"
+          className="relative grid w-full grid-cols-2 items-center gap-1 rounded-xl border border-zinc-200 bg-zinc-100 p-1 shadow-xs sm:inline-flex sm:w-auto sm:flex-nowrap sm:whitespace-nowrap"
         >
           {pill.width > 0 && (
             <span
               aria-hidden
-              className="pointer-events-none absolute top-1 bottom-1 left-0 rounded-lg bg-primary shadow-sm transition-[transform,width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+              className="pointer-events-none absolute top-0 left-0 rounded-lg bg-primary shadow-sm transition-[transform,width,height] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
               style={{
                 width: `${pill.width}px`,
-                transform: `translateX(${pill.left}px)`,
+                height: `${pill.height}px`,
+                transform: `translate3d(${pill.left}px, ${pill.top}px, 0)`,
               }}
             />
           )}
@@ -491,7 +502,7 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
                 aria-selected={selected}
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  'relative z-10 inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-colors duration-200 whitespace-nowrap',
+                  'relative z-10 inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition-colors duration-200 whitespace-nowrap sm:justify-start sm:px-3',
                   selected ? 'text-white' : 'text-zinc-600 hover:text-zinc-950',
                 )}
               >
@@ -770,19 +781,19 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
                   .map((m) => (
                   <li
                     key={m.id}
-                    className="flex flex-wrap items-center justify-between gap-2.5 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2.5"
+                    className="flex flex-col gap-2.5 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
                   >
-                    <div>
+                    <div className="min-w-0 sm:flex-1">
                       <div className="flex items-center gap-2">
-                        <strong className="text-sm text-zinc-950">{m.displayName}</strong>
+                        <strong className="truncate text-sm text-zinc-950">{m.displayName}</strong>
                         <Badge
                           variant={m.role === 'lead' ? 'default' : 'secondary'}
-                          className="h-5 px-1.5 text-[10px]"
+                          className="h-5 shrink-0 px-1.5 text-[10px]"
                         >
                           {m.role}
                         </Badge>
                       </div>
-                      <div className="text-xs text-zinc-500">
+                      <div className="break-all text-xs text-zinc-500">
                         {m.email} {!m.isActive && '· Inactive'}
                       </div>
                     </div>
@@ -833,7 +844,7 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
                     <Input
                       readOnly
                       value={resetLink}
-                      className="h-8 font-mono text-xs"
+                      className="h-8 min-w-0 flex-1 font-mono text-xs"
                       onFocus={(e) => e.currentTarget.select()}
                     />
                     <Button
@@ -864,7 +875,7 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
                       <Input
                         readOnly
                         value={session.team.slug}
-                        className="h-8 max-w-xs font-mono text-xs"
+                        className="h-8 min-w-0 flex-1 max-w-xs font-mono text-xs"
                         onFocus={(e) => e.currentTarget.select()}
                       />
                       <Button
@@ -905,7 +916,7 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
                           <Input
                             readOnly
                             value={joinLink}
-                            className="h-8 font-mono text-xs"
+                            className="h-8 min-w-0 flex-1 font-mono text-xs"
                             onFocus={(e) => e.currentTarget.select()}
                           />
                           <Button
@@ -932,13 +943,13 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
                         {joinRequests.map((reqItem) => (
                           <div
                             key={reqItem.id}
-                            className="flex flex-wrap items-center justify-between gap-2 p-2.5"
+                            className="flex flex-col gap-2 p-2.5 sm:flex-row sm:items-center sm:justify-between"
                           >
-                            <div className="min-w-0">
-                              <div className="text-sm font-semibold text-zinc-950">
+                            <div className="min-w-0 sm:flex-1">
+                              <div className="truncate text-sm font-semibold text-zinc-950">
                                 {reqItem.name}
                               </div>
-                              <div className="text-xs text-zinc-500">{reqItem.email}</div>
+                              <div className="break-all text-xs text-zinc-500">{reqItem.email}</div>
                             </div>
                             <div className="flex items-center gap-1.5">
                               <Button
@@ -1250,8 +1261,9 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
                                       });
                                     }}
                                   >
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex flex-wrap items-center gap-2">
                                       <Input
+                                        className="min-w-[160px] flex-1"
                                         value={editingFreq.statusText}
                                         onChange={(e) =>
                                           setEditingFreq({
@@ -1327,7 +1339,7 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
                                   </form>
                                 ) : (
                                   <>
-                                    <span className="break-words font-medium text-zinc-900">
+                                    <span className="min-w-0 break-words font-medium text-zinc-900">
                                       {item.statusText}
                                     </span>
                                     <button
@@ -1608,7 +1620,7 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
 
       {leaveModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-5 text-zinc-900 shadow-xl">
+          <div className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-xl border border-zinc-200 bg-white p-5 text-zinc-900 shadow-xl">
             <div className="flex items-center gap-2">
               <LogOut className="h-4 w-4 text-rose-600" />
               <h3 className="text-base font-bold text-zinc-950">Leave {session.team.name}</h3>

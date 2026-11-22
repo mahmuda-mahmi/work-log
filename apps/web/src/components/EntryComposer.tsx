@@ -536,10 +536,10 @@ export function EntryComposer({
 
             <div className="relative grid gap-1.5 md:col-span-2 lg:col-span-1">
               <Label htmlFor="composer-status">Status</Label>
-              <div className={isCommunication ? 'flex items-start gap-2' : 'grid'}>
+              <div className={isCommunication ? 'flex flex-col items-stretch gap-2 sm:flex-row sm:items-start' : 'grid'}>
                 {isCommunication && (
                   <Select
-                    className="w-[148px] shrink-0"
+                    className="w-full shrink-0 sm:w-[148px]"
                     value={communicationType}
                     onValueChange={setCommunicationType}
                     disabled={disabled || createMutation.isPending}
@@ -556,7 +556,7 @@ export function EntryComposer({
                 <Textarea
                   id="composer-status"
                   rows={1}
-                  className="h-9 min-h-[36px] min-w-0 flex-1 resize-y py-1.5"
+                  className="min-h-[38px] min-w-0 flex-1 resize-y py-1.5"
                   value={statusText}
                   onFocus={() => setStatusFocused(true)}
                   onBlur={() => setStatusFocused(false)}
@@ -592,7 +592,7 @@ export function EntryComposer({
 
             <Button
               type="submit"
-              className="h-9 px-4 md:col-span-2 lg:col-span-1"
+              className="h-9 w-full px-4 md:col-span-2 lg:col-span-1 lg:w-auto"
               disabled={disabled || createMutation.isPending}
             >
               <Plus className="h-4 w-4" />

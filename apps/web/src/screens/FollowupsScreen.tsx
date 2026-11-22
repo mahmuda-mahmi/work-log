@@ -246,6 +246,189 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
     return 'secondary';
   }
 
+  function renderEditFollowupBox(idx: number) {
+    if (!editing) return null;
+    const editCat = activeCategories.find((c) => c.name === editing.categoryName);
+    const editTitles = editCat?.titles ?? [];
+    return (
+      <div className="grid gap-3 rounded-md border border-primary-border border-l-4 border-l-primary bg-white p-3.5">
+        <div className="border-b border-zinc-100 pb-2 text-xs font-bold text-zinc-950">
+          Editing Follow-up #{idx + 1}
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-1.5">
+            <Label>Report Category</Label>
+            <Select
+              value={editing.categoryName}
+              onValueChange={(nextCatName) => {
+                const nextCat = activeCategories.find((c) => c.name === nextCatName);
+                setEditing({
+                  ...editing,
+                  categoryName: nextCatName,
+                  titleName: nextCat?.titles[0]?.name ?? editing.titleName,
+                });
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {!activeCategories.some((c) => c.name === editing.categoryName) && (
+                  <SelectItem value={editing.categoryName || 'General'}>
+                    {editing.categoryName || 'General'}
+                  </SelectItem>
+                )}
+                {activeCategories.map((c) => (
+                  <SelectItem key={c.id} value={c.name}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid gap-1.5">
+            <Label>Title</Label>
+            <Select
+              value={editing.titleName}
+              onValueChange={(val) => setEditing({ ...editing, titleName: val })}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {!editTitles.some((t) => t.name === editing.titleName) && (
+                  <SelectItem value={editing.titleName}>{editing.titleName}</SelectItem>
+                )}
+                {editTitles.map((t) => (
+                  <SelectItem key={t.id} value={t.name}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid gap-1.5">
+            <Label>Follow-up State</Label>
+            <Select
+              value={editing.status}
+              onValueChange={(val) => setEditing({ ...editing, status: val as FollowupStatus })}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="open">Open (carry forward)</SelectItem>
+                <SelectItem value="in_progress">In Progress (carry forward)</SelectItem>
+                <SelectItem value="done">Done (stop carrying forward)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid gap-1.5">
+            <Label>Task Completed By</Label>
+            <Select
+              value={editing.completedByMemberId || CUSTOM_LABEL_SENTINEL}
+              onValueChange={(val) =>
+                setEditing({
+                  ...editing,
+                  completedByMemberId: val === CUSTOM_LABEL_SENTINEL ? '' : val,
+                })
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={CUSTOM_LABEL_SENTINEL}>
+                  Label ({editing.completedByLabel})
+                </SelectItem>
+                {activeMembers.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    {m.displayName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="grid gap-1.5">
+          <Label>Status</Label>
+          <Textarea
+            rows={3}
+            value={editing.statusText}
+            onChange={(e) => setEditing({ ...editing, statusText: e.target.value })}
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            disabled={updateMutation.isPending}
+            onClick={() => updateMutation.mutate(editing)}
+          >
+            {updateMutation.isPending ? 'Saving…' : 'Save Changes'}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setEditing(null)}
+          >
+            Cancel
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  function renderMoveToDailyBox(idx: number) {
+    if (!movingToDaily) return null;
+    return (
+      <div className="grid gap-3 rounded-md border border-primary-border border-l-4 border-l-primary bg-white p-3.5">
+        <div className="border-b border-zinc-100 pb-2 text-xs font-bold text-zinc-950">
+          Move Follow-up #{idx + 1} to Today&apos;s Daily Work ({movingToDaily.categoryName} /{' '}
+          {movingToDaily.titleName})
+        </div>
+        <div className="grid gap-1.5">
+          <Label>Updated Status for Today&apos;s Report</Label>
+          <Textarea
+            rows={2}
+            value={movingToDaily.statusText}
+            onChange={(e) => setMovingToDaily({ ...movingToDaily, statusText: e.target.value })}
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            disabled={moveToDailyMutation.isPending || !movingToDaily.statusText.trim()}
+            onClick={() =>
+              moveToDailyMutation.mutate({
+                id: movingToDaily.id,
+                statusText: movingToDaily.statusText,
+              })
+            }
+          >
+            <ArrowUpRight className="h-3.5 w-3.5" />
+            {moveToDailyMutation.isPending ? 'Moving…' : "Move to Today's Daily Work"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setMovingToDaily(null)}
+          >
+            Cancel
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-3.5">
       {errorMsg && <Alert variant="destructive">{errorMsg}</Alert>}
@@ -414,372 +597,303 @@ export function FollowupsScreen({ session }: FollowupsScreenProps) {
               No follow-up items. Reports will omit the follow-up table until you add items.
             </p>
           ) : (
-            <div className="w-full overflow-x-auto rounded-md border border-zinc-200 bg-white">
-              <table className="w-full table-fixed border-collapse text-sm">
-                <thead>
-                  <tr className="bg-zinc-950 text-white border-b-2 border-b-primary">
-                    <th className="w-[5%] border-r border-zinc-800 px-2.5 py-2.5 text-center text-xs font-bold">
-                      Ser
-                    </th>
-                    <th className="w-[14%] border-r border-zinc-800 px-2.5 py-2.5 text-left text-xs font-bold">
-                      Report Category
-                    </th>
-                    <th className="w-[19%] border-r border-zinc-800 px-2.5 py-2.5 text-left text-xs font-bold">
-                      Title
-                    </th>
-                    <th className="w-[34%] border-r border-zinc-800 px-2.5 py-2.5 text-left text-xs font-bold">
-                      Status
-                    </th>
-                    <th className="w-[14%] border-r border-zinc-800 px-2.5 py-2.5 text-left text-xs font-bold">
-                      Task Completed By
-                    </th>
-                    <th className="w-[14%] px-2.5 py-2.5 text-right text-xs font-bold">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item, idx) => {
-                    const isEditingThis = editing?.id === item.id;
-                    if (isEditingThis && editing) {
-                      const editCat = activeCategories.find(
-                        (c) => c.name === editing.categoryName,
-                      );
-                      const editTitles = editCat?.titles ?? [];
-                      return (
-                        <tr key={item.id} className="border-b border-zinc-200 last:border-b-0">
-                          <td colSpan={6} className="bg-zinc-50 p-3">
-                            <div className="grid gap-3 rounded-md border border-primary-border border-l-4 border-l-primary bg-white p-3.5">
-                              <div className="border-b border-zinc-100 pb-2 text-xs font-bold text-zinc-950">
-                                Editing Follow-up #{idx + 1}
-                              </div>
-                              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                                <div className="grid gap-1.5">
-                                  <Label>Report Category</Label>
-                                  <Select
-                                    value={editing.categoryName}
-                                    onValueChange={(nextCatName) => {
-                                      const nextCat = activeCategories.find(
-                                        (c) => c.name === nextCatName,
-                                      );
-                                      setEditing({
-                                        ...editing,
-                                        categoryName: nextCatName,
-                                        titleName: nextCat?.titles[0]?.name ?? editing.titleName,
-                                      });
-                                    }}
-                                  >
-                                    <SelectTrigger>
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {!activeCategories.some(
-                                        (c) => c.name === editing.categoryName,
-                                      ) && (
-                                        <SelectItem value={editing.categoryName || 'General'}>
-                                          {editing.categoryName || 'General'}
-                                        </SelectItem>
-                                      )}
-                                      {activeCategories.map((c) => (
-                                        <SelectItem key={c.id} value={c.name}>
-                                          {c.name}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
+            <>
+              <div className="grid gap-3 md:hidden">
+                {items.map((item, idx) => {
+                  const isEditingThis = editing?.id === item.id;
+                  if (isEditingThis) {
+                    return <div key={item.id}>{renderEditFollowupBox(idx)}</div>;
+                  }
+                  if (movingToDaily?.id === item.id) {
+                    return <div key={item.id}>{renderMoveToDailyBox(idx)}</div>;
+                  }
 
-                                <div className="grid gap-1.5">
-                                  <Label>Title</Label>
-                                  <Select
-                                    value={editing.titleName}
-                                    onValueChange={(val) =>
-                                      setEditing({ ...editing, titleName: val })
-                                    }
-                                  >
-                                    <SelectTrigger>
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {!editTitles.some((t) => t.name === editing.titleName) && (
-                                        <SelectItem value={editing.titleName}>
-                                          {editing.titleName}
-                                        </SelectItem>
-                                      )}
-                                      {editTitles.map((t) => (
-                                        <SelectItem key={t.id} value={t.name}>
-                                          {t.name}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
+                  const activeIdx =
+                    item.status !== 'archived'
+                      ? activeItems.findIndex((x) => x.id === item.id)
+                      : -1;
 
-                                <div className="grid gap-1.5">
-                                  <Label>Follow-up State</Label>
-                                  <Select
-                                    value={editing.status}
-                                    onValueChange={(val) =>
-                                      setEditing({ ...editing, status: val as FollowupStatus })
-                                    }
-                                  >
-                                    <SelectTrigger>
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="open">Open (carry forward)</SelectItem>
-                                      <SelectItem value="in_progress">
-                                        In Progress (carry forward)
-                                      </SelectItem>
-                                      <SelectItem value="done">
-                                        Done (stop carrying forward)
-                                      </SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-
-                                <div className="grid gap-1.5">
-                                  <Label>Task Completed By</Label>
-                                  <Select
-                                    value={editing.completedByMemberId || CUSTOM_LABEL_SENTINEL}
-                                    onValueChange={(val) =>
-                                      setEditing({
-                                        ...editing,
-                                        completedByMemberId:
-                                          val === CUSTOM_LABEL_SENTINEL ? '' : val,
-                                      })
-                                    }
-                                  >
-                                    <SelectTrigger>
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value={CUSTOM_LABEL_SENTINEL}>
-                                        Label ({editing.completedByLabel})
-                                      </SelectItem>
-                                      {activeMembers.map((m) => (
-                                        <SelectItem key={m.id} value={m.id}>
-                                          {m.displayName}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              </div>
-
-                              <div className="grid gap-1.5">
-                                <Label>Status</Label>
-                                <Textarea
-                                  rows={3}
-                                  value={editing.statusText}
-                                  onChange={(e) =>
-                                    setEditing({ ...editing, statusText: e.target.value })
-                                  }
-                                />
-                              </div>
-
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  disabled={updateMutation.isPending}
-                                  onClick={() => updateMutation.mutate(editing)}
-                                >
-                                  {updateMutation.isPending ? 'Saving…' : 'Save Changes'}
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => setEditing(null)}
-                                >
-                                  Cancel
-                                </Button>
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    }
-
-                    if (movingToDaily?.id === item.id) {
-                      return (
-                        <tr key={item.id} className="border-b border-zinc-200">
-                          <td colSpan={6} className="bg-zinc-50 p-3">
-                            <div className="grid gap-3 rounded-md border border-primary-border border-l-4 border-l-primary bg-white p-3.5">
-                              <div className="border-b border-zinc-100 pb-2 text-xs font-bold text-zinc-950">
-                                Move Follow-up #{idx + 1} to Today&apos;s Daily Work (
-                                {movingToDaily.categoryName} / {movingToDaily.titleName})
-                              </div>
-                              <div className="grid gap-1.5">
-                                <Label>Updated Status for Today&apos;s Report</Label>
-                                <Textarea
-                                  rows={2}
-                                  value={movingToDaily.statusText}
-                                  onChange={(e) =>
-                                    setMovingToDaily({
-                                      ...movingToDaily,
-                                      statusText: e.target.value,
-                                    })
-                                  }
-                                />
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  disabled={
-                                    moveToDailyMutation.isPending ||
-                                    !movingToDaily.statusText.trim()
-                                  }
-                                  onClick={() =>
-                                    moveToDailyMutation.mutate({
-                                      id: movingToDaily.id,
-                                      statusText: movingToDaily.statusText,
-                                    })
-                                  }
-                                >
-                                  <ArrowUpRight className="h-3.5 w-3.5" />
-                                  {moveToDailyMutation.isPending
-                                    ? 'Moving…'
-                                    : "Move to Today's Daily Work"}
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => setMovingToDaily(null)}
-                                >
-                                  Cancel
-                                </Button>
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    }
-
-                    const activeIdx =
-                      item.status !== 'archived'
-                        ? activeItems.findIndex((x) => x.id === item.id)
-                        : -1;
-
-                    return (
-                      <tr key={item.id} className="border-b border-zinc-200 last:border-b-0">
-                        <td className="border-r border-zinc-200 p-2.5 text-center align-top">
-                          <span className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-primary-border bg-accent text-xs font-extrabold text-primary-text">
+                  return (
+                    <div
+                      key={item.id}
+                      className="grid gap-2.5 rounded-lg border border-zinc-200 bg-white p-3"
+                    >
+                      <div className="flex items-start justify-between gap-2 border-b border-zinc-100 pb-2">
+                        <div className="flex min-w-0 items-start gap-2">
+                          <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-primary-border bg-accent text-xs font-extrabold text-primary-text">
                             {idx + 1}
                           </span>
-                          {item.status !== 'archived' && (
-                            <div className="mt-1.5 flex items-center justify-center gap-1">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="icon-xs"
-                                className="h-6 w-6"
-                                title="Move follow-up up"
-                                disabled={activeIdx <= 0 || reorderMutation.isPending}
-                                onClick={() =>
-                                  reorderMutation.mutate(
-                                    moveFollowupItem(activeItems, activeIdx, -1).map((x) => x.id),
-                                  )
-                                }
-                              >
-                                <ArrowUp className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="icon-xs"
-                                className="h-6 w-6"
-                                title="Move follow-up down"
-                                disabled={
-                                  activeIdx === -1 ||
-                                  activeIdx >= activeItems.length - 1 ||
-                                  reorderMutation.isPending
-                                }
-                                onClick={() =>
-                                  reorderMutation.mutate(
-                                    moveFollowupItem(activeItems, activeIdx, 1).map((x) => x.id),
-                                  )
-                                }
-                              >
-                                <ArrowDown className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          )}
-                        </td>
-                        <td className="border-r border-zinc-200 p-2.5 font-bold text-zinc-950 align-top">
-                          {item.categoryName}
-                        </td>
-                        <td className="border-r border-zinc-200 p-2.5 font-medium text-zinc-700 align-top">
-                          {item.titleName}
-                        </td>
-                        <td className="border-r border-zinc-200 p-2.5 align-top">
-                          <div className="whitespace-pre-wrap text-zinc-950 leading-relaxed">
-                            {item.statusText}
+                          <div className="min-w-0">
+                            <div className="text-sm font-bold text-zinc-950">{item.categoryName}</div>
+                            <div className="text-xs font-medium text-zinc-600">{item.titleName}</div>
                           </div>
-                          <Badge
-                            variant={statusBadgeVariant(item.status)}
-                            size="sm"
-                            className="mt-2"
+                        </div>
+                        {item.status !== 'archived' && (
+                          <div className="flex shrink-0 items-center gap-1">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon-xs"
+                              title="Move follow-up up"
+                              disabled={activeIdx <= 0 || reorderMutation.isPending}
+                              onClick={() =>
+                                reorderMutation.mutate(
+                                  moveFollowupItem(activeItems, activeIdx, -1).map((x) => x.id),
+                                )
+                              }
+                            >
+                              <ArrowUp className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon-xs"
+                              title="Move follow-up down"
+                              disabled={
+                                activeIdx === -1 ||
+                                activeIdx >= activeItems.length - 1 ||
+                                reorderMutation.isPending
+                              }
+                              onClick={() =>
+                                reorderMutation.mutate(
+                                  moveFollowupItem(activeItems, activeIdx, 1).map((x) => x.id),
+                                )
+                              }
+                            >
+                              <ArrowDown className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-950">
+                        {item.statusText}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Badge variant={statusBadgeVariant(item.status)} size="sm">
+                          {item.status}
+                        </Badge>
+                        <Badge variant="secondary" size="sm" className="normal-case">
+                          {item.completedByDisplay}
+                        </Badge>
+                      </div>
+
+                      {item.status !== 'archived' && (
+                        <div className="flex flex-wrap items-center gap-1.5 border-t border-zinc-100 pt-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="xs"
+                            onClick={() => {
+                              setSuccessMsg(null);
+                              setMovingToDaily({
+                                id: item.id,
+                                categoryName: item.categoryName,
+                                titleName: item.titleName,
+                                statusText: item.statusText,
+                              });
+                            }}
                           >
-                            {item.status}
-                          </Badge>
-                        </td>
-                        <td className="border-r border-zinc-200 p-2.5 align-top">
-                          <Badge variant="secondary" size="sm" className="normal-case">
-                            {item.completedByDisplay}
-                          </Badge>
-                        </td>
-                        <td className="p-2.5 align-top">
-                          {item.status !== 'archived' && (
-                            <div className="flex flex-wrap items-center justify-end gap-1">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="icon-xs"
-                                title="Move to today's Daily Work"
-                                onClick={() => {
-                                  setSuccessMsg(null);
-                                  setMovingToDaily({
-                                    id: item.id,
-                                    categoryName: item.categoryName,
-                                    titleName: item.titleName,
-                                    statusText: item.statusText,
-                                  });
-                                }}
-                              >
-                                <ArrowUpRight className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="icon-xs"
-                                title="Edit follow-up"
-                                onClick={() => startEdit(item)}
-                              >
-                                <Pencil className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="destructive"
-                                size="icon-xs"
-                                title="Delete follow-up"
-                                disabled={archiveMutation.isPending}
-                                onClick={() => setDeleteTargetId(item.id)}
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
+                            <ArrowUpRight className="h-3 w-3" />
+                            Move to Daily
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="xs"
+                            onClick={() => startEdit(item)}
+                          >
+                            <Pencil className="h-3 w-3" />
+                            Edit
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="xs"
+                            className="ml-auto"
+                            disabled={archiveMutation.isPending}
+                            onClick={() => setDeleteTargetId(item.id)}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                            Delete
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="hidden w-full overflow-x-auto rounded-md border border-zinc-200 bg-white md:block">
+                <table className="w-full table-fixed border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-zinc-950 text-white border-b-2 border-b-primary">
+                      <th className="w-[5%] border-r border-zinc-800 px-2.5 py-2.5 text-center text-xs font-bold">
+                        Ser
+                      </th>
+                      <th className="w-[14%] border-r border-zinc-800 px-2.5 py-2.5 text-left text-xs font-bold">
+                        Report Category
+                      </th>
+                      <th className="w-[19%] border-r border-zinc-800 px-2.5 py-2.5 text-left text-xs font-bold">
+                        Title
+                      </th>
+                      <th className="w-[34%] border-r border-zinc-800 px-2.5 py-2.5 text-left text-xs font-bold">
+                        Status
+                      </th>
+                      <th className="w-[14%] border-r border-zinc-800 px-2.5 py-2.5 text-left text-xs font-bold">
+                        Task Completed By
+                      </th>
+                      <th className="w-[14%] px-2.5 py-2.5 text-right text-xs font-bold">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((item, idx) => {
+                      const isEditingThis = editing?.id === item.id;
+                      if (isEditingThis && editing) {
+                        return (
+                          <tr key={item.id} className="border-b border-zinc-200 last:border-b-0">
+                            <td colSpan={6} className="bg-zinc-50 p-3">
+                              {renderEditFollowupBox(idx)}
+                            </td>
+                          </tr>
+                        );
+                      }
+
+                      if (movingToDaily?.id === item.id) {
+                        return (
+                          <tr key={item.id} className="border-b border-zinc-200">
+                            <td colSpan={6} className="bg-zinc-50 p-3">
+                              {renderMoveToDailyBox(idx)}
+                            </td>
+                          </tr>
+                        );
+                      }
+
+                      const activeIdx =
+                        item.status !== 'archived'
+                          ? activeItems.findIndex((x) => x.id === item.id)
+                          : -1;
+
+                      return (
+                        <tr key={item.id} className="border-b border-zinc-200 last:border-b-0">
+                          <td className="border-r border-zinc-200 p-2.5 text-center align-top">
+                            <span className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-primary-border bg-accent text-xs font-extrabold text-primary-text">
+                              {idx + 1}
+                            </span>
+                            {item.status !== 'archived' && (
+                              <div className="mt-1.5 flex items-center justify-center gap-1">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon-xs"
+                                  className="h-6 w-6"
+                                  title="Move follow-up up"
+                                  disabled={activeIdx <= 0 || reorderMutation.isPending}
+                                  onClick={() =>
+                                    reorderMutation.mutate(
+                                      moveFollowupItem(activeItems, activeIdx, -1).map((x) => x.id),
+                                    )
+                                  }
+                                >
+                                  <ArrowUp className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon-xs"
+                                  className="h-6 w-6"
+                                  title="Move follow-up down"
+                                  disabled={
+                                    activeIdx === -1 ||
+                                    activeIdx >= activeItems.length - 1 ||
+                                    reorderMutation.isPending
+                                  }
+                                  onClick={() =>
+                                    reorderMutation.mutate(
+                                      moveFollowupItem(activeItems, activeIdx, 1).map((x) => x.id),
+                                    )
+                                  }
+                                >
+                                  <ArrowDown className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            )}
+                          </td>
+                          <td className="border-r border-zinc-200 p-2.5 font-bold text-zinc-950 align-top">
+                            {item.categoryName}
+                          </td>
+                          <td className="border-r border-zinc-200 p-2.5 font-medium text-zinc-700 align-top">
+                            {item.titleName}
+                          </td>
+                          <td className="border-r border-zinc-200 p-2.5 align-top">
+                            <div className="whitespace-pre-wrap text-zinc-950 leading-relaxed">
+                              {item.statusText}
                             </div>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                            <Badge
+                              variant={statusBadgeVariant(item.status)}
+                              size="sm"
+                              className="mt-2"
+                            >
+                              {item.status}
+                            </Badge>
+                          </td>
+                          <td className="border-r border-zinc-200 p-2.5 align-top">
+                            <Badge variant="secondary" size="sm" className="normal-case">
+                              {item.completedByDisplay}
+                            </Badge>
+                          </td>
+                          <td className="p-2.5 align-top">
+                            {item.status !== 'archived' && (
+                              <div className="flex flex-wrap items-center justify-end gap-1">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon-xs"
+                                  title="Move to today's Daily Work"
+                                  onClick={() => {
+                                    setSuccessMsg(null);
+                                    setMovingToDaily({
+                                      id: item.id,
+                                      categoryName: item.categoryName,
+                                      titleName: item.titleName,
+                                      statusText: item.statusText,
+                                    });
+                                  }}
+                                >
+                                  <ArrowUpRight className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon-xs"
+                                  title="Edit follow-up"
+                                  onClick={() => startEdit(item)}
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="destructive"
+                                  size="icon-xs"
+                                  title="Delete follow-up"
+                                  disabled={archiveMutation.isPending}
+                                  onClick={() => setDeleteTargetId(item.id)}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

@@ -65,7 +65,19 @@ export function ReportTableSkeleton({ showSlowHint = false }: { showSlowHint?: b
         )}
       </CardHeader>
       <CardContent className="p-0">
-        <div className="divide-y divide-zinc-200">
+        <div className="divide-y divide-zinc-200 md:hidden">
+          {[0, 1, 2].map((card) => (
+            <div key={card} className="grid gap-2.5 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <Skeleton className="h-4 w-36" />
+                <Skeleton className="h-6 w-16 rounded-md" />
+              </div>
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-2/3" />
+            </div>
+          ))}
+        </div>
+        <div className="hidden divide-y divide-zinc-200 md:block">
           <div className="grid grid-cols-[50px_1fr_1.2fr_2.4fr_1fr_120px] gap-3 bg-zinc-50 px-4 py-2.5">
             <Skeleton className="h-4 w-8" />
             <Skeleton className="h-4 w-24" />
