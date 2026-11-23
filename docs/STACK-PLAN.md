@@ -541,7 +541,7 @@ Because the SPA and the API share an origin, there is no CORS, no cookie `Domain
 | **SQL contract** | Jest + Testcontainers MySQL | Every SQL constant executes; constraints fire; no column drift |
 | API e2e | supertest | Auth → entries → finalize → export with cookies and origin checks |
 | DOCX structural | unzip + XML asserts | Page size, table widths, merges, header, exactly two tables |
-| **PDF visual** | pdfjs + pixelmatch | Rendered pages vs `exported baseline PDF pages` |
+| **PDF visual** | pdfjs + pixelmatch | Rendered pages vs golden baseline snapshots |
 | **Layout parity** | shared harness | Both renderers break at the same row boundaries for a 4-page fixture |
 | Browser e2e | Playwright | Real flows, mobile viewport, share stub |
 | Migration | script | Checksums, idempotent re-run, clean apply on an empty DB |

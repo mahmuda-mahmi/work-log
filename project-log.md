@@ -1,4 +1,4 @@
-# CGHQ Daily Work Log — Project Log & Agent Handoff Guide
+# Daily Work Log — Project Log & Agent Handoff Guide
 
 ## 1. Project Overview
 - **Repository:** `https://github.com/mahmuda-mahmi/work-log.git` (branch: `main`)
@@ -6,8 +6,8 @@
 - **Stack:**
   - **Monorepo:** `pnpm` workspace (`packages/contracts`, `packages/document`, `apps/api`, `apps/web`).
   - **Frontend (`apps/web`):** React 19 + Vite 7 + React Router 7 + TanStack Query v5 + Tailwind CSS v4 + pure React shadcn-style UI primitives (`apps/web/src/components/ui/`, **no** `@radix-ui/*` dependencies).
-  - **Backend (`apps/api`):** NestJS 11 + Express (deployed on Vercel Serverless via `api/index.ts` -> `apps/api/api/index.ts`) + `mysql2/promise` raw parameterized SQL + Argon2id passwords + HTTP-only `sid` session cookie.
-  - **Document Engine (`packages/document`):** Deterministic DOCX (`docx`) and PDF (`pdf-lib` with `StandardFonts.TimesRoman` / `TimesRomanBold`) renderer producing **A4 Landscape** (`841.89 × 595.28 pt` / `16838 × 11906 twips`) reports .
+  - **Backend (`apps/api`):** NestJS 11 + Express (deployed on Vercel Serverless via `api/index.ts` -> `apps/api/api/index.ts`) + PostgreSQL (`pg`) raw parameterized SQL + Argon2id passwords + HTTP-only `sid` session cookie.
+  - **Document Engine (`packages/document`):** Deterministic DOCX (`docx`) and PDF (`pdf-lib` with `StandardFonts.TimesRoman` / `TimesRomanBold`) renderer producing **A4 Landscape** (`841.89 × 595.28 pt` / `16838 × 11906 twips`) reports.
   - **Shared Contracts (`packages/contracts`):** Zod schemas & TypeScript DTOs shared between API and Web.
 
 ---
@@ -23,7 +23,7 @@
 4. **Document Export Format (`packages/document`):**
    - Paper size: **A4 Landscape** (`widthTwips: 16838`, `heightTwips: 11906`, `widthPt: 841.89`, `heightPt: 595.28`).
    - Font family & size: **Times New Roman** (`TimesRoman` / `TimesRomanBold` in PDF) across both DOCX and PDF; **15 pt bold** for the heading (`CGHQ Daily Report`) and **14 pt** for all body/table text.
-   - Header spacing: `30 pt` gap in PDF and `before: 240, after: 120` twips with a `3 pt` spacer paragraph in DOCX).
+   - Header spacing: `30 pt` gap in PDF and `before: 240, after: 120` twips with a `3 pt` spacer paragraph in DOCX.
    - Company Logo: Always use the bundled Solution Art company logo (`getDefaultLogoBytes()` / `/default-logo.png`) in both live preview and PDF/DOCX exports.
    - Status column: No automatic `1.`, `2.`, `3.` prefixes in the exported `Status` column; Category and Title names are automatically sentence/first-letter capitalized (`support` → `Support`) in `buildDocumentModel`.
 

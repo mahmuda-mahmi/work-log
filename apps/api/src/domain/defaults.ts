@@ -37,24 +37,6 @@ export const DEFAULT_REPORT_GROUPS: ReadonlyArray<{
   },
 ];
 
-export const DEFAULT_DICTIONARY_PAIRS: ReadonlyArray<{
-  categoryName: string;
-  titleName: string;
-}> = [
-  { categoryName: 'Support', titleName: 'Daily Calls from User and Desk Support' },
-  { categoryName: 'Communication', titleName: 'New Comer' },
-  { categoryName: 'Communication', titleName: 'Over the Phone' },
-  {
-    categoryName: 'Physically Visit',
-    titleName: 'Department Visit for Use of CGRPMS and Any Other Reason',
-  },
-  { categoryName: 'Mobile Apps', titleName: 'Messaging Mobile Apps' },
-  { categoryName: 'Bill', titleName: 'Hospital Management System' },
-  { categoryName: 'Bill', titleName: 'Library Management System' },
-  { categoryName: 'Bill', titleName: 'Dockyard Management System' },
-  { categoryName: 'Bill', titleName: 'CGRPMS Monthly Bill (October)' },
-];
-
 export const DEFAULT_FOLLOWUPS: ReadonlyArray<{
   categoryName: string;
   titleName: string;
@@ -90,7 +72,7 @@ export const DEFAULT_FOLLOWUPS: ReadonlyArray<{
   {
     categoryName: 'Bill',
     titleName: 'CGRPMS Monthly Bill (October)',
-    statusText: 'The bill was sent to the bill section, and they are processing it.',
+    statusText: 'The monthly billing statement has been submitted for processing.',
     completedByLabel: 'As Previous',
   },
 ];

@@ -4,10 +4,7 @@ This document defines the exact document the app must generate. It was derived b
 
 Reference artifacts:
 
-- `exported DOCX report` — supplied source
-- `exported PDF report` — supplied 3-page PDF
-- `exported PDF page` … `page-3.png` — rendered reference pages
-- `docs/reference/logo-solution-art.png` — logo extracted from the DOCX
+- `docs/reference/logo-solution-art.png` — default header logo mark (measured layout geometry captured in this spec and `packages/document/src/tokens.ts`)
 
 ---
 
@@ -565,7 +562,7 @@ If conversion fails:
 
 ### 15.2 Visual checks
 
-- [ ] Side-by-side comparison with `exported baseline PDF pages`
+- [ ] Side-by-side comparison with exported baseline PDF pages
 - [ ] Page orientation and margins look identical
 - [ ] Column widths and table left/right edges align
 - [ ] Merged group cells span the correct number of rows

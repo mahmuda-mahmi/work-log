@@ -4,12 +4,9 @@ Document layout measurements and the extracted header logo mark used for report 
 
 | File | Description |
 |---|---|
-| `sample-report.docx` | The supplied Word document (source of truth for layout). |
-| `sample-report.pdf` | The supplied 3-page PDF (the visual target). |
-| `sample-page-1.png` | Rendered page 1 of the PDF at 144 DPI. |
-| `sample-page-2.png` | Rendered page 2. |
-| `sample-page-3.png` | Rendered page 3. |
-| `logo-solution-art.png` | Logo extracted from `word/media/image1.png` inside the DOCX. |
+| `logo-solution-art.png` | Default Solution Art header logo mark. |
+
+> Real sample report artifacts were removed before making this repository public.
 
 ## What was measured
 

@@ -5,7 +5,7 @@
 | **Version** | 1.0 (proposed) |
 | **Date** | 14 November 2026 |
 | **Working name** | CGHQ Team Work Report |
-| **Reference output** | `exported PDF report` / `.docx` |
+| **Reference spec** | [EXPORT-SPEC.md](EXPORT-SPEC.md) |
 | **Status** | Architecture approved for build planning; open questions in § 20 |
 
 ---
@@ -999,7 +999,7 @@ The client fetches the download URL as a blob, then invokes the share sheet on a
 ├──────────────────────────────────────┤
 │ 1  Support                           │
 │    Daily Calls from User and Desk…   │
-│    1. Provided training about…  Samir│
+│    1. Conducted user onboarding…Samir│
 │    2. Assisted with QC process… Samir│
 │    3. Assisted with QC review…  Samir│
 │    …                                 │
@@ -1398,7 +1398,7 @@ Managed variant: Vercel/Supabase free tiers may cover it; the always-on Gotenber
    - filename is exact.
 3. Convert to PDF via Gotenberg.
 4. Render pages with `pdfjs-dist`; compare against `tests/golden/*.png` with a tolerance (e.g., < 0.3% pixels differing).
-5. Keep the reference PDF/DOCX in `docs/reference/` and the fixture in `tests/fixtures/`.
+5. Store synthetic fixtures in `tests/fixtures/` for automated visual/XML assertions.
 
 Because pagination can shift slightly between LibreOffice versions, the visual test pins the Gotenberg image tag and focuses assertions on layout regions (header, table edges, row text) rather than exact page breaks. A human format sign-off is still required.
 

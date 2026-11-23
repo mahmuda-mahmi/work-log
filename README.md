@@ -4,8 +4,8 @@ A small web app for a 2–4 person team to replace the daily "shared Google Doc 
 
 Each member logs what they did during the day. The app groups the entries into the exact CGHQ daily-report table format and exports a ready-to-send **DOCX** and **PDF** with one click.
 
-> **Status:** architecture package — no application code yet.
-> **Working name:** CGHQ Team Work Report
+> **Status:** Production web app + NestJS API deployed on Vercel with PostgreSQL and Vercel Blob.
+> **Working name:** Work Log (`cghq-work-log`)
 
 ---
 
@@ -61,7 +61,7 @@ Estimated running cost: **US$10–25/month** (VPS + domain + offsite backup).
 | [docs/EXPORT-SPEC.md](docs/EXPORT-SPEC.md) | Pixel-and-twip-level specification of the generated document, derived from the sample files |
 | [docs/DATA-MODEL.sql](docs/DATA-MODEL.sql) | Logical PostgreSQL schema (MySQL version follows in Phase 0) |
 | [docs/API.md](docs/API.md) | HTTP API surface and request/response examples |
-| [docs/reference/](docs/reference/) | The supplied sample DOCX/PDF, rendered pages, and extracted logo |
+| [docs/reference/](docs/reference/) | Format measurement notes and default brand mark |
 
 ## The format we must reproduce
 

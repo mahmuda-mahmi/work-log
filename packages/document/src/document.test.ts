@@ -53,14 +53,14 @@ describe('@cghq/document Phase 1 Format Proof', () => {
         {
           categoryName: 'Software Development',
           titleName: 'CGHQ Work Log',
-          statusText: 'Initialized MySQL schema',
+          statusText: 'Initialized PostgreSQL schema',
           completedBy: 'Alice',
         },
         {
           categoryName: 'software development ',
           titleName: 'cghq work log',
           statusText: 'Built PDF renderer',
-          completedBy: 'Alex',
+          completedBy: 'Bob',
         },
       ],
       followups: [],
@@ -72,7 +72,7 @@ describe('@cghq/document Phase 1 Format Proof', () => {
     assert.equal(model.mainRows[0]!.completedBy, 'Alice');
     assert.equal(model.mainRows[1]!.ser, '');
     assert.equal(model.mainRows[1]!.groupMerge, 'continue');
-    assert.equal(model.mainRows[1]!.completedBy, 'Alex');
+    assert.equal(model.mainRows[1]!.completedBy, 'Bob');
 
     assert.equal(model.followupRows.length, 0);
     assert.equal(model.hasFollowups, false);
@@ -107,7 +107,7 @@ describe('@cghq/document Phase 1 Format Proof', () => {
       categoryName: 'Hospital Management System',
       titleName: 'Module Integration & Testing',
       statusText: `Completed integration test case #${i + 1} for patient intake, lab routing, and billing reconciliation across wards.`,
-      completedBy: i % 2 === 0 ? 'Alice' : 'Alex',
+      completedBy: i % 2 === 0 ? 'Alice' : 'Bob',
     }));
 
     const model = buildDocumentModel({
