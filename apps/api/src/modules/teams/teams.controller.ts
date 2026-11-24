@@ -66,6 +66,7 @@ import {
   findTeamSettings,
   insertInvite,
   insertPasswordReset,
+  isTeamSlugTaken,
   listTeamMembers,
   updateMemberDisplayName,
   updateMemberRole,
@@ -99,8 +100,10 @@ export class TeamsController {
       throw new NotFoundException({ code: 'TEAM_NOT_FOUND', message: 'Team not found' });
     }
 
+    const nextSlug = body.slug !== undefined ? body.slug.trim() : current.slug;
     const next = {
       name: body.name ?? current.name,
+      slug: nextSlug,
       documentTitle: body.documentTitle ?? current.documentTitle,
       filePrefix: body.filePrefix ?? current.filePrefix,
       timezone: body.timezone ?? current.timezone,
@@ -113,6 +116,12 @@ export class TeamsController {
     };
 
     await withTransaction(pool, async (conn) => {
+      if (body.slug !== undefined && (await isTeamSlugTaken(conn, nextSlug, teamId))) {
+        throw new ConflictException({
+          code: 'TEAM_CODE_TAKEN',
+          message: 'That Team Code is already in use. Choose another code.',
+        });
+      }
       await updateTeamSettings(conn, teamId, next);
       await appendAuditEvent(conn, {
         teamId,

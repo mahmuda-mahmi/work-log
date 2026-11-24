@@ -281,32 +281,25 @@ export function OnboardingScreen({
                     <Input
                       id="onb-team-name"
                       value={teamName}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setTeamName(val);
-                        setTeamSlug(
-                          val
-                            .toLowerCase()
-                            .replace(/[^a-z0-9]+/g, '-')
-                            .replace(/(^-|-$)/g, ''),
-                        );
-                      }}
-                      placeholder="e.g. CGHQ"
+                      onChange={(e) => setTeamName(e.target.value)}
+                      placeholder="e.g. Engineering or Team X"
                       required
                     />
                   </div>
                   <div className="grid gap-1.5">
-                    <Label htmlFor="onb-team-slug">Team Code (Slug)</Label>
+                    <Label htmlFor="onb-team-slug">Team Code</Label>
                     <Input
                       id="onb-team-slug"
                       value={teamSlug}
                       onChange={(e) => setTeamSlug(e.target.value)}
-                      placeholder="e.g. cghq"
-                      pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+                      placeholder="e.g. 2EC0DERTW"
+                      minLength={2}
+                      maxLength={80}
                       required
                     />
                     <span className="text-[11px] text-zinc-500">
-                      Teammates can use this code to request to join your team.
+                      Create any custom code (2–80 characters, no slashes). Teammates can use this
+                      code to request to join your team.
                     </span>
                   </div>
                   <Button type="submit" disabled={createTeamMutation.isPending}>

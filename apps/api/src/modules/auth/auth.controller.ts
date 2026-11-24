@@ -393,14 +393,15 @@ export class AuthController {
   ) {
     const pool = getPool()!;
     const auth = req.auth!;
-    const rawSlugBase =
-      body.teamSlug?.trim() ||
+    const requestedSlug = body.teamSlug?.trim();
+    const fallbackSlug =
       body.teamName
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/(^-|-$)/g, '')
-        .slice(0, 60) ||
-      'team';
+        .slice(0, 60) || 'team';
+    const rawSlugBase =
+      requestedSlug || (fallbackSlug.length >= 2 ? fallbackSlug : `${fallbackSlug}01`);
     const teamId = uuidv7();
     const memberId = uuidv7();
 
@@ -409,6 +410,12 @@ export class AuthController {
         `SELECT id FROM teams WHERE LOWER(slug) = LOWER($1) LIMIT 1`,
         [rawSlugBase],
       );
+      if (existingSlug.rows[0] && requestedSlug) {
+        throw new ConflictException({
+          code: 'TEAM_CODE_TAKEN',
+          message: 'That Team Code is already in use. Choose another code.',
+        });
+      }
       const finalSlug = existingSlug.rows[0]
         ? `${rawSlugBase}-${Math.random().toString(36).slice(2, 6)}`
         : rawSlugBase;

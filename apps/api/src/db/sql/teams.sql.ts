@@ -22,19 +22,28 @@ export const SELECT_TEAM_SETTINGS = `
   LIMIT 1
 `;
 
+export const SELECT_TEAM_BY_LOWER_SLUG_EXCLUDING_ID = `
+  SELECT id
+  FROM teams
+  WHERE LOWER(slug) = LOWER($1)
+    AND id <> $2
+  LIMIT 1
+`;
+
 export const UPDATE_TEAM_SETTINGS = `
   UPDATE teams
   SET
     name = $1,
-    document_title = $2,
-    file_prefix = $3,
-    timezone = $4,
-    prepared_by_default = $5,
-    members_can_add_dictionary = $6,
-    followups_enabled = $7,
-    document_font_family = $8,
-    document_font_size_pt = $9
-  WHERE id = $10
+    slug = $2,
+    document_title = $3,
+    file_prefix = $4,
+    timezone = $5,
+    prepared_by_default = $6,
+    members_can_add_dictionary = $7,
+    followups_enabled = $8,
+    document_font_family = $9,
+    document_font_size_pt = $10
+  WHERE id = $11
 `;
 
 export const INSERT_TEAM_MEMBER = `

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { EmailSchema } from './auth.js';
+import { EmailSchema, TeamCodeSchema } from './auth.js';
 import { MemberRoleSchema } from './reports.js';
 
 export const DocumentFontFamilySchema = z.enum(['Times New Roman']);
@@ -23,6 +23,7 @@ export type TeamSettings = z.infer<typeof TeamSettingsSchema>;
 
 export const UpdateTeamSettingsSchema = z.object({
   name: z.string().trim().min(1).max(120).optional(),
+  slug: TeamCodeSchema.optional(),
   documentTitle: z.string().trim().min(1).max(160).optional(),
   filePrefix: z.string().trim().min(1).max(120).optional(),
   timezone: z.string().trim().min(1).max(64).optional(),

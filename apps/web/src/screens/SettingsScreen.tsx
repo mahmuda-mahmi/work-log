@@ -222,6 +222,8 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
   const [docTitle, setDocTitle] = useState<string | null>(null);
   const [filePrefix, setFilePrefix] = useState<string | null>(null);
   const [preparedBy, setPreparedBy] = useState<string | null>(null);
+  const [teamCode, setTeamCode] = useState<string | null>(null);
+  const [codeError, setCodeError] = useState<string | null>(null);
   const [profileDisplayName, setProfileDisplayName] = useState<string | null>(null);
   const [leaveModalOpen, setLeaveModalOpen] = useState(false);
   const [successorLeadMemberId, setSuccessorLeadMemberId] = useState('');
@@ -267,6 +269,24 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
       await queryClient.invalidateQueries({ queryKey: ['me'] });
     },
     onError: (err: Error) => setStatusMsg(err.message),
+  });
+
+  const saveTeamCode = useMutation({
+    mutationFn: () =>
+      teamsApi.updateSettings(teamId, {
+        slug: (teamCode ?? settings?.slug ?? session.team.slug).trim(),
+      }),
+    onSuccess: async (updated) => {
+      setTeamCode(updated.slug);
+      setCodeError(null);
+      setStatusMsg(`Team Code updated to "${updated.slug}".`);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['team-settings', teamId] }),
+        queryClient.invalidateQueries({ queryKey: ['me'] }),
+        queryClient.invalidateQueries({ queryKey: ['my-teams'] }),
+      ]);
+    },
+    onError: (err: Error) => setCodeError(err.message),
   });
 
   const renameCategoryMutation = useMutation({
@@ -867,26 +887,61 @@ export function SettingsScreen({ session }: { session: ActiveAuthSession }) {
                         Team Code
                       </h3>
                       <p className="text-xs text-zinc-500">
-                        Teammates can enter this Team Code after signing in to request access to{' '}
-                        <strong>{session.team.name}</strong>.
+                        Customize the code teammates enter after signing in to request access to{' '}
+                        <strong>{session.team.name}</strong> (2–80 characters, no slashes).
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <form
+                      className="flex flex-wrap items-center gap-2"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        setCodeError(null);
+                        saveTeamCode.mutate();
+                      }}
+                    >
                       <Input
-                        readOnly
-                        value={session.team.slug}
+                        value={teamCode ?? settings?.slug ?? session.team.slug}
+                        onChange={(e) => {
+                          setTeamCode(e.target.value);
+                          setCodeError(null);
+                        }}
+                        placeholder="e.g. 2EC0DERTW"
+                        minLength={2}
+                        maxLength={80}
+                        required
                         className="h-8 min-w-0 flex-1 max-w-xs font-mono text-xs"
-                        onFocus={(e) => e.currentTarget.select()}
                       />
+                      <Button
+                        type="submit"
+                        size="sm"
+                        disabled={
+                          saveTeamCode.isPending ||
+                          (teamCode ?? settings?.slug ?? session.team.slug).trim().length < 2 ||
+                          (teamCode ?? settings?.slug ?? session.team.slug).trim() ===
+                            (settings?.slug ?? session.team.slug)
+                        }
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                        {saveTeamCode.isPending ? 'Saving…' : 'Save Code'}
+                      </Button>
                       <Button
                         type="button"
                         size="sm"
-                        onClick={() => void copyToClipboard(session.team.slug, 'team-code')}
+                        variant="outline"
+                        onClick={() =>
+                          void copyToClipboard(
+                            (teamCode ?? settings?.slug ?? session.team.slug).trim(),
+                            'team-code',
+                          )
+                        }
                       >
                         <Copy className="h-3.5 w-3.5" />
                         {copiedKey === 'team-code' ? 'Copied!' : 'Copy Code'}
                       </Button>
-                    </div>
+                    </form>
+                    {codeError && (
+                      <p className="text-xs font-medium text-red-600">{codeError}</p>
+                    )}
                   </div>
 
                   <div className="grid gap-2.5 border-t border-zinc-100 pt-3">

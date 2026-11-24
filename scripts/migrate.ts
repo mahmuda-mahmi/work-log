@@ -50,7 +50,7 @@ async function main() {
     for (const file of files) {
       const version = file.replace(/\.sql$/, '');
       const fullPath = path.join(MIGRATIONS_DIR, file);
-      const sql = fs.readFileSync(fullPath, 'utf8');
+      const sql = fs.readFileSync(fullPath, 'utf8').replace(/\r\n/g, '\n');
       const checksum = sha256(sql);
 
       const existingChecksum = appliedMap.get(version);

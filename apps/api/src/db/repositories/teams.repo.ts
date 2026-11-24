@@ -9,6 +9,7 @@ import {
   INSERT_TEAM_ASSET,
   INSERT_TEAM_MEMBER,
   SELECT_TEAM_ASSET_BY_HASH,
+  SELECT_TEAM_BY_LOWER_SLUG_EXCLUDING_ID,
   SELECT_TEAM_LOGO,
   SELECT_TEAM_MEMBERS,
   SELECT_TEAM_MEMBER_BY_ID,
@@ -120,13 +121,26 @@ export async function findTeamSettings(conn: DbClient, teamId: string): Promise<
   };
 }
 
+export async function isTeamSlugTaken(
+  conn: DbClient,
+  slug: string,
+  excludeTeamId: string,
+): Promise<boolean> {
+  const res = await conn.query<{ id: string }>(SELECT_TEAM_BY_LOWER_SLUG_EXCLUDING_ID, [
+    slug,
+    excludeTeamId,
+  ]);
+  return Boolean(res.rows[0]);
+}
+
 export async function updateTeamSettings(
   conn: DbClient,
   teamId: string,
-  settings: Omit<TeamSettings, 'id' | 'slug' | 'hasLogo'>,
+  settings: Omit<TeamSettings, 'id' | 'hasLogo'>,
 ): Promise<void> {
   await conn.query(UPDATE_TEAM_SETTINGS, [
     settings.name,
+    settings.slug,
     settings.documentTitle,
     settings.filePrefix,
     settings.timezone,

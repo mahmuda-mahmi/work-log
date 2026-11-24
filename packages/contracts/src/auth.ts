@@ -19,15 +19,16 @@ export const LoginSchema = z.object({
 });
 export type LoginInput = z.infer<typeof LoginSchema>;
 
+export const TeamCodeSchema = z
+  .string()
+  .trim()
+  .min(2, 'Team code must be at least 2 characters')
+  .max(80, 'Team code must be at most 80 characters')
+  .regex(/^[^/\\\r\n\t]+$/, 'Team code cannot contain slashes');
+
 export const BootstrapLeadSchema = z.object({
   teamName: z.string().trim().min(1).max(120),
-  teamSlug: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Slug must be lowercase alphanumeric with hyphens')
-    .min(2)
-    .max(80),
+  teamSlug: TeamCodeSchema,
   timezone: z.string().trim().min(1).max(64).default('Asia/Dhaka'),
   name: z.string().trim().min(1).max(120),
   email: EmailSchema,
@@ -115,14 +116,7 @@ export type RegisterInput = z.infer<typeof RegisterSchema>;
 
 export const CreateTeamSchema = z.object({
   teamName: z.string().trim().min(1, 'Team name is required').max(120),
-  teamSlug: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Slug must be lowercase alphanumeric with hyphens')
-    .min(2)
-    .max(80)
-    .optional(),
+  teamSlug: TeamCodeSchema.optional(),
   timezone: z.string().trim().min(1).max(64).default('Asia/Dhaka'),
 });
 export type CreateTeamInput = z.infer<typeof CreateTeamSchema>;
